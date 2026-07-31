@@ -153,7 +153,14 @@ New-Item -ItemType Directory -Force -Path "data/snapshots", "data/reference_phot
 # 6. Launch FastAPI backend server
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
+``` 
+#in short way
+cd your-path\face_detection
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn backend.main:app --reload --port 8000
+```
 #### On Linux / macOS (Bash):
 
 ```bash

@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  # ── Face Tracking Application ───────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: face-tracker
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      # Persistent storage for DB, snapshots, and reference photos
+      - ./data:/app/data
+      # InsightFace model cache
+      - insightface-models:/root/.insightface
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/face_tracking.db
+      - SNAPSHOT_DIR=./data/snapshots
+      - REFERENCE_PHOTO_DIR=./data/reference_photos
+    # ── GPU Support (NVIDIA) ──────────────────────────────
+    # Uncomment the deploy section below if you have an NVIDIA GPU
+    # and the NVIDIA Container Toolkit installed.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  insightface-models:
+    driver: local

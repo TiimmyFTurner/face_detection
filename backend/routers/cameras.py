@@ -17,6 +17,7 @@ import logging
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,3 +168,61 @@ async def _test_rtsp_connection(rtsp_url: str) -> CameraTestResult:
 
     except Exception as e:
         return CameraTestResult(success=False, message=f"Connection error: {str(e)}")
+
+
+@router.get("/{camera_id}/snapshot")
+async def get_camera_snapshot(camera_id: int, db: AsyncSession = Depends(get_db)):
+    """Return a single JPEG snapshot of the camera's current view."""
+    camera = await db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    # Try getting frame from running stream processor
+    jpeg_bytes = stream_processor.get_latest_frame(camera_id)
+    if jpeg_bytes:
+        return Response(
+            content=jpeg_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+
+    # Fallback: grab frame directly on demand
+    test_res = await _test_rtsp_connection(camera.rtsp_url)
+    if test_res.success and test_res.thumbnail_base64:
+        raw_bytes = base64.b64decode(test_res.thumbnail_base64)
+        return Response(
+            content=raw_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+
+    raise HTTPException(status_code=503, detail=f"Camera feed unavailable: {test_res.message}")
+
+
+@router.get("/{camera_id}/stream")
+async def get_camera_stream(camera_id: int, db: AsyncSession = Depends(get_db)):
+    """Stream live camera frames as MJPEG video."""
+    camera = await db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    async def frame_generator():
+        while True:
+            jpeg_bytes = stream_processor.get_latest_frame(camera_id)
+            if not jpeg_bytes:
+                test_res = await _test_rtsp_connection(camera.rtsp_url)
+                if test_res.success and test_res.thumbnail_base64:
+                    jpeg_bytes = base64.b64decode(test_res.thumbnail_base64)
+
+            if jpeg_bytes:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + jpeg_bytes + b"\r\n"
+                )
+            await asyncio.sleep(0.1)  # ~10 FPS
+
+    return StreamingResponse(
+        frame_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )

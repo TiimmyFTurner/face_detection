@@ -158,16 +158,25 @@ const App = {
     },
 
     // ─── Modal Management ──────────────────────────────────
+    _modalCloseTimer: null,
+
     openModal(contentHtml) {
+        if (App._modalCloseTimer) {
+            clearTimeout(App._modalCloseTimer);
+            App._modalCloseTimer = null;
+        }
         document.getElementById('modal-content').innerHTML = contentHtml;
         document.getElementById('modal-overlay').classList.add('active');
     },
 
     closeModal() {
         document.getElementById('modal-overlay').classList.remove('active');
-        // Clear content after animation
-        setTimeout(() => {
+        if (App._modalCloseTimer) {
+            clearTimeout(App._modalCloseTimer);
+        }
+        App._modalCloseTimer = setTimeout(() => {
             document.getElementById('modal-content').innerHTML = '';
+            App._modalCloseTimer = null;
         }, 300);
     },
 

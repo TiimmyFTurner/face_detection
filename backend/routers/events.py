@@ -85,10 +85,14 @@ async def list_events(
                 camera_cache[event.camera_id] = cam.name if cam else "Deleted Camera"
             camera_name = camera_cache[event.camera_id]
 
+        ts = event.timestamp
+        if ts and ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+
         event_responses.append(
             EventResponse(
                 id=event.id,
-                timestamp=event.timestamp,
+                timestamp=ts,
                 camera_id=event.camera_id,
                 camera_name=camera_name,
                 person_id=event.person_id,

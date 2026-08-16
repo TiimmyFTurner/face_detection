@@ -79,7 +79,12 @@ class StreamProcessor:
         self._stop_flags: dict[int, asyncio.Event] = {}  # camera_id -> stop event
         self._cooldown_cache: dict[tuple[int, Optional[int]], float] = {}  # (camera_id, person_id) -> last_log_time
         self._known_persons_cache: list[KnownPerson] = []
+        self._latest_frames: dict[int, bytes] = {}  # camera_id -> JPEG bytes
         self._cache_lock = asyncio.Lock()
+
+    def get_latest_frame(self, camera_id: int) -> Optional[bytes]:
+        """Get the most recent JPEG frame bytes for a camera."""
+        return self._latest_frames.get(camera_id)
 
     async def start_all(self) -> None:
         """Start processing loops for all active cameras."""
@@ -136,6 +141,7 @@ class StreamProcessor:
                 logger.warning("Error stopping camera %d: %s", camera_id, e)
 
         self._stop_flags.pop(camera_id, None)
+        self._latest_frames.pop(camera_id, None)
         logger.info("Stopped stream for camera %d.", camera_id)
 
     async def refresh_known_persons(self) -> None:
@@ -215,8 +221,17 @@ class StreamProcessor:
 
                     frame_count += 1
 
-                    # Frame skipping: only process every Nth frame
+                    # Update latest JPEG frame for live camera view
+                    try:
+                        ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                        if ret_enc:
+                            self._latest_frames[camera_id] = jpeg_buf.tobytes()
+                    except Exception:
+                        pass
+
+                    # Frame skipping: only process every Nth frame for AI face detection
                     if frame_count % settings.frame_skip != 0:
+                        await asyncio.sleep(0.005)
                         continue
 
                     # Process frame (detection + matching + logging)
@@ -249,6 +264,14 @@ class StreamProcessor:
         """
         Run face detection, recognition, and event logging on a single frame.
         """
+        # Save latest JPEG frame for live camera view & snapshot
+        try:
+            ret, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if ret:
+                self._latest_frames[camera_id] = jpeg_buf.tobytes()
+        except Exception as e:
+            logger.warning("Failed to encode JPEG frame for camera %d: %s", camera_id, e)
+
         if not face_engine.is_ready:
             return
 

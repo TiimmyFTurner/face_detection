@@ -95,6 +95,9 @@ const CamerasPage = {
                 </div>
 
                 <div class="camera-actions">
+                    <button class="btn btn-primary btn-sm" onclick="CamerasPage.showLiveModal(${camera.id})">
+                        👁️ Live View
+                    </button>
                     <button class="btn btn-secondary btn-sm" onclick="CamerasPage.testCamera(${camera.id})">
                         ⚡ Test
                     </button>
@@ -107,6 +110,82 @@ const CamerasPage = {
                 </div>
             </div>
         `).join('');
+    },
+
+    /**
+     * Show live camera stream / picture modal.
+     */
+    showLiveModal(cameraId) {
+        const camera = CamerasPage._cameras.find(c => c.id === cameraId);
+        if (!camera) return;
+
+        const streamUrl = `/api/cameras/${camera.id}/stream?t=${Date.now()}`;
+        const snapshotUrl = `/api/cameras/${camera.id}/snapshot?t=${Date.now()}`;
+
+        const content = `
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <h2 class="modal-title">📹 ${CamerasPage.escapeHtml(camera.name)}</h2>
+                    <span class="camera-status ${camera.is_active ? 'active' : 'inactive'}">
+                        <span class="camera-status-dot"></span>
+                        ${camera.is_active ? 'LIVE' : 'Inactive'}
+                    </span>
+                </div>
+                <button class="modal-close" onclick="App.closeModal()">✕</button>
+            </div>
+
+            <div class="modal-body" style="padding: 1.25rem;">
+                ${camera.location ? `
+                    <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>📍</span>
+                        <span>Location: <strong>${CamerasPage.escapeHtml(camera.location)}</strong></span>
+                    </div>
+                ` : ''}
+
+                <div class="camera-live-feed-wrapper">
+                    <img id="camera-live-img" 
+                         src="${streamUrl}" 
+                         alt="${CamerasPage.escapeAttr(camera.name)} Live View"
+                         onerror="CamerasPage.handleStreamError(${camera.id})"
+                    />
+                </div>
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="CamerasPage.refreshLiveFeed(${camera.id})">
+                        🔄 Refresh Snapshot
+                    </button>
+                    <a href="${snapshotUrl}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none;">
+                        🔗 Full Resolution
+                    </a>
+                </div>
+                <button class="btn btn-primary" onclick="App.closeModal()">Close</button>
+            </div>
+        `;
+
+        App.openModal(content);
+    },
+
+    /**
+     * Refresh snapshot image in live modal.
+     */
+    refreshLiveFeed(cameraId) {
+        const img = document.getElementById('camera-live-img');
+        if (img) {
+            img.src = `/api/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+        }
+    },
+
+    /**
+     * Fallback if MJPEG stream drops.
+     */
+    handleStreamError(cameraId) {
+        const img = document.getElementById('camera-live-img');
+        if (img) {
+            console.warn(`Stream error for camera ${cameraId}, falling back to snapshot.`);
+            img.src = `/api/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+        }
     },
 
     /**

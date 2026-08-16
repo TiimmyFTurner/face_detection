@@ -1163,3 +1163,32 @@ body {
         padding: var(--space-md);
     }
 }
+
+/* ── Camera Live Stream Preview Modal ────────────────────── */
+.camera-live-feed-wrapper {
+    position: relative;
+    width: 100%;
+    background: #090d16;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+}
+
+.camera-live-feed-wrapper img {
+    width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    display: block;
+}
+
+/* ── Event Detail Modal ──────────────────────────────────── */
+@media (max-width: 640px) {
+    .event-detail-dialog-grid {
+        grid-template-columns: 1fr !important;
+    }
+}

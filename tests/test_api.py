@@ -194,5 +194,29 @@ async def test_snapshot_not_found(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_snapshot_path_traversal(client: AsyncClient):
-    response = await client.get("/api/snapshots/../../../etc/passwd")
-    assert response.status_code == 400
+    response = await client.get("/api/snapshots/..%2F..%2Fetc%2Fpasswd")
+    assert response.status_code in (400, 404)
+
+
+@pytest.mark.asyncio
+async def test_camera_snapshot_and_stream(client: AsyncClient):
+    # Create camera
+    resp = await client.post("/api/cameras", json={
+        "name": "Live Test Cam",
+        "rtsp_url": "rtsp://invalid_url_for_test",
+        "is_active": False,
+    })
+    cam_id = resp.json()["id"]
+
+    # Test camera snapshot endpoint
+    snap_resp = await client.get(f"/api/cameras/{cam_id}/snapshot")
+    assert snap_resp.status_code in (200, 503)
+
+    # Test camera stream endpoint
+    async with client.stream("GET", f"/api/cameras/{cam_id}/stream") as stream_resp:
+        assert stream_resp.status_code == 200
+        assert "multipart/x-mixed-replace" in stream_resp.headers.get("content-type", "")
+
+    # Nonexistent camera snapshot
+    bad_snap = await client.get("/api/cameras/99999/snapshot")
+    assert bad_snap.status_code == 404

@@ -228,7 +228,7 @@ class FaceEngine:
         self,
         frame: NDArray[np.uint8],
         bbox: tuple[int, int, int, int],
-        padding: float = 0.2,
+        padding: float = 0.7,
     ) -> NDArray[np.uint8]:
         """
         Crop a face region from a frame with padding.
@@ -236,7 +236,7 @@ class FaceEngine:
         Args:
             frame: Full BGR image.
             bbox: (x1, y1, x2, y2) bounding box.
-            padding: Fractional padding around the face (0.2 = 20%).
+            padding: Fractional padding around the face (0.7 = 70%).
 
         Returns:
             Cropped face image as numpy array.

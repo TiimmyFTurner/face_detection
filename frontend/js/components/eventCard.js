@@ -128,6 +128,8 @@ const EventCard = {
                         </div>
                     </div>
                 </div>
+
+                <div id="event-detail-person-history"></div>
             </div>
 
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
@@ -147,6 +149,46 @@ const EventCard = {
         `;
 
         App.openModal(content);
+
+        // Load photo history timeline for this person
+        EventCard.loadPersonHistory(event);
+    },
+
+    /**
+     * Load recent detection photo history for a person.
+     */
+    async loadPersonHistory(event) {
+        try {
+            let url = event.person_id ? `/api/events?person_id=${event.person_id}&limit=10` : `/api/events?person_name=${encodeURIComponent(event.person_name)}&limit=10`;
+            const data = await App.api(url);
+            const events = data.events || [];
+
+            const historyContainer = document.getElementById('event-detail-person-history');
+            if (!historyContainer || events.length <= 1) return;
+
+            historyContainer.innerHTML = `
+                <div style="margin-top: 1rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>📸</span>
+                        <span>Other Detections for ${EventCard.escapeHtml(event.person_name)} (${events.length})</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.4rem;">
+                        ${events.map(ev => {
+                            EventCard._cache[ev.id] = ev;
+                            const isActive = ev.id === event.id;
+                            return `
+                                <div onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 75px; cursor: pointer; opacity: ${isActive ? '1' : '0.65'}; border: ${isActive ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface-hover);" title="View this event">
+                                    <img src="${ev.snapshot_url || '/api/snapshots/' + ev.snapshot_path}" style="width: 100%; height: 60px; object-fit: cover; display: block;" />
+                                    <div style="font-size: 0.6rem; text-align: center; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 0;">${EventCard.formatTimestamp(ev.timestamp)}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        } catch (err) {
+            console.warn('Failed to load person event history:', err);
+        }
     },
 
     /**

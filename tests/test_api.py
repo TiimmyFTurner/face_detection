@@ -182,6 +182,14 @@ async def test_event_stats(client: AsyncClient):
     assert "active_cameras" in data
 
 
+@pytest.mark.asyncio
+async def test_grouped_events(client: AsyncClient):
+    response = await client.get("/api/events/grouped")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
 # ═══════════════════════════════════════════════════════════
 # Snapshot Tests
 # ═══════════════════════════════════════════════════════════

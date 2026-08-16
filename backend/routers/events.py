@@ -26,6 +26,7 @@ router = APIRouter(prefix="/api/events", tags=["events"])
 @router.get("", response_model=EventListResponse)
 async def list_events(
     camera_id: Optional[int] = Query(None, description="Filter by camera ID"),
+    person_id: Optional[int] = Query(None, description="Filter by person ID"),
     person_name: Optional[str] = Query(None, description="Filter by person name (partial match)"),
     is_known: Optional[bool] = Query(None, description="Filter known (true) or unknown (false)"),
     start_time: Optional[datetime] = Query(None, description="Start of time range (ISO 8601)"),
@@ -37,7 +38,7 @@ async def list_events(
     """
     List detection events with optional filtering.
 
-    Supports filtering by camera, person name, known/unknown status, and time range.
+    Supports filtering by camera, person ID, person name, known/unknown status, and time range.
     Results are ordered newest-first with pagination.
     """
     # Build query with filters
@@ -45,6 +46,8 @@ async def list_events(
 
     if camera_id is not None:
         conditions.append(Event.camera_id == camera_id)
+    if person_id is not None:
+        conditions.append(Event.person_id == person_id)
     if is_known is not None:
         conditions.append(Event.is_known == is_known)
     if person_name is not None:
@@ -150,3 +153,84 @@ async def get_event_stats(db: AsyncSession = Depends(get_db)):
         unknown_today=unknown_today,
         active_cameras=active_cameras,
     )
+
+
+@router.get("/grouped")
+async def get_grouped_events(
+    is_known: Optional[bool] = Query(None, description="Filter known/unknown events"),
+    limit_per_group: int = Query(15, ge=1, le=50, description="Max snapshots per person group"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get detection events grouped by person identity.
+
+    Returns a list of person groups containing detection count, latest timestamp,
+    and a timeline gallery of snapshots & camera locations.
+    """
+    conditions = []
+    if is_known is not None:
+        conditions.append(Event.is_known == is_known)
+
+    where_clause = and_(*conditions) if conditions else True
+
+    query = (
+        select(Event)
+        .where(where_clause)
+        .order_by(Event.timestamp.desc())
+        .limit(300)
+    )
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    camera_cache: dict[int, str] = {}
+    grouped_map: dict[str, dict] = {}
+
+    for event in events:
+        camera_name = "Camera"
+        if event.camera_id:
+            if event.camera_id not in camera_cache:
+                cam = await db.get(Camera, event.camera_id)
+                camera_cache[event.camera_id] = cam.name if cam else f"Camera #{event.camera_id}"
+            camera_name = camera_cache[event.camera_id]
+
+        ts = event.timestamp
+        if ts and ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+
+        # Unique key for grouping
+        if event.is_known and event.person_id:
+            group_key = f"person_{event.person_id}"
+        else:
+            group_key = f"unknown_{event.person_name}_{event.snapshot_path}"
+
+        if group_key not in grouped_map:
+            grouped_map[group_key] = {
+                "group_key": group_key,
+                "person_id": event.person_id,
+                "person_name": event.person_name or "Unknown Person",
+                "is_known": event.is_known,
+                "total_detections": 0,
+                "latest_timestamp": ts,
+                "events": [],
+            }
+
+        group = grouped_map[group_key]
+        group["total_detections"] += 1
+
+        if len(group["events"]) < limit_per_group:
+            group["events"].append({
+                "id": event.id,
+                "timestamp": ts,
+                "camera_id": event.camera_id,
+                "camera_name": camera_name,
+                "confidence_score": event.confidence_score,
+                "snapshot_path": event.snapshot_path,
+                "snapshot_url": f"/api/snapshots/{event.snapshot_path}",
+                "is_known": event.is_known,
+                "person_name": event.person_name,
+                "person_id": event.person_id,
+            })
+
+    grouped_list = list(grouped_map.values())
+    grouped_list.sort(key=lambda g: g["latest_timestamp"], reverse=True)
+    return grouped_list

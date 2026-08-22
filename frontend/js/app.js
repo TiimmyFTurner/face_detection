@@ -85,6 +85,8 @@ const App = {
                     const data = JSON.parse(event.data);
                     if (data.type === 'new_event') {
                         DashboardPage.addRealtimeEvent(data.event);
+                    } else if (data.type === 'zone_alert') {
+                        App.showZoneAlert(data);
                     }
                 } catch (err) {
                     console.error('Failed to parse WebSocket message:', err);
@@ -206,6 +208,25 @@ const App = {
             toast.style.transform = 'translateX(30px)';
             toast.style.transition = 'all 300ms ease';
             setTimeout(() => toast.remove(), 300);
+        }
+    },
+
+    showZoneAlert(data) {
+        App.toast(`${data.message}`, 'error');
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(440, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        } catch (e) {
+            // Audio context muted / blocked by browser policy
         }
     },
 };

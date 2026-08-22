@@ -34,13 +34,23 @@ const EventCard = {
                 <div class="event-card-body">
                     <div class="event-card-header">
                         <span class="event-person-name">${EventCard.escapeHtml(event.person_name || 'Unknown')}</span>
-                        <span class="event-badge ${statusClass}">${badgeText}</span>
+                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                            <span class="event-badge ${statusClass}">${badgeText}</span>
+                            ${event.alert_type === 'out_of_zone' ? '<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">⚠️ Out of Area</span>' : ''}
+                            ${event.alert_type === 'unauthorized_entry' ? '<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">🚨 Unauthorized</span>' : ''}
+                        </div>
                     </div>
                     <div class="event-card-meta">
                         <div class="event-meta-row">
                             <span class="meta-icon">📹</span>
                             <span>${EventCard.escapeHtml(event.camera_name || 'Camera ' + event.camera_id)}</span>
                         </div>
+                        ${event.zone_name ? `
+                        <div class="event-meta-row" style="color: var(--accent-blue);">
+                            <span class="meta-icon">🎯</span>
+                            <span>Area: ${EventCard.escapeHtml(event.zone_name)}</span>
+                        </div>
+                        ` : ''}
                         <div class="event-meta-row">
                             <span class="meta-icon">🕐</span>
                             <span>${timestamp}</span>

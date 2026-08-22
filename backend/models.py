@@ -37,9 +37,35 @@ class Camera(Base):
 
     # Relationships
     events = relationship("Event", back_populates="camera", cascade="all, delete-orphan")
+    zones = relationship("CameraZone", back_populates="camera", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Camera id={self.id} name='{self.name}' active={self.is_active}>"
+
+
+class CameraZone(Base):
+    """An important designated area (ROI) defined on a camera."""
+
+    __tablename__ = "camera_zones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(Integer, ForeignKey("cameras.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)  # e.g. "Work Desk", "Main Counter"
+    x = Column(Float, nullable=False)           # % (0-100) left
+    y = Column(Float, nullable=False)           # % (0-100) top
+    width = Column(Float, nullable=False)       # % (0-100) width
+    height = Column(Float, nullable=False)      # % (0-100) height
+    alert_mode = Column(String(50), default="absence")  # "absence" (alert if assigned person is NOT in area), "presence", "unauthorized"
+    assigned_person_ids = Column(JSON, default=list)    # List of Person IDs
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    # Relationships
+    camera = relationship("Camera", back_populates="zones")
+
+    def __repr__(self) -> str:
+        return f"<CameraZone id={self.id} camera_id={self.camera_id} name='{self.name}'>"
 
 
 class Person(Base):
@@ -97,6 +123,9 @@ class Event(Base):
     confidence_score = Column(Float, default=0.0)
     snapshot_path = Column(Text, nullable=False)
     is_known = Column(Boolean, default=False, index=True)
+    zone_id = Column(Integer, nullable=True)
+    zone_name = Column(String(255), default="")
+    alert_type = Column(String(50), default="normal")  # "normal", "out_of_zone", "unauthorized_entry"
 
     # Relationships
     camera = relationship("Camera", back_populates="events")
@@ -105,5 +134,5 @@ class Event(Base):
     def __repr__(self) -> str:
         return (
             f"<Event id={self.id} person='{self.person_name}' "
-            f"confidence={self.confidence_score:.2f} known={self.is_known}>"
+            f"confidence={self.confidence_score:.2f} known={self.is_known} alert={self.alert_type}>"
         )

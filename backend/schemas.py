@@ -76,6 +76,52 @@ class PersonResponse(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════
+# Camera Zone (Important Area) Schemas
+# ═══════════════════════════════════════════════════════════
+
+class CameraZoneCreate(BaseModel):
+    """Schema for creating a camera important area."""
+    name: str = Field(..., min_length=1, max_length=255, examples=["Work Desk"])
+    x: float = Field(..., ge=0.0, le=100.0, description="Top-left X (%)")
+    y: float = Field(..., ge=0.0, le=100.0, description="Top-left Y (%)")
+    width: float = Field(..., gt=0.0, le=100.0, description="Width (%)")
+    height: float = Field(..., gt=0.0, le=100.0, description="Height (%)")
+    alert_mode: str = Field(default="absence", description="'absence', 'presence', or 'unauthorized'")
+    assigned_person_ids: list[int] = Field(default_factory=list)
+    is_active: bool = Field(default=True)
+
+
+class CameraZoneUpdate(BaseModel):
+    """Schema for updating a camera zone."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    x: Optional[float] = Field(None, ge=0.0, le=100.0)
+    y: Optional[float] = Field(None, ge=0.0, le=100.0)
+    width: Optional[float] = Field(None, gt=0.0, le=100.0)
+    height: Optional[float] = Field(None, gt=0.0, le=100.0)
+    alert_mode: Optional[str] = None
+    assigned_person_ids: Optional[list[int]] = None
+    is_active: Optional[bool] = None
+
+
+class CameraZoneResponse(BaseModel):
+    """Schema for camera zone response."""
+    id: int
+    camera_id: int
+    name: str
+    x: float
+    y: float
+    width: float
+    height: float
+    alert_mode: str
+    assigned_person_ids: list[int] = []
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ═══════════════════════════════════════════════════════════
 # Event Schemas
 # ═══════════════════════════════════════════════════════════
 
@@ -91,6 +137,9 @@ class EventResponse(BaseModel):
     snapshot_path: str
     snapshot_url: str = ""
     is_known: bool
+    zone_id: Optional[int] = None
+    zone_name: str = ""
+    alert_type: str = "normal"  # "normal", "out_of_zone", "unauthorized_entry"
 
     model_config = {"from_attributes": True}
 

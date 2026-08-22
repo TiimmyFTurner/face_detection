@@ -605,12 +605,24 @@ body {
     margin-bottom: var(--space-md);
 }
 
-.camera-actions {
+.camera-actions,
+.camera-actions-wrapper {
     display: flex;
-    gap: var(--space-sm);
+    flex-direction: column;
+    gap: 0.5rem;
     margin-top: var(--space-md);
     padding-top: var(--space-md);
     border-top: 1px solid var(--border-subtle);
+}
+
+.camera-actions-primary {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.camera-actions-secondary {
+    display: flex;
+    gap: 0.4rem;
 }
 
 /* ── Person Cards ────────────────────────────────────────── */

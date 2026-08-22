@@ -94,19 +94,26 @@ const CamerasPage = {
                     <span>Added ${CamerasPage.formatDate(camera.created_at)}</span>
                 </div>
 
-                <div class="camera-actions">
-                    <button class="btn btn-primary btn-sm" onclick="CamerasPage.showLiveModal(${camera.id})">
-                        👁️ Live View
-                    </button>
-                    <button class="btn btn-secondary btn-sm" onclick="CamerasPage.testCamera(${camera.id})">
-                        ⚡ Test
-                    </button>
-                    <button class="btn btn-secondary btn-sm" onclick="CamerasPage.showEditModal(${camera.id})">
-                        ✏️ Edit
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="CamerasPage.deleteCamera(${camera.id}, '${CamerasPage.escapeAttr(camera.name)}')">
-                        🗑️ Delete
-                    </button>
+                <div class="camera-actions-wrapper">
+                    <div class="camera-actions-primary">
+                        <button class="btn btn-primary btn-sm" onclick="CamerasPage.showLiveModal(${camera.id})" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                            <span>👁️</span> <span>Live Stream</span>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${camera.id})" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem; background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.35); color: var(--accent-blue);">
+                            <span>🎯</span> <span>Zones</span>
+                        </button>
+                    </div>
+                    <div class="camera-actions-secondary">
+                        <button class="btn btn-secondary btn-sm" onclick="CamerasPage.testCamera(${camera.id})" title="Test RTSP Connection" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem; justify-content: center;">
+                            ⚡ Test
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="CamerasPage.showEditModal(${camera.id})" title="Edit Camera Settings" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem; justify-content: center;">
+                            ✏️ Edit
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="CamerasPage.deleteCamera(${camera.id}, '${CamerasPage.escapeAttr(camera.name)}')" title="Delete Camera" style="padding: 0.4rem 0.65rem; justify-content: center;">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
             </div>
         `).join('');

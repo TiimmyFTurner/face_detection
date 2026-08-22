@@ -228,3 +228,83 @@ async def test_camera_snapshot_and_stream(client: AsyncClient):
     # Nonexistent camera snapshot
     bad_snap = await client.get("/api/cameras/99999/snapshot")
     assert bad_snap.status_code == 404
+
+
+# ═══════════════════════════════════════════════════════════
+# Camera Zone / Important Area Tests
+# ═══════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_create_and_list_camera_zones(client: AsyncClient):
+    # Create camera first
+    cam_resp = await client.post("/api/cameras", json={
+        "name": "Zone Test Cam",
+        "rtsp_url": "rtsp://localhost/test",
+        "is_active": False,
+    })
+    cam_id = cam_resp.json()["id"]
+
+    # Create zone
+    zone_resp = await client.post(f"/api/cameras/{cam_id}/zones", json={
+        "name": "Work Desk A",
+        "x": 10.0,
+        "y": 15.0,
+        "width": 30.0,
+        "height": 40.0,
+        "alert_mode": "absence",
+        "assigned_person_ids": [1],
+        "is_active": True,
+    })
+    assert zone_resp.status_code == 201
+    zone_data = zone_resp.json()
+    assert zone_data["name"] == "Work Desk A"
+    assert zone_data["camera_id"] == cam_id
+    assert zone_data["assigned_person_ids"] == [1]
+    zone_id = zone_data["id"]
+
+    # List camera zones
+    list_resp = await client.get(f"/api/cameras/{cam_id}/zones")
+    assert list_resp.status_code == 200
+    zones = list_resp.json()
+    assert len(zones) >= 1
+    assert any(z["id"] == zone_id for z in zones)
+
+
+@pytest.mark.asyncio
+async def test_update_and_delete_camera_zone(client: AsyncClient):
+    # Create camera
+    cam_resp = await client.post("/api/cameras", json={
+        "name": "Zone Cam 2",
+        "rtsp_url": "rtsp://localhost/test2",
+        "is_active": False,
+    })
+    cam_id = cam_resp.json()["id"]
+
+    # Create zone
+    create_resp = await client.post(f"/api/cameras/{cam_id}/zones", json={
+        "name": "Cashier",
+        "x": 20.0,
+        "y": 20.0,
+        "width": 50.0,
+        "height": 50.0,
+        "alert_mode": "unauthorized",
+        "assigned_person_ids": [2],
+    })
+    zone_id = create_resp.json()["id"]
+
+    # Update zone
+    update_resp = await client.put(f"/api/zones/{zone_id}", json={
+        "name": "Updated Cashier",
+        "alert_mode": "both",
+    })
+    assert update_resp.status_code == 200
+    assert update_resp.json()["name"] == "Updated Cashier"
+    assert update_resp.json()["alert_mode"] == "both"
+
+    # Delete zone
+    del_resp = await client.delete(f"/api/zones/{zone_id}")
+    assert del_resp.status_code == 204
+
+    # Verify deleted
+    get_resp = await client.get(f"/api/zones/{zone_id}")
+    assert get_resp.status_code == 404

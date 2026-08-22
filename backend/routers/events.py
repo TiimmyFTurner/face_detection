@@ -99,11 +99,14 @@ async def list_events(
                 camera_id=event.camera_id,
                 camera_name=camera_name,
                 person_id=event.person_id,
-                person_name=event.person_name,
-                confidence_score=event.confidence_score,
-                snapshot_path=event.snapshot_path,
-                snapshot_url=f"/api/snapshots/{event.snapshot_path}",
-                is_known=event.is_known,
+                person_name=event.person_name or "Unknown",
+                confidence_score=event.confidence_score or 0.0,
+                snapshot_path=event.snapshot_path or "",
+                snapshot_url=f"/api/snapshots/{event.snapshot_path}" if event.snapshot_path else "",
+                is_known=bool(event.is_known),
+                zone_id=getattr(event, "zone_id", None),
+                zone_name=getattr(event, "zone_name", "") or "",
+                alert_type=getattr(event, "alert_type", "normal") or "normal",
             )
         )
 

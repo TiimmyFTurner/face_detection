@@ -266,7 +266,7 @@ class StreamProcessor:
         """
         # Save latest JPEG frame for live camera view & snapshot
         try:
-            ret, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            ret, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
             if ret:
                 self._latest_frames[camera_id] = jpeg_buf.tobytes()
         except Exception as e:
@@ -329,7 +329,7 @@ class StreamProcessor:
                 await asyncio.get_event_loop().run_in_executor(
                     None,
                     lambda p=str(snapshot_path), c=cropped: cv2.imwrite(
-                        p, c, [cv2.IMWRITE_JPEG_QUALITY, 98, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
+                        p, c, [cv2.IMWRITE_JPEG_QUALITY, 100, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
                     ),
                 )
             except Exception as e:

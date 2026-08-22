@@ -223,7 +223,7 @@ class StreamProcessor:
 
                     # Update latest JPEG frame for live camera view
                     try:
-                        ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                        ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
                         if ret_enc:
                             self._latest_frames[camera_id] = jpeg_buf.tobytes()
                     except Exception:
@@ -266,7 +266,7 @@ class StreamProcessor:
         """
         # Save latest JPEG frame for live camera view & snapshot
         try:
-            ret, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            ret, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             if ret:
                 self._latest_frames[camera_id] = jpeg_buf.tobytes()
         except Exception as e:
@@ -328,7 +328,9 @@ class StreamProcessor:
                 cropped = face_engine.crop_face(frame, face.bbox)
                 await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda p=str(snapshot_path), c=cropped: cv2.imwrite(p, c),
+                    lambda p=str(snapshot_path), c=cropped: cv2.imwrite(
+                        p, c, [cv2.IMWRITE_JPEG_QUALITY, 98, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
+                    ),
                 )
             except Exception as e:
                 logger.warning("Failed to save snapshot: %s", e)

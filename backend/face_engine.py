@@ -228,32 +228,34 @@ class FaceEngine:
         self,
         frame: NDArray[np.uint8],
         bbox: tuple[int, int, int, int],
-        padding: float = 0.7,
+        padding: float = 1.3,
     ) -> NDArray[np.uint8]:
         """
-        Crop a face region from a frame with padding.
+        Crop a face region from a full-resolution frame with generous zoom-out padding.
 
         Args:
             frame: Full BGR image.
             bbox: (x1, y1, x2, y2) bounding box.
-            padding: Fractional padding around the face (0.7 = 70%).
+            padding: Fractional padding around the face (1.3 = 130% zoom out).
 
         Returns:
-            Cropped face image as numpy array.
+            High-resolution cropped context image as numpy array.
         """
         h, w = frame.shape[:2]
         x1, y1, x2, y2 = bbox
 
-        # Add padding
         face_w = x2 - x1
         face_h = y2 - y1
+
+        # Generous horizontal and vertical context with extra torso/shoulder margin below
         pad_x = int(face_w * padding)
-        pad_y = int(face_h * padding)
+        pad_top = int(face_h * padding)
+        pad_bottom = int(face_h * (padding + 0.6))
 
         x1 = max(0, x1 - pad_x)
-        y1 = max(0, y1 - pad_y)
+        y1 = max(0, y1 - pad_top)
         x2 = min(w, x2 + pad_x)
-        y2 = min(h, y2 + pad_y)
+        y2 = min(h, y2 + pad_bottom)
 
         return frame[y1:y2, x1:x2].copy()
 

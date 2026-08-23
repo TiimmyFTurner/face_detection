@@ -2,9 +2,10 @@
 Pydantic v2 schemas for API request/response validation.
 """
 
+import json
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator
 
 
 # ═══════════════════════════════════════════════════════════
@@ -88,6 +89,9 @@ class CameraZoneCreate(BaseModel):
     height: float = Field(..., gt=0.0, le=100.0, description="Height (%)")
     alert_mode: str = Field(default="absence", description="'absence', 'presence', or 'unauthorized'")
     assigned_person_ids: list[int] = Field(default_factory=list)
+    start_time: str = Field(default="00:00", description="Shift start time HH:MM")
+    end_time: str = Field(default="23:59", description="Shift end time HH:MM")
+    active_days: list[str] = Field(default_factory=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
     is_active: bool = Field(default=True)
 
 
@@ -100,6 +104,9 @@ class CameraZoneUpdate(BaseModel):
     height: Optional[float] = Field(None, gt=0.0, le=100.0)
     alert_mode: Optional[str] = None
     assigned_person_ids: Optional[list[int]] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    active_days: Optional[list[str]] = None
     is_active: Optional[bool] = None
 
 
@@ -112,13 +119,91 @@ class CameraZoneResponse(BaseModel):
     y: float
     width: float
     height: float
-    alert_mode: str
+    alert_mode: str = "absence"
     assigned_person_ids: list[int] = []
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    start_time: str = "00:00"
+    end_time: str = "23:59"
+    active_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @field_validator("assigned_person_ids", mode="before")
+    @classmethod
+    def parse_assigned_persons(cls, v: Any) -> list[int]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [int(x) for x in parsed if str(x).isdigit()]
+            except Exception:
+                return []
+        if isinstance(v, list):
+            return [int(x) for x in v if str(x).isdigit()]
+        return []
+
+    @field_validator("active_days", mode="before")
+    @classmethod
+    def parse_active_days(cls, v: Any) -> list[str]:
+        default_days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        if v is None:
+            return default_days
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    return [str(d) for d in parsed]
+            except Exception:
+                return default_days
+        if isinstance(v, list) and len(v) > 0:
+            return [str(d) for d in v]
+        return default_days
+
+    @field_validator("start_time", mode="before")
+    @classmethod
+    def parse_start_time(cls, v: Any) -> str:
+        return str(v) if v else "00:00"
+
+    @field_validator("end_time", mode="before")
+    @classmethod
+    def parse_end_time(cls, v: Any) -> str:
+        return str(v) if v else "23:59"
+
+    @field_validator("alert_mode", mode="before")
+    @classmethod
+    def parse_alert_mode(cls, v: Any) -> str:
+        return str(v) if v else "absence"
+
+    @field_validator("is_active", mode="before")
+    @classmethod
+    def parse_is_active(cls, v: Any) -> bool:
+        return True if v is None else bool(v)
 
     model_config = {"from_attributes": True}
+
+
+class ZonePersonStatus(BaseModel):
+    """Real-time presence state for an assigned individual."""
+    person_id: int
+    person_name: str
+    status: str  # "present", "absent", "off_duty"
+    last_seen_seconds_ago: Optional[float] = None
+    last_seen_str: str = ""
+    minutes_absent: Optional[int] = None
+
+
+class ZoneStatusResponse(BaseModel):
+    """Real-time status report for a zone."""
+    zone_id: int
+    zone_name: str
+    camera_id: int
+    camera_name: str
+    is_in_schedule: bool
+    timetable_text: str
+    alert_mode: str
+    assigned_persons: list[ZonePersonStatus] = []
 
 
 # ═══════════════════════════════════════════════════════════

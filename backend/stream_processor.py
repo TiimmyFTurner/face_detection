@@ -222,15 +222,37 @@ class StreamProcessor:
                         "height": z.height,
                         "alert_mode": z.alert_mode,
                         "assigned_person_ids": z.assigned_person_ids or [],
+                        "start_time": z.start_time or "00:00",
+                        "end_time": z.end_time or "23:59",
+                        "active_days": z.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
                     })
 
             self._zones_cache = zones_map
             logger.info("Refreshed camera zones cache: %d cameras with configured zones.", len(zones_map))
 
+    @staticmethod
+    def _is_zone_in_schedule(start_time: str, end_time: str, active_days: list[str]) -> bool:
+        """Check if current time is within active shift hours and days."""
+        now = datetime.now()
+        day_name = now.strftime("%a")
+
+        if active_days and day_name not in active_days:
+            return False
+
+        current_hm = now.strftime("%H:%M")
+        start = start_time or "00:00"
+        end = end_time or "23:59"
+
+        if start <= end:
+            return start <= current_hm <= end
+        else:
+            return current_hm >= start or current_hm <= end
+
     async def _absence_watchdog_loop(self) -> None:
         """
         Periodic background watchdog: check if assigned persons are missing
-        from their designated zones for >= 60 seconds and broadcast alerts every minute.
+        from their designated zones for >= 60 seconds and broadcast alerts every minute
+        (only during scheduled timetable hours).
         """
         # Initial 30-second grace period after system startup
         await asyncio.sleep(30)
@@ -248,6 +270,14 @@ class StreamProcessor:
                         continue
 
                     for zone in zones:
+                        # Check timetable shift hours
+                        if not self._is_zone_in_schedule(
+                            zone.get("start_time", "00:00"),
+                            zone.get("end_time", "23:59"),
+                            zone.get("active_days", []),
+                        ):
+                            continue  # Off duty — suppress absence alerts
+
                         mode = zone.get("alert_mode", "absence")
                         if mode not in ("absence", "both", "out_of_zone"):
                             continue

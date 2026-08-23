@@ -55,8 +55,11 @@ class CameraZone(Base):
     y = Column(Float, nullable=False)           # % (0-100) top
     width = Column(Float, nullable=False)       # % (0-100) width
     height = Column(Float, nullable=False)      # % (0-100) height
-    alert_mode = Column(String(50), default="absence")  # "absence" (alert if assigned person is NOT in area), "presence", "unauthorized"
+    alert_mode = Column(String(50), default="absence")  # "absence", "presence", "unauthorized", "both"
     assigned_person_ids = Column(JSON, default=list)    # List of Person IDs
+    start_time = Column(String(10), default="00:00")    # HH:MM format
+    end_time = Column(String(10), default="23:59")      # HH:MM format
+    active_days = Column(JSON, default=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)

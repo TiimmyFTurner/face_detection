@@ -1,0 +1,406 @@
+/**
+ * ZonesPage — Dedicated Zone Monitoring, Timetable Shifts, Live Presence Board & Violation Logs.
+ */
+const ZonesPage = {
+    _statusData: [],
+    _zones: [],
+    _cameras: [],
+    _logs: [],
+    _activeSubTab: 'board', // 'board', 'zones', 'logs'
+    _pollTimer: null,
+
+    /**
+     * Load the Zone Monitoring page.
+     */
+    async load() {
+        document.getElementById('page-title').textContent = '🎯 Zone Monitoring & Shift Schedules';
+        
+        const headerActions = document.getElementById('header-actions');
+        headerActions.innerHTML = `
+            <button class="btn btn-secondary btn-sm" onclick="ZonesPage.refresh()">
+                🔄 Refresh
+            </button>
+        `;
+
+        const contentBody = document.getElementById('content-body');
+        contentBody.innerHTML = `
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <span>Loading zone status and schedules...</span>
+            </div>
+        `;
+
+        await ZonesPage.fetchData();
+        ZonesPage.render();
+
+        // Start auto-refreshing live presence status every 10 seconds while on this tab
+        if (ZonesPage._pollTimer) clearInterval(ZonesPage._pollTimer);
+        ZonesPage._pollTimer = setInterval(() => {
+            if (App._currentPage === 'zones') {
+                ZonesPage.pollStatus();
+            } else {
+                clearInterval(ZonesPage._pollTimer);
+            }
+        }, 10000);
+    },
+
+    /**
+     * Fetch all status, zones, cameras, and logs data in parallel.
+     */
+    async fetchData() {
+        try {
+            const [statusRes, zonesRes, camerasRes, logsRes] = await Promise.allSettled([
+                App.api('/api/zones/status'),
+                App.api('/api/zones'),
+                App.api('/api/cameras'),
+                App.api('/api/zones/logs?limit=40'),
+            ]);
+
+            ZonesPage._statusData = statusRes.status === 'fulfilled' && Array.isArray(statusRes.value) ? statusRes.value : [];
+            ZonesPage._zones = zonesRes.status === 'fulfilled' && Array.isArray(zonesRes.value) ? zonesRes.value : [];
+            ZonesPage._cameras = camerasRes.status === 'fulfilled' && Array.isArray(camerasRes.value) ? camerasRes.value : [];
+            ZonesPage._logs = logsRes.status === 'fulfilled' && Array.isArray(logsRes.value) ? logsRes.value : [];
+        } catch (err) {
+            console.error('Error fetching zone data:', err);
+        }
+    },
+
+    /**
+     * Silent poll for live presence board updates.
+     */
+    async pollStatus() {
+        try {
+            const statusData = await App.api('/api/zones/status');
+            ZonesPage._statusData = statusData || [];
+            if (ZonesPage._activeSubTab === 'board') {
+                const boardContainer = document.getElementById('zones-presence-grid');
+                if (boardContainer) {
+                    boardContainer.innerHTML = ZonesPage.renderPresenceGrid();
+                }
+                ZonesPage.updateSummaryStats();
+            }
+        } catch (e) {
+            // Ignore background poll errors
+        }
+    },
+
+    /**
+     * Render the complete Zones page.
+     */
+    render() {
+        const contentBody = document.getElementById('content-body');
+
+        contentBody.innerHTML = `
+            <!-- Top Summary Stats -->
+            <div id="zone-summary-stats" style="margin-bottom: 1.5rem;">
+                ${ZonesPage.renderSummaryStatsHtml()}
+            </div>
+
+            <!-- Sub-tab Navigation Bar -->
+            <div class="view-toggle-bar" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;">
+                <button class="btn btn-sm ${ZonesPage._activeSubTab === 'board' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('board')">
+                    👥 Live Presence Board
+                </button>
+                <button class="btn btn-sm ${ZonesPage._activeSubTab === 'zones' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('zones')">
+                    🎯 Zone Assignments & Shifts (${ZonesPage._zones.length})
+                </button>
+                <button class="btn btn-sm ${ZonesPage._activeSubTab === 'logs' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('logs')">
+                    📋 Security & Absence Logs (${ZonesPage._logs.length})
+                </button>
+            </div>
+
+            <!-- Tab Content Container -->
+            <div id="zone-subtab-content">
+                ${ZonesPage.renderSubTabContent()}
+            </div>
+        `;
+    },
+
+    switchSubTab(tab) {
+        ZonesPage._activeSubTab = tab;
+        ZonesPage.render();
+    },
+
+    async refresh() {
+        App.toast('Refreshing zone data...', 'info');
+        await ZonesPage.fetchData();
+        ZonesPage.render();
+        App.toast('Zone data updated.', 'success');
+    },
+
+    /**
+     * Compute and render top statistics cards.
+     */
+    renderSummaryStatsHtml() {
+        let totalZones = ZonesPage._statusData.length;
+        let presentCount = 0;
+        let absentCount = 0;
+        let offDutyCount = 0;
+
+        ZonesPage._statusData.forEach(z => {
+            if (!z.is_in_schedule) {
+                offDutyCount++;
+            } else {
+                const hasAbsent = (z.assigned_persons || []).some(p => p.status === 'absent');
+                if (hasAbsent) {
+                    absentCount++;
+                } else if (z.assigned_persons && z.assigned_persons.length > 0) {
+                    presentCount++;
+                }
+            }
+        });
+
+        return `
+            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">🎯</div>
+                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary);">${totalZones}</div>
+                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Total Active Zones</div>
+                </div>
+                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">🟢</div>
+                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: var(--accent-emerald);">${presentCount}</div>
+                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Staff On Station (Present)</div>
+                </div>
+                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">🔴</div>
+                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: #f87171;">${absentCount}</div>
+                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Absence / Missing Alerts</div>
+                </div>
+                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">⚪</div>
+                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: var(--text-secondary);">${offDutyCount}</div>
+                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Off-Duty (Outside Shift)</div>
+                </div>
+            </div>
+        `;
+    },
+
+    updateSummaryStats() {
+        const container = document.getElementById('zone-summary-stats');
+        if (container) {
+            container.innerHTML = ZonesPage.renderSummaryStatsHtml();
+        }
+    },
+
+    /**
+     * Render the active sub-tab content.
+     */
+    renderSubTabContent() {
+        if (ZonesPage._activeSubTab === 'board') {
+            return `
+                <div id="zones-presence-grid" class="presence-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
+                    ${ZonesPage.renderPresenceGrid()}
+                </div>
+            `;
+        } else if (ZonesPage._activeSubTab === 'zones') {
+            return ZonesPage.renderZoneAssignmentsTab();
+        } else {
+            return ZonesPage.renderLogsTab();
+        }
+    },
+
+    /**
+     * Render the Live Presence Board cards.
+     */
+    renderPresenceGrid() {
+        if (ZonesPage._statusData.length === 0) {
+            return `
+                <div class="empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: var(--bg-glass); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🎯</div>
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-primary);">No Important Areas Defined</h3>
+                    <p style="color: var(--text-tertiary); font-size: 0.9rem; margin-bottom: 1.25rem;">Create camera zones and attach staff to track live presence and shift timetables.</p>
+                    <button class="btn btn-primary" onclick="App.navigate('cameras')">Manage Cameras & Zones</button>
+                </div>
+            `;
+        }
+
+        return ZonesPage._statusData.map(z => {
+            let overallStatus = 'present';
+            let statusColor = '#10b981';
+            let statusBadge = '🟢 ON STATION';
+
+            if (!z.is_in_schedule) {
+                overallStatus = 'off_duty';
+                statusColor = '#94a3b8';
+                statusBadge = '⚪ OFF DUTY';
+            } else if ((z.assigned_persons || []).some(p => p.status === 'absent')) {
+                overallStatus = 'absent';
+                statusColor = '#ef4444';
+                statusBadge = '🔴 ABSENT / MISSING';
+            }
+
+            return `
+                <div class="presence-card" style="background: var(--bg-glass); border: 1px solid ${overallStatus === 'absent' ? 'rgba(239, 68, 68, 0.4)' : overallStatus === 'present' ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)'}; border-radius: var(--radius-lg); padding: 1.25rem; backdrop-filter: blur(12px); display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <!-- Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.85rem;">
+                            <div>
+                                <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>🎯</span>
+                                    <span>${ZonesPage.escapeHtml(z.zone_name)}</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                                    📹 ${ZonesPage.escapeHtml(z.camera_name)}
+                                </div>
+                            </div>
+                            <span style="font-size: 0.68rem; font-weight: 800; padding: 3px 8px; border-radius: var(--radius-full); background: ${statusColor}22; color: ${statusColor}; border: 1px solid ${statusColor}55;">
+                                ${statusBadge}
+                            </span>
+                        </div>
+
+                        <!-- Timetable / Shift -->
+                        <div style="background: var(--bg-surface-hover); padding: 0.6rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 0.85rem; font-size: 0.75rem;">
+                            <div style="color: var(--text-tertiary); font-weight: 600; text-transform: uppercase; font-size: 0.65rem;">🕐 Timetable Shift</div>
+                            <div style="color: var(--accent-blue); font-weight: 600; margin-top: 0.15rem;">${ZonesPage.escapeHtml(z.timetable_text)}</div>
+                        </div>
+
+                        <!-- Attached Person(s) Status List -->
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase;">Assigned Staff:</div>
+                            ${z.assigned_persons.length === 0 ? `
+                                <div style="font-size: 0.78rem; color: var(--text-tertiary); font-style: italic;">No staff attached to this area.</div>
+                            ` : z.assigned_persons.map(p => `
+                                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+                                        <span>👤</span>
+                                        <span>${ZonesPage.escapeHtml(p.person_name)}</span>
+                                    </div>
+                                    <div style="font-size: 0.72rem; font-weight: 600; color: ${p.status === 'present' ? 'var(--accent-emerald)' : p.status === 'absent' ? '#f87171' : 'var(--text-tertiary)'};">
+                                        ${p.last_seen_str}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 0.5rem; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${z.camera_id})" style="flex: 1; justify-content: center; font-size: 0.75rem;">
+                            ✏️ Edit Area & Shift
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    /**
+     * Render the Zone Assignments & Shift management sub-tab.
+     */
+    renderZoneAssignmentsTab() {
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-glass); padding: 1rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <div>
+                        <h3 style="margin: 0 0 0.25rem 0; color: var(--text-primary); font-size: 1.05rem;">🎯 Cameras & Designated Areas</h3>
+                        <p style="margin: 0; font-size: 0.8rem; color: var(--text-tertiary);">Define spatial regions of interest, attach identities, and configure shift timetables.</p>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="App.navigate('cameras')">
+                        📹 Go to Cameras
+                    </button>
+                </div>
+
+                <div class="zones-assignment-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                    ${ZonesPage._cameras.map(cam => {
+                        const camZones = ZonesPage._zones.filter(z => z.camera_id === cam.id);
+                        return `
+                            <div class="camera-zone-group" style="background: var(--bg-glass); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); padding: 1.25rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                        <span style="font-size: 1.3rem;">📹</span>
+                                        <div>
+                                            <div style="font-weight: 700; color: var(--text-primary); font-size: 1rem;">${ZonesPage.escapeHtml(cam.name)}</div>
+                                            <div style="font-size: 0.75rem; color: var(--text-tertiary);">${ZonesPage.escapeHtml(cam.location || 'Location not specified')}</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${cam.id})" style="background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.4); color: var(--accent-blue);">
+                                        🎯 Manage Zones (${camZones.length})
+                                    </button>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem;">
+                                    ${camZones.length === 0 ? `
+                                        <div style="font-size: 0.8rem; color: var(--text-tertiary); padding: 0.5rem 0;">No areas created on this camera yet.</div>
+                                    ` : camZones.map(z => `
+                                        <div style="background: var(--bg-surface); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.25rem;">🎯 ${ZonesPage.escapeHtml(z.name)}</div>
+                                            <div style="font-size: 0.72rem; color: var(--accent-blue); margin-bottom: 0.2rem;">🕐 ${z.start_time || '00:00'} - ${z.end_time || '23:59'} (${(z.active_days || []).join(', ')})</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-tertiary);">Attached IDs: ${(z.assigned_person_ids || []).join(', ') || 'None'}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    },
+
+    /**
+     * Render the Security & Absence Logs sub-tab.
+     */
+    renderLogsTab() {
+        if (ZonesPage._logs.length === 0) {
+            return `
+                <div class="empty-state" style="text-align: center; padding: 3rem; background: var(--bg-glass); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📋</div>
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-primary);">No Zone Violation Logs</h3>
+                    <p style="color: var(--text-tertiary); font-size: 0.9rem;">No absence timeouts, out-of-zone violations, or unauthorized entries recorded yet.</p>
+                </div>
+            `;
+        }
+
+        return `
+            <div style="background: var(--bg-glass); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
+                    <thead>
+                        <tr style="background: var(--bg-surface-hover); border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 0.75rem; text-transform: uppercase;">
+                            <th style="padding: 0.85rem 1rem;">Snapshot</th>
+                            <th style="padding: 0.85rem 1rem;">Time (Local)</th>
+                            <th style="padding: 0.85rem 1rem;">Person</th>
+                            <th style="padding: 0.85rem 1rem;">Camera & Area</th>
+                            <th style="padding: 0.85rem 1rem;">Alert / Violation Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${ZonesPage._logs.map(log => {
+                            let alertBadge = '<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); font-size: 0.7rem; font-weight: 700;">Zone Event</span>';
+                            if (log.alert_type === 'out_of_zone') {
+                                alertBadge = '<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.7rem; font-weight: 700;">⚠️ Out of Area</span>';
+                            } else if (log.alert_type === 'unauthorized_entry') {
+                                alertBadge = '<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); font-size: 0.7rem; font-weight: 700;">🚨 Unauthorized Entry</span>';
+                            } else if (log.alert_type === 'absence_timeout') {
+                                alertBadge = '<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.7rem; font-weight: 700;">⏱️ Absence Timeout</span>';
+                            }
+
+                            const timeStr = EventCard.formatFullTimestamp ? EventCard.formatFullTimestamp(log.timestamp) : new Date(log.timestamp).toLocaleString();
+
+                            return `
+                                <tr style="border-bottom: 1px solid var(--border-subtle); transition: background 0.15s ease;" onmouseover="this.style.background='var(--bg-surface-hover)'" onmouseout="this.style.background='transparent'">
+                                    <td style="padding: 0.6rem 1rem;">
+                                        <img src="${log.snapshot_url || '/api/snapshots/' + log.snapshot_path}" style="width: 46px; height: 46px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); cursor: pointer;" onclick="EventCard.showDetailModal(${log.id})" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 50 50%22><rect fill=%22%231e293b%22 width=%2250%22 height=%2250%22/><text x=%2225%22 y=%2228%22 text-anchor=%22middle%22 fill=%22%2394a3b8%22 font-size=%2210%22>No Pic</text></svg>'" />
+                                    </td>
+                                    <td style="padding: 0.6rem 1rem; color: var(--text-secondary); font-size: 0.8rem;">${timeStr}</td>
+                                    <td style="padding: 0.6rem 1rem; font-weight: 600; color: var(--text-primary);">👤 ${ZonesPage.escapeHtml(log.person_name || 'Unknown')}</td>
+                                    <td style="padding: 0.6rem 1rem;">
+                                        <div style="font-weight: 600; color: var(--text-primary);">📹 ${ZonesPage.escapeHtml(log.camera_name || 'Camera')}</div>
+                                        ${log.zone_name ? `<div style="font-size: 0.72rem; color: var(--accent-blue);">🎯 Area: ${ZonesPage.escapeHtml(log.zone_name)}</div>` : ''}
+                                    </td>
+                                    <td style="padding: 0.6rem 1rem;">${alertBadge}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    },
+};

@@ -50,6 +50,26 @@ async def init_db() -> None:
                         sync_conn.exec_driver_sql("ALTER TABLE events ADD COLUMN zone_name VARCHAR(255) DEFAULT ''")
                     if "alert_type" not in cols:
                         sync_conn.exec_driver_sql("ALTER TABLE events ADD COLUMN alert_type VARCHAR(50) DEFAULT 'normal'")
+
+                z_res = sync_conn.exec_driver_sql("PRAGMA table_info(camera_zones)")
+                z_cols = {row[1] for row in z_res.fetchall()}
+                if z_cols:
+                    if "start_time" not in z_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN start_time VARCHAR(10) DEFAULT '00:00'")
+                    if "end_time" not in z_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN end_time VARCHAR(10) DEFAULT '23:59'")
+                    if "active_days" not in z_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN active_days JSON")
+
+                # Data backfill for existing records
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET start_time = '00:00' WHERE start_time IS NULL OR start_time = ''")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET end_time = '23:59' WHERE end_time IS NULL OR end_time = ''")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET active_days = '[\"Mon\", \"Tue\", \"Wed\", \"Thu\", \"Fri\", \"Sat\", \"Sun\"]' WHERE active_days IS NULL")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET assigned_person_ids = '[]' WHERE assigned_person_ids IS NULL")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET alert_mode = 'absence' WHERE alert_mode IS NULL OR alert_mode = ''")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET is_active = 1 WHERE is_active IS NULL")
+                sync_conn.exec_driver_sql("UPDATE events SET alert_type = 'normal' WHERE alert_type IS NULL OR alert_type = ''")
+                sync_conn.exec_driver_sql("UPDATE events SET zone_name = '' WHERE zone_name IS NULL")
             except Exception:
                 pass
 

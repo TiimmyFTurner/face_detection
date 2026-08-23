@@ -308,3 +308,87 @@ async def test_update_and_delete_camera_zone(client: AsyncClient):
     # Verify deleted
     get_resp = await client.get(f"/api/zones/{zone_id}")
     assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_zone_status_and_logs(client: AsyncClient):
+    # Create camera and zone with timetable
+    cam_resp = await client.post("/api/cameras", json={
+        "name": "Status Cam",
+        "rtsp_url": "rtsp://localhost/status_test",
+        "is_active": False,
+    })
+    cam_id = cam_resp.json()["id"]
+
+    zone_resp = await client.post(f"/api/cameras/{cam_id}/zones", json={
+        "name": "Status Zone",
+        "x": 5.0,
+        "y": 5.0,
+        "width": 40.0,
+        "height": 40.0,
+        "alert_mode": "absence",
+        "assigned_person_ids": [1],
+        "start_time": "08:00",
+        "end_time": "18:00",
+        "active_days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    })
+    assert zone_resp.status_code == 201
+
+    # Test GET /api/zones/status
+    status_resp = await client.get("/api/zones/status")
+    assert status_resp.status_code == 200
+    status_list = status_resp.json()
+    assert isinstance(status_list, list)
+    assert len(status_list) >= 1
+
+    # Test GET /api/zones/logs
+    logs_resp = await client.get("/api/zones/logs")
+    assert logs_resp.status_code == 200
+    logs = logs_resp.json()
+    assert isinstance(logs, list)
+
+
+@pytest.mark.asyncio
+async def test_legacy_zone_backward_compatibility(client: AsyncClient, test_session):
+    # Insert a legacy CameraZone directly with NULL fields
+    from backend.models import Camera, CameraZone
+
+    cam = Camera(name="Legacy Cam", rtsp_url="rtsp://localhost/legacy", is_active=False)
+    test_session.add(cam)
+    await test_session.commit()
+    await test_session.refresh(cam)
+
+    legacy_zone = CameraZone(
+        camera_id=cam.id,
+        name="Old Legacy Area",
+        x=10.0,
+        y=10.0,
+        width=30.0,
+        height=30.0,
+        alert_mode=None,
+        assigned_person_ids=None,
+        start_time=None,
+        end_time=None,
+        active_days=None,
+    )
+    test_session.add(legacy_zone)
+    await test_session.commit()
+    await test_session.refresh(legacy_zone)
+
+    # Verify listing all zones works and doesn't 500
+    all_zones_resp = await client.get("/api/zones")
+    assert all_zones_resp.status_code == 200
+    all_zones = all_zones_resp.json()
+    assert any(z["name"] == "Old Legacy Area" for z in all_zones)
+
+    # Verify camera-scoped zones endpoint works
+    cam_zones_resp = await client.get(f"/api/cameras/{cam.id}/zones")
+    assert cam_zones_resp.status_code == 200
+    cam_zones = cam_zones_resp.json()
+    assert len(cam_zones) == 1
+    assert cam_zones[0]["assigned_person_ids"] == []
+    assert cam_zones[0]["start_time"] == "00:00"
+
+    # Verify status board endpoint works
+    status_resp = await client.get("/api/zones/status")
+    assert status_resp.status_code == 200

@@ -94,7 +94,7 @@ const ZoneModal = {
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
                             <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">Notification Policy</label>
                             <select id="zone-alert-mode" class="form-input" style="font-size: 0.8rem;">
                                 <option value="absence">🔔 Alert if attached person is NOT in this area</option>
@@ -103,8 +103,30 @@ const ZoneModal = {
                             </select>
                         </div>
 
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">🕐 Shift Timetable (Active Monitoring Hours)</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
+                                <div>
+                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">Start Time</span>
+                                    <input type="time" id="zone-start-time" class="form-input" value="08:00" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" />
+                                </div>
+                                <div>
+                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">End Time</span>
+                                    <input type="time" id="zone-end-time" class="form-input" value="17:00" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" />
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.25rem;" id="zone-days-picker">
+                                ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => `
+                                    <label style="font-size: 0.72rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.2rem; cursor: pointer; background: var(--bg-surface); padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                        <input type="checkbox" name="zone-day" value="${day}" ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day) ? 'checked' : ''} />
+                                        <span>${day}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+
                         <button class="btn btn-primary btn-sm" onclick="ZoneModal.saveZone()" style="width: 100%;">
-                            💾 Save Area & Coordinates
+                            💾 Save Area & Timetable
                         </button>
                     </div>
 
@@ -171,6 +193,9 @@ const ZoneModal = {
                         </div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem;">
                             👤 Attached: <strong>${assignedNames.length > 0 ? ZoneModal.escapeHtml(assignedNames.join(', ')) : 'None'}</strong>
+                        </div>
+                        <div style="font-size: 0.68rem; color: var(--accent-blue); margin-top: 0.15rem;">
+                            🕐 Shift: ${zone.start_time || '00:00'} - ${zone.end_time || '23:59'} (${(zone.active_days || []).join(', ')})
                         </div>
                         <div style="font-size: 0.68rem; color: var(--text-tertiary);">
                             ${zone.alert_mode === 'absence' ? '🔔 Alert if NOT in area' : zone.alert_mode === 'unauthorized' ? '🚨 Alert if unauthorized' : '⚠️ Both alerts'}
@@ -255,6 +280,10 @@ const ZoneModal = {
             .map(cb => parseInt(cb.value, 10));
 
         const alertMode = document.getElementById('zone-alert-mode').value;
+        const startTime = document.getElementById('zone-start-time') ? document.getElementById('zone-start-time').value : '08:00';
+        const endTime = document.getElementById('zone-end-time') ? document.getElementById('zone-end-time').value : '17:00';
+        const checkedDays = Array.from(document.querySelectorAll('#zone-days-picker input[type="checkbox"]:checked'))
+            .map(cb => cb.value);
 
         const payload = {
             name: name,
@@ -264,6 +293,9 @@ const ZoneModal = {
             height: Math.round(ZoneModal._currentBox.height * 10) / 10,
             alert_mode: alertMode,
             assigned_person_ids: checkedPersons,
+            start_time: startTime,
+            end_time: endTime,
+            active_days: checkedDays.length > 0 ? checkedDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
             is_active: true,
         };
 

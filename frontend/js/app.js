@@ -61,6 +61,9 @@ const App = {
             case 'persons':
                 PersonsPage.load();
                 break;
+            case 'zones':
+                ZonesPage.load();
+                break;
             default:
                 DashboardPage.load();
         }

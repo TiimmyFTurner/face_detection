@@ -20,7 +20,7 @@ from backend.config import settings
 from backend.database import init_db
 from backend.face_engine import face_engine
 from backend.stream_processor import stream_processor, ws_manager
-from backend.routers import cameras, persons, events, snapshots, zones
+from backend.routers import cameras, persons, events, snapshots, zones, system
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(
@@ -98,6 +98,7 @@ app.include_router(persons.router)
 app.include_router(events.router)
 app.include_router(snapshots.router)
 app.include_router(zones.router)
+app.include_router(system.router)
 
 
 # ── Health Check ─────────────────────────────────────────

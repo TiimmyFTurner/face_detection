@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     max_reconnect_backoff: int = 30
 
     # ── Storage ──────────────────────────────────────────
+    save_snapshots: bool = True  # If False, events are only logged to DB without saving snapshot files to disk
     snapshot_dir: str = "./data/snapshots"
     reference_photo_dir: str = "./data/reference_photos"
 

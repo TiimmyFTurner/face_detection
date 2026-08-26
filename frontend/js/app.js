@@ -153,15 +153,35 @@ const App = {
     },
 
     // ─── API Helper ────────────────────────────────────────
-    async api(url, method = 'GET', body = null) {
+    async api(url, methodOrOptions = 'GET', body = null) {
+        let method = 'GET';
+        let headers = {};
+        let reqBody = null;
+
+        if (typeof methodOrOptions === 'object' && methodOrOptions !== null) {
+            method = methodOrOptions.method || 'GET';
+            headers = methodOrOptions.headers || {};
+            reqBody = methodOrOptions.body || null;
+        } else {
+            method = (typeof methodOrOptions === 'string' ? methodOrOptions : 'GET').toUpperCase();
+            reqBody = body;
+        }
+
         const options = {
             method,
-            headers: {},
+            headers: { ...headers },
         };
 
-        if (body && method !== 'GET') {
-            options.headers['Content-Type'] = 'application/json';
-            options.body = JSON.stringify(body);
+        if (reqBody && method !== 'GET') {
+            if (typeof reqBody === 'object') {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(reqBody);
+            } else {
+                if (!options.headers['Content-Type']) {
+                    options.headers['Content-Type'] = 'application/json';
+                }
+                options.body = reqBody;
+            }
         }
 
         const response = await fetch(url, options);

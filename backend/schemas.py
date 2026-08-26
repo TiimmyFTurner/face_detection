@@ -255,3 +255,25 @@ class WSEvent(BaseModel):
     """Real-time event pushed via WebSocket."""
     type: str = "new_event"
     event: EventResponse
+
+
+# ═══════════════════════════════════════════════════════════
+# System Settings Schemas
+# ═══════════════════════════════════════════════════════════
+
+class SystemSettingsResponse(BaseModel):
+    """Current runtime settings of the system."""
+    save_snapshots: bool
+    match_threshold: float
+    cooldown_seconds: int
+    frame_skip: int
+    downscale_factor: float
+
+
+class SystemSettingsUpdate(BaseModel):
+    """Update runtime settings of the system."""
+    save_snapshots: Optional[bool] = None
+    match_threshold: Optional[float] = None
+    cooldown_seconds: Optional[int] = None
+    frame_skip: Optional[int] = None
+    downscale_factor: Optional[float] = None

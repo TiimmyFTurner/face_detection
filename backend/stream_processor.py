@@ -581,21 +581,23 @@ class StreamProcessor:
                         alert_type = "unauthorized_entry"
                         alert_message = f"🚨 Alert: Unauthorized person ({match.person_name}) in restricted area '{matched_zone['name']}' on {camera_name}"
 
-            # Save cropped face snapshot
-            snapshot_filename = f"{uuid.uuid4().hex}.jpg"
-            snapshot_path = Path(settings.snapshot_dir) / snapshot_filename
+            # Save cropped face snapshot (if enabled in settings)
+            snapshot_filename = ""
+            if getattr(settings, "save_snapshots", True):
+                snapshot_filename = f"{uuid.uuid4().hex}.jpg"
+                snapshot_path = Path(settings.snapshot_dir) / snapshot_filename
 
-            try:
-                cropped = face_engine.crop_face(frame, face.bbox)
-                await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda p=str(snapshot_path), c=cropped: cv2.imwrite(
-                        p, c, [cv2.IMWRITE_JPEG_QUALITY, 100, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
-                    ),
-                )
-            except Exception as e:
-                logger.warning("Failed to save snapshot: %s", e)
-                continue
+                try:
+                    cropped = face_engine.crop_face(frame, face.bbox)
+                    await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda p=str(snapshot_path), c=cropped: cv2.imwrite(
+                            p, c, [cv2.IMWRITE_JPEG_QUALITY, 100, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
+                        ),
+                    )
+                except Exception as e:
+                    logger.warning("Failed to save snapshot: %s", e)
+                    snapshot_filename = ""
 
             # Log event to database
             try:
@@ -627,7 +629,8 @@ class StreamProcessor:
                             "person_id": match.person_id,
                             "person_name": match.person_name,
                             "confidence_score": match.confidence,
-                            "snapshot_url": f"/api/snapshots/{snapshot_filename}",
+                            "snapshot_url": f"/api/snapshots/{snapshot_filename}" if snapshot_filename else "",
+                            "snapshot_path": snapshot_filename,
                             "is_known": match.is_known,
                             "zone_id": zone_id,
                             "zone_name": zone_name,

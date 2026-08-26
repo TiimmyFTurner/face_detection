@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="سامانه تشخیص چهره و نظارت تصویری هوشمند دوربین‌های مداربسته IP">
     <title>FaceTrack — سامانه تشخیص چهره و نظارت هوشمند</title>
-    <link rel="stylesheet" href="/css/style.css?v=2.0">
+    <link rel="stylesheet" href="/css/style.css?v=2.1">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
 </head>
 <body>
@@ -39,6 +39,10 @@
                 <a class="nav-item" data-page="persons" id="nav-persons">
                     <span class="nav-icon">👤</span>
                     <span>هویت‌ها و چهره‌ها</span>
+                </a>
+                <a class="nav-item" id="nav-settings" onclick="SettingsModal.show()" style="cursor: pointer;">
+                    <span class="nav-icon">⚙️</span>
+                    <span>تنظیمات</span>
                 </a>
             </nav>
 
@@ -81,15 +85,16 @@
     </div>
 
     <!-- ── JavaScript ───────────────────────────────────── -->
-    <script src="/js/i18n.js?v=2.0"></script>
-    <script src="/js/components/eventCard.js?v=2.0"></script>
-    <script src="/js/components/cameraForm.js?v=2.0"></script>
-    <script src="/js/components/personForm.js?v=2.0"></script>
-    <script src="/js/components/zoneModal.js?v=2.0"></script>
-    <script src="/js/pages/dashboard.js?v=2.0"></script>
-    <script src="/js/pages/zonesPage.js?v=2.0"></script>
-    <script src="/js/pages/cameras.js?v=2.0"></script>
-    <script src="/js/pages/persons.js?v=2.0"></script>
-    <script src="/js/app.js?v=2.0"></script>
+    <script src="/js/i18n.js?v=2.1"></script>
+    <script src="/js/components/eventCard.js?v=2.1"></script>
+    <script src="/js/components/cameraForm.js?v=2.1"></script>
+    <script src="/js/components/personForm.js?v=2.1"></script>
+    <script src="/js/components/zoneModal.js?v=2.1"></script>
+    <script src="/js/components/settingsModal.js?v=2.1"></script>
+    <script src="/js/pages/dashboard.js?v=2.1"></script>
+    <script src="/js/pages/zonesPage.js?v=2.1"></script>
+    <script src="/js/pages/cameras.js?v=2.1"></script>
+    <script src="/js/pages/persons.js?v=2.1"></script>
+    <script src="/js/app.js?v=2.1"></script>
 </body>
 </html>

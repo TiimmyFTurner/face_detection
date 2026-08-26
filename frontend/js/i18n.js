@@ -17,6 +17,7 @@ const I18n = {
             nav_zones: 'منطقه‌ها و شیفت‌ها',
             nav_cameras: 'دوربین‌ها',
             nav_persons: 'هویت‌ها و چهره‌ها',
+            nav_settings: 'تنظیمات سیستم',
             ws_connected: 'متصل شد',
             ws_reconnecting: 'در حال اتصال مجدد...',
             ws_connecting: 'در حال برقراری ارتباط...',
@@ -245,6 +246,21 @@ const I18n = {
             unit_minutes: '{m} دقیقه',
             unit_hours_minutes: '{h} ساعت و {m} دقیقه',
 
+            // System Settings
+            settings_title: '⚙️ تنظیمات سیستم',
+            settings_subtitle: 'پیکربندی هوشمند ذخیره‌سازی، شناسایی چهره و کارایی سیستم',
+            setting_save_snapshots: 'ذخیره تصاویر اسنپ‌شات رویدادها',
+            setting_save_snapshots_desc: 'در صورت غیرفعال بودن، رویدادها صرفاً در پایگاه‌داده (Database-Only) ثبت شده و فایل تصویری روی دیسک ذخیره نمی‌شود.',
+            setting_save_snapshots_enabled: 'فعال (ذخیره تصویر روی دیسک و ثبت دیتابیس)',
+            setting_save_snapshots_disabled: 'غیرفعال (صرفاً ثبت در پایگاه‌داده)',
+            setting_cooldown: 'زمان خنک‌سازی کول‌داون (ثانیه)',
+            setting_cooldown_desc: 'فاصله زمانی بین ثبت رویدادهای مجدد برای یک فرد یکسان در همان دوربین',
+            setting_match_threshold: 'آستانه دقت تطبیق چهره',
+            setting_match_threshold_desc: 'حداقل شباهت برای تأیید هویت فرد شناخته‌شده (بین ۰.۱ تا ۱.۰)',
+            setting_frame_skip: 'نرخ پردازش فریم (Frame Skip)',
+            setting_frame_skip_desc: 'پردازش یک فریم از هر N فریم برای بهینه‌سازی بار پردازشی سخت‌افزار',
+            settings_saved_success: 'تنظیمات سیستم با موفقیت ذخیره و اعمال شد.',
+
             // Time Relative
             just_now: 'هم‌اکنون',
             minutes_ago: '{mins} دقیقه پیش',
@@ -260,6 +276,7 @@ const I18n = {
             nav_zones: 'Zones & Shifts',
             nav_cameras: 'Cameras',
             nav_persons: 'Identities',
+            nav_settings: 'Settings',
             ws_connected: 'Connected',
             ws_reconnecting: 'Reconnecting...',
             ws_connecting: 'Connecting...',
@@ -488,6 +505,21 @@ const I18n = {
             unit_minutes: '{m} mins',
             unit_hours_minutes: '{h}h {m}m',
 
+            // System Settings
+            settings_title: '⚙️ System Settings',
+            settings_subtitle: 'Configure snapshot storage, recognition thresholds, and performance',
+            setting_save_snapshots: 'Save Event Snapshot Images',
+            setting_save_snapshots_desc: 'When disabled, events are logged exclusively to the database (Database-Only) without writing image files to disk.',
+            setting_save_snapshots_enabled: 'Enabled (Disk & Database)',
+            setting_save_snapshots_disabled: 'Disabled (Database Only)',
+            setting_cooldown: 'Event Cooldown (Seconds)',
+            setting_cooldown_desc: 'Minimum time between duplicate event logs for the same person on a camera',
+            setting_match_threshold: 'Face Match Threshold',
+            setting_match_threshold_desc: 'Minimum similarity score to match known identity (0.1 to 1.0)',
+            setting_frame_skip: 'Frame Skip Rate',
+            setting_frame_skip_desc: 'Process 1 frame every N frames for performance optimization',
+            settings_saved_success: 'System settings updated and applied successfully.',
+
             // Time Relative
             just_now: 'Just now',
             minutes_ago: '{mins}m ago',
@@ -568,6 +600,9 @@ const I18n = {
 
         const navPersons = document.querySelector('#nav-persons span:last-child');
         if (navPersons) navPersons.textContent = I18n.t('nav_persons');
+
+        const navSettings = document.querySelector('#nav-settings span:last-child');
+        if (navSettings) navSettings.textContent = I18n.t('nav_settings');
 
         const langLabel = document.getElementById('lang-switcher-label');
         if (langLabel) langLabel.textContent = I18n.t('lang_switcher_label');

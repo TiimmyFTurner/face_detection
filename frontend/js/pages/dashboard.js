@@ -13,9 +13,15 @@ const DashboardPage = {
     async load() {
         document.getElementById('page-title').textContent = I18n.t('dashboard_title');
         document.getElementById('header-actions').innerHTML = `
-            <div class="live-indicator">
-                <span class="live-dot"></span>
-                ${I18n.t('live')}
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <button class="btn btn-secondary btn-sm" onclick="SettingsModal.show()" title="${I18n.t('nav_settings')}" style="display: flex; align-items: center; gap: 0.35rem;">
+                    <span>⚙️</span>
+                    <span>${I18n.t('nav_settings')}</span>
+                </button>
+                <div class="live-indicator">
+                    <span class="live-dot"></span>
+                    ${I18n.t('live')}
+                </div>
             </div>
         `;
 

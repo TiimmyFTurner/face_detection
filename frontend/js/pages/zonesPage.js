@@ -409,7 +409,16 @@ const ZonesPage = {
                                         <div style="font-weight: 600; color: var(--text-primary);">📹 ${ZonesPage.escapeHtml(camName)}</div>
                                         ${log.zone_name ? `<div style="font-size: 0.72rem; color: var(--accent-blue);">🎯 ${I18n.t('event_area')}: ${ZonesPage.escapeHtml(log.zone_name)}</div>` : ''}
                                     </td>
-                                    <td style="padding: 0.6rem 1rem;">${alertBadge}</td>
+                                    <td style="padding: 0.6rem 1rem;">
+                                        <div style="display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-start;">
+                                            <div>${alertBadge}</div>
+                                            ${(log.duration_seconds || log.duration_str) ? `
+                                                <div style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); padding: 2px 7px; border-radius: var(--radius-sm);">
+                                                    <span>${I18n.t('absence_duration_pill', { duration: log.duration_seconds ? I18n.formatDuration(log.duration_seconds) : log.duration_str })}</span>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </td>
                                 </tr>
                             `;
                         }).join('')}
@@ -417,6 +426,56 @@ const ZonesPage = {
                 </table>
             </div>
         `;
+    },
+
+    /**
+     * Prepend incoming real-time zone alert/event to the Security & Absence Logs list.
+     */
+    addRealtimeLog(data) {
+        const eventItem = data.event || {
+            id: data.id || Date.now(),
+            timestamp: data.timestamp || new Date().toISOString(),
+            camera_id: data.camera_id,
+            camera_name: data.camera_name,
+            person_id: data.person_id,
+            person_name: data.person_name,
+            zone_id: data.zone_id,
+            zone_name: data.zone_name,
+            alert_type: data.alert_type || 'out_of_zone',
+            snapshot_url: data.snapshot_url || (data.snapshot_path ? '/api/snapshots/' + data.snapshot_path : ''),
+            snapshot_path: data.snapshot_path || '',
+            confidence_score: data.confidence_score || 1.0,
+            duration_seconds: data.duration_seconds || null,
+            duration_str: data.duration_str || null,
+            is_known: true
+        };
+
+        if (typeof EventCard !== 'undefined' && EventCard._cache) {
+            EventCard._cache[eventItem.id] = eventItem;
+        }
+
+        // Avoid duplicate ID
+        if (!ZonesPage._logs.some(l => l.id === eventItem.id)) {
+            ZonesPage._logs.unshift(eventItem);
+            if (ZonesPage._logs.length > 100) {
+                ZonesPage._logs = ZonesPage._logs.slice(0, 100);
+            }
+        }
+
+        // Update Subtab count badge
+        const logsBtn = document.querySelector('button[onclick*="switchSubTab(\'logs\')"]');
+        if (logsBtn) {
+            const logsCount = I18n.isRTL() ? I18n.toPersianDigits(ZonesPage._logs.length) : ZonesPage._logs.length;
+            logsBtn.textContent = I18n.t('subtab_logs', { count: logsCount });
+        }
+
+        // If currently viewing logs tab, re-render the table dynamically
+        if (ZonesPage._activeSubTab === 'logs') {
+            const content = document.getElementById('zone-subtab-content');
+            if (content) {
+                content.innerHTML = ZonesPage.renderLogsTab();
+            }
+        }
     },
 
     escapeHtml(text) {

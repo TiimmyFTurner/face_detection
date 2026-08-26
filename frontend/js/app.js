@@ -94,8 +94,16 @@ const App = {
                     const data = JSON.parse(event.data);
                     if (data.type === 'new_event') {
                         DashboardPage.addRealtimeEvent(data.event);
+                        if (data.event && (data.event.alert_type === 'out_of_zone' || data.event.alert_type === 'unauthorized_entry' || data.event.alert_type === 'absence_timeout')) {
+                            if (typeof ZonesPage !== 'undefined' && ZonesPage.addRealtimeLog) {
+                                ZonesPage.addRealtimeLog({ event: data.event, ...data.event });
+                            }
+                        }
                     } else if (data.type === 'zone_alert') {
                         App.showZoneAlert(data);
+                        if (typeof ZonesPage !== 'undefined' && ZonesPage.addRealtimeLog) {
+                            ZonesPage.addRealtimeLog(data);
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to parse WebSocket message:', err);

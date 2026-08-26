@@ -41,6 +41,7 @@ const EventCard = {
                             <span class="event-badge ${statusClass}">${badgeText}</span>
                             ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
                             ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
+                            ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}</span>` : ''}
                         </div>
                     </div>
                     <div class="event-card-meta">
@@ -133,6 +134,16 @@ const EventCard = {
                                 <span>${fullTimeStr}</span>
                             </div>
                         </div>
+
+                        ${(event.duration_seconds || event.duration_str) ? `
+                            <div class="info-block" style="background: rgba(245, 158, 11, 0.1); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid rgba(245, 158, 11, 0.3);">
+                                <div style="font-size: 0.75rem; text-transform: uppercase; color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem;">${I18n.isRTL() ? 'مدت عدم حضور' : 'Absence Duration'}</div>
+                                <div style="font-size: 1.1rem; font-weight: 800; color: #f59e0b; display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>⏱️</span>
+                                    <span>${event.duration_seconds ? I18n.formatDuration(event.duration_seconds) : event.duration_str}</span>
+                                </div>
+                            </div>
+                        ` : ''}
 
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">

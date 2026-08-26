@@ -239,6 +239,12 @@ const I18n = {
             err_failed_load: 'خطا در بارگذاری: {msg}',
             err_generic: 'خطا: {msg}',
 
+            // Absence Duration Units
+            absence_duration_pill: '⏱️ غیبت: {duration}',
+            unit_seconds: '{s} ثانیه',
+            unit_minutes: '{m} دقیقه',
+            unit_hours_minutes: '{h} ساعت و {m} دقیقه',
+
             // Time Relative
             just_now: 'هم‌اکنون',
             minutes_ago: '{mins} دقیقه پیش',
@@ -476,6 +482,12 @@ const I18n = {
             err_failed_load: 'Failed to load: {msg}',
             err_generic: 'Error: {msg}',
 
+            // Absence Duration Units
+            absence_duration_pill: '⏱️ Absent: {duration}',
+            unit_seconds: '{s}s',
+            unit_minutes: '{m} mins',
+            unit_hours_minutes: '{h}h {m}m',
+
             // Time Relative
             just_now: 'Just now',
             minutes_ago: '{mins}m ago',
@@ -653,9 +665,13 @@ const I18n = {
         const cameraName = data.camera_name || (data.event ? data.event.camera_name : I18n.t('event_camera'));
 
         if (alertType === 'absence_timeout') {
-            const timeDesc = data.message && data.message.includes('missing for')
-                ? data.message.split('missing for')[1].replace(')', '').trim()
-                : (I18n.isRTL() ? 'بیش از ۱ دقیقه' : 'over 1 min');
+            const timeDesc = data.duration_seconds
+                ? I18n.formatDuration(data.duration_seconds)
+                : (data.duration_str
+                    ? data.duration_str
+                    : (data.message && data.message.includes('missing for')
+                        ? data.message.split('missing for')[1].replace(')', '').trim()
+                        : (I18n.isRTL() ? 'بیش از ۱ دقیقه' : 'over 1 min')));
             return I18n.t('notification_absence_msg', {
                 person: personName,
                 zone: zoneName,
@@ -806,6 +822,31 @@ const I18n = {
             return Number(num).toLocaleString('fa-IR');
         }
         return Number(num).toLocaleString('en-US');
+    },
+
+    /**
+     * Format elapsed absence duration in localized friendly format.
+     */
+    formatDuration(seconds) {
+        if (!seconds && seconds !== 0) return '';
+        const sec = Math.max(0, parseInt(seconds, 10));
+        if (sec < 60) {
+            const s = I18n.isRTL() ? I18n.toPersianDigits(sec) : sec;
+            return I18n.t('unit_seconds', { s });
+        }
+        const totalMins = Math.floor(sec / 60);
+        if (totalMins < 60) {
+            const m = I18n.isRTL() ? I18n.toPersianDigits(totalMins) : totalMins;
+            return I18n.t('unit_minutes', { m });
+        }
+        const hours = Math.floor(totalMins / 60);
+        const mins = totalMins % 60;
+        const h = I18n.isRTL() ? I18n.toPersianDigits(hours) : hours;
+        const m = I18n.isRTL() ? I18n.toPersianDigits(mins) : mins;
+        if (mins === 0) {
+            return I18n.isRTL() ? `${h} ساعت` : `${h}h`;
+        }
+        return I18n.t('unit_hours_minutes', { h, m });
     }
 };
 

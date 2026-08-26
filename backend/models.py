@@ -128,7 +128,8 @@ class Event(Base):
     is_known = Column(Boolean, default=False, index=True)
     zone_id = Column(Integer, nullable=True)
     zone_name = Column(String(255), default="")
-    alert_type = Column(String(50), default="normal")  # "normal", "out_of_zone", "unauthorized_entry"
+    alert_type = Column(String(50), default="normal")  # "normal", "out_of_zone", "unauthorized_entry", "absence_timeout"
+    duration_seconds = Column(Integer, nullable=True, default=None)
 
     # Relationships
     camera = relationship("Camera", back_populates="events")

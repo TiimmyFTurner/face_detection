@@ -107,6 +107,7 @@ async def list_events(
                 zone_id=getattr(event, "zone_id", None),
                 zone_name=getattr(event, "zone_name", "") or "",
                 alert_type=getattr(event, "alert_type", "normal") or "normal",
+                duration_seconds=getattr(event, "duration_seconds", None),
             )
         )
 

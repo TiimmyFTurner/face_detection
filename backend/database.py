@@ -50,6 +50,8 @@ async def init_db() -> None:
                         sync_conn.exec_driver_sql("ALTER TABLE events ADD COLUMN zone_name VARCHAR(255) DEFAULT ''")
                     if "alert_type" not in cols:
                         sync_conn.exec_driver_sql("ALTER TABLE events ADD COLUMN alert_type VARCHAR(50) DEFAULT 'normal'")
+                    if "duration_seconds" not in cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE events ADD COLUMN duration_seconds INTEGER")
 
                 z_res = sync_conn.exec_driver_sql("PRAGMA table_info(camera_zones)")
                 z_cols = {row[1] for row in z_res.fetchall()}

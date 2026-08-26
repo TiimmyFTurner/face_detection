@@ -176,7 +176,7 @@ async def get_zones_status(db: AsyncSession = Depends(get_db)):
                 last_seen_sec = None
                 last_seen_str = "Off Duty (Outside Timetable)"
                 minutes_absent = None
-            elif last_seen > 0 and (now - last_seen) < 60.0:
+            elif last_seen > 0 and (now - last_seen) < 120.0:
                 status_str = "present"
                 last_seen_sec = round(now - last_seen, 1)
                 last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
@@ -251,6 +251,7 @@ async def get_zone_logs(
 
         cam_name = camera_map.get(e.camera_id, f"Camera #{e.camera_id}") if e.camera_id else ""
 
+        dur_secs = getattr(e, "duration_seconds", None)
         event_responses.append(
             EventResponse(
                 id=e.id,
@@ -266,6 +267,7 @@ async def get_zone_logs(
                 zone_id=e.zone_id,
                 zone_name=e.zone_name or "",
                 alert_type=e.alert_type or "normal",
+                duration_seconds=dur_secs,
             )
         )
 

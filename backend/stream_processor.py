@@ -80,6 +80,7 @@ class StreamProcessor:
         self._cooldown_cache: dict[tuple[int, Optional[int]], float] = {}  # (camera_id, person_id) -> last_log_time
         self._known_persons_cache: list[KnownPerson] = []
         self._latest_frames: dict[int, bytes] = {}  # camera_id -> JPEG bytes
+        self._camera_names: dict[int, str] = {}  # camera_id -> camera_name
         self._zones_cache: dict[int, list[dict]] = {}  # camera_id -> list of zone dicts
         self._zone_last_seen: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
         self._zone_last_absence_alert: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
@@ -136,6 +137,7 @@ class StreamProcessor:
         if camera_id in self._tasks:
             await self.stop_camera(camera_id)
 
+        self._camera_names[camera_id] = camera_name
         stop_event = asyncio.Event()
         self._stop_flags[camera_id] = stop_event
 
@@ -162,6 +164,7 @@ class StreamProcessor:
 
         self._stop_flags.pop(camera_id, None)
         self._latest_frames.pop(camera_id, None)
+        self._camera_names.pop(camera_id, None)
         logger.info("Stopped stream for camera %d.", camera_id)
 
     async def refresh_known_persons(self) -> None:
@@ -204,6 +207,10 @@ class StreamProcessor:
             zones_map: dict[int, list[dict]] = {}
 
             async with async_session() as session:
+                cams_result = await session.execute(select(Camera))
+                for c in cams_result.scalars().all():
+                    self._camera_names[c.id] = c.name
+
                 result = await session.execute(
                     select(CameraZone).where(CameraZone.is_active == True)  # noqa: E712
                 )
@@ -251,11 +258,11 @@ class StreamProcessor:
     async def _absence_watchdog_loop(self) -> None:
         """
         Periodic background watchdog: check if assigned persons are missing
-        from their designated zones for >= 60 seconds and broadcast alerts every minute
+        from their designated zones for >= 60 seconds and broadcast alerts
         (only during scheduled timetable hours).
         """
-        # Initial 30-second grace period after system startup
-        await asyncio.sleep(30)
+        # Initial 5-second grace period after system startup
+        await asyncio.sleep(5)
 
         while True:
             try:
@@ -268,6 +275,8 @@ class StreamProcessor:
                     # Only check active streaming cameras
                     if camera_id not in self._tasks or self._tasks[camera_id].done():
                         continue
+
+                    camera_name = self._camera_names.get(camera_id, f"Camera #{camera_id}")
 
                     for zone in zones:
                         # Check timetable shift hours
@@ -287,36 +296,90 @@ class StreamProcessor:
                             key = (zone["id"], person_id)
                             last_seen = self._zone_last_seen.get(key, 0)
 
-                            # If never seen since start, initialize timer to now
+                            # If never seen since startup, initialize timer to now
                             if last_seen == 0:
                                 self._zone_last_seen[key] = now
                                 continue
 
-                            # Check if person has been missing for 60 seconds or more
-                            if (now - last_seen) >= 60.0:
+                            # Check if person has been missing from zone for >= 60 seconds (1 minute)
+                            if (now - last_seen) >= 120.0:
                                 last_alert = self._zone_last_absence_alert.get(key, 0)
-                                # Notify once every 60 seconds
-                                if (now - last_alert) >= 60.0:
+                                # Throttle absence alert events to at most once every 2 minutes
+                                if (now - last_alert) >= 300.0:
                                     self._zone_last_absence_alert[key] = now
                                     person_name = known_persons_map.get(person_id, f"Person #{person_id}")
                                     minutes_absent = max(1, int((now - last_seen) // 60))
                                     time_desc = f"{minutes_absent} min" if minutes_absent == 1 else f"{minutes_absent} mins"
-
                                     message = (
                                         f"⚠️ Absence Alert: {person_name} is NOT in assigned area "
                                         f"'{zone['name']}' (missing for {time_desc})"
                                     )
                                     logger.warning(message)
 
+                                    saved_event_id = None
+                                    saved_snapshot = ""
+                                    absent_duration_secs = int(now - last_seen)
+                                    try:
+                                        async with async_session() as session:
+                                            pres = await session.execute(
+                                                select(PersonEmbedding)
+                                                .where(PersonEmbedding.person_id == person_id)
+                                                .order_by(PersonEmbedding.id.asc())
+                                            )
+                                            emb_obj = pres.scalars().first()
+                                            if emb_obj and emb_obj.reference_photo_path:
+                                                ref_name = Path(emb_obj.reference_photo_path).name
+                                                saved_snapshot = f"ref_{ref_name}"
+
+                                            evt = Event(
+                                                timestamp=datetime.now(timezone.utc),
+                                                camera_id=camera_id,
+                                                person_id=person_id,
+                                                person_name=person_name,
+                                                confidence_score=1.0,
+                                                snapshot_path=saved_snapshot,
+                                                is_known=True,
+                                                zone_id=zone["id"],
+                                                zone_name=zone["name"],
+                                                alert_type="absence_timeout",
+                                                duration_seconds=absent_duration_secs,
+                                            )
+                                            session.add(evt)
+                                            await session.commit()
+                                            await session.refresh(evt)
+                                            saved_event_id = evt.id
+                                    except Exception as db_err:
+                                        logger.error("Failed to log absence event to DB: %s", db_err)
+
                                     await ws_manager.broadcast({
                                         "type": "zone_alert",
                                         "alert_type": "absence_timeout",
                                         "message": message,
+                                        "event": {
+                                            "id": saved_event_id or int(time.time()),
+                                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                                            "camera_id": camera_id,
+                                            "camera_name": camera_name,
+                                            "person_id": person_id,
+                                            "person_name": person_name,
+                                            "confidence_score": 1.0,
+                                            "snapshot_url": f"/api/snapshots/{saved_snapshot}" if saved_snapshot else "",
+                                            "snapshot_path": saved_snapshot,
+                                            "is_known": True,
+                                            "zone_id": zone["id"],
+                                            "zone_name": zone["name"],
+                                            "alert_type": "absence_timeout",
+                                            "duration_seconds": absent_duration_secs,
+                                            "duration_str": time_desc,
+                                        },
                                         "zone_id": zone["id"],
                                         "zone_name": zone["name"],
                                         "camera_id": camera_id,
+                                        "camera_name": camera_name,
                                         "person_id": person_id,
                                         "person_name": person_name,
+                                        "duration_seconds": absent_duration_secs,
+                                        "duration_str": time_desc,
                                         "timestamp": datetime.now(timezone.utc).isoformat(),
                                     })
 
@@ -325,7 +388,7 @@ class StreamProcessor:
             except Exception as e:
                 logger.error("Error in absence watchdog loop: %s", e)
 
-            await asyncio.sleep(10)  # Check every 10 seconds
+            await asyncio.sleep(5)  # Check every 5 seconds
 
     async def _camera_loop(
         self,
@@ -463,29 +526,7 @@ class StreamProcessor:
             face_cx = ((face.bbox[0] + face.bbox[2]) / 2.0 / max(1, frame_w)) * 100.0
             face_cy = ((face.bbox[1] + face.bbox[3]) / 2.0 / max(1, frame_h)) * 100.0
 
-            # Check cooldown key
-            # For known person: key by (camera_id, person_id)
-            # For unknown person: key by spatial grid location so multiple unknown people are detected simultaneously
-            if match.person_id:
-                cooldown_key = (camera_id, match.person_id)
-            else:
-                grid_x = int(face_cx // 15)  # 15% grid granularity
-                grid_y = int(face_cy // 15)
-                cooldown_key = (camera_id, f"unknown_{grid_x}_{grid_y}")
-
-            now = time.time()
-            last_logged = self._cooldown_cache.get(cooldown_key, 0)
-
-            if now - last_logged < settings.cooldown_seconds:
-                continue  # Skip — too soon to re-log this person in this location
-
-            self._cooldown_cache[cooldown_key] = now
-
             # Evaluate Camera Zones / Important Areas
-            frame_h, frame_w = frame.shape[:2]
-            face_cx = ((face.bbox[0] + face.bbox[2]) / 2.0 / frame_w) * 100.0
-            face_cy = ((face.bbox[1] + face.bbox[3]) / 2.0 / frame_h) * 100.0
-
             camera_zones = self._zones_cache.get(camera_id, [])
             matched_zone = None
             for zone in camera_zones:
@@ -494,22 +535,38 @@ class StreamProcessor:
                     matched_zone = zone
                     break
 
+            # Always update presence heartbeat for assigned staff on EVERY frame
+            now = time.time()
+            if matched_zone and match.person_id:
+                self._zone_last_seen[(matched_zone["id"], match.person_id)] = now
+
+            # Check cooldown key for logging event to database & live feed
+            if match.person_id:
+                cooldown_key = (camera_id, match.person_id)
+            else:
+                grid_x = int(face_cx // 15)  # 15% grid granularity
+                grid_y = int(face_cy // 15)
+                cooldown_key = (camera_id, f"unknown_{grid_x}_{grid_y}")
+
+            last_logged = self._cooldown_cache.get(cooldown_key, 0)
+            if now - last_logged < settings.cooldown_seconds:
+                continue  # Skip event logging — cooldown active (presence heartbeat already updated above)
+
+            self._cooldown_cache[cooldown_key] = now
+
             zone_id = matched_zone["id"] if matched_zone else None
             zone_name = matched_zone["name"] if matched_zone else ""
             alert_type = "normal"
             alert_message = ""
 
-            # Update zone presence heartbeat
-            if matched_zone and match.person_id:
-                self._zone_last_seen[(matched_zone["id"], match.person_id)] = time.time()
-
-            # Rule 1: Absence / Out of Designated Area Alert
+            # Rule 1: Out of Designated Area Alert
+            # ONLY trigger if the zone policy is explicitly configured for immediate out_of_zone or both
             if match.person_id:
                 for zone in camera_zones:
                     assigned_ids = zone.get("assigned_person_ids", [])
                     if match.person_id in assigned_ids:
                         mode = zone.get("alert_mode", "absence")
-                        if mode in ("absence", "out_of_zone", "both"):
+                        if mode in ("out_of_zone", "both"):
                             if not matched_zone or matched_zone["id"] != zone["id"]:
                                 alert_type = "out_of_zone"
                                 alert_message = f"⚠️ Alert: {match.person_name} is NOT in assigned area '{zone['name']}' on {camera_name}"

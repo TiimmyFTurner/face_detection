@@ -224,7 +224,9 @@ class EventResponse(BaseModel):
     is_known: bool
     zone_id: Optional[int] = None
     zone_name: str = ""
-    alert_type: str = "normal"  # "normal", "out_of_zone", "unauthorized_entry"
+    alert_type: str = "normal"  # "normal", "out_of_zone", "unauthorized_entry", "absence_timeout"
+    duration_seconds: Optional[int] = None
+    duration_str: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

@@ -8,10 +8,10 @@ const CamerasPage = {
      * Load and render the cameras management page.
      */
     async load() {
-        document.getElementById('page-title').textContent = 'Camera Management';
+        document.getElementById('page-title').textContent = I18n.t('cameras_title');
         document.getElementById('header-actions').innerHTML = `
             <button class="btn btn-primary" onclick="CamerasPage.showAddModal()">
-                ＋ Add Camera
+                ${I18n.t('add_camera_btn')}
             </button>
         `;
 
@@ -20,7 +20,7 @@ const CamerasPage = {
             <div class="cameras-grid" id="cameras-grid">
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">⏳</div>
-                    <div class="empty-state-title">Loading cameras...</div>
+                    <div class="empty-state-title">${I18n.t('loading_cameras')}</div>
                 </div>
             </div>
         `;
@@ -40,7 +40,7 @@ const CamerasPage = {
             document.getElementById('cameras-grid').innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">⚠️</div>
-                    <div class="empty-state-title">Failed to load cameras</div>
+                    <div class="empty-state-title">${I18n.t('test_failed')}</div>
                     <div class="empty-state-text">${err.message}</div>
                 </div>
             `;
@@ -58,65 +58,69 @@ const CamerasPage = {
             grid.innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">📹</div>
-                    <div class="empty-state-title">No cameras configured</div>
+                    <div class="empty-state-title">${I18n.t('no_cameras_title')}</div>
                     <div class="empty-state-text">
-                        Add your first IP camera to start detecting faces.
-                        Click "Add Camera" above to get started.
+                        ${I18n.t('no_cameras_desc')}
                     </div>
                 </div>
             `;
             return;
         }
 
-        grid.innerHTML = CamerasPage._cameras.map(camera => `
-            <div class="camera-card" data-camera-id="${camera.id}">
-                <div class="camera-card-header">
-                    <span class="camera-name">${CamerasPage.escapeHtml(camera.name)}</span>
-                    <span class="camera-status ${camera.is_active ? 'active' : 'inactive'}">
-                        <span class="camera-status-dot"></span>
-                        ${camera.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                </div>
+        grid.innerHTML = CamerasPage._cameras.map(camera => {
+            const statusText = camera.is_active ? I18n.t('active') : I18n.t('inactive');
+            const addedDateStr = I18n.formatDate(camera.created_at);
 
-                ${camera.location ? `
+            return `
+                <div class="camera-card" data-camera-id="${camera.id}">
+                    <div class="camera-card-header">
+                        <span class="camera-name">${CamerasPage.escapeHtml(camera.name)}</span>
+                        <span class="camera-status ${camera.is_active ? 'active' : 'inactive'}">
+                            <span class="camera-status-dot"></span>
+                            ${statusText}
+                        </span>
+                    </div>
+
+                    ${camera.location ? `
+                        <div class="camera-detail">
+                            <span class="detail-icon">📍</span>
+                            <span>${I18n.t('camera_location')} <strong>${CamerasPage.escapeHtml(camera.location)}</strong></span>
+                        </div>
+                    ` : ''}
+
+                    <div class="camera-url" dir="ltr" style="text-align: left;" title="${CamerasPage.escapeAttr(camera.rtsp_url)}">
+                        ${CamerasPage.escapeHtml(CamerasPage.maskUrl(camera.rtsp_url))}
+                    </div>
+
                     <div class="camera-detail">
-                        <span class="detail-icon">📍</span>
-                        <span>${CamerasPage.escapeHtml(camera.location)}</span>
+                        <span class="detail-icon">🕐</span>
+                        <span>${I18n.t('camera_added', { date: addedDateStr })}</span>
                     </div>
-                ` : ''}
 
-                <div class="camera-url" title="${CamerasPage.escapeAttr(camera.rtsp_url)}">
-                    ${CamerasPage.escapeHtml(CamerasPage.maskUrl(camera.rtsp_url))}
-                </div>
-
-                <div class="camera-detail">
-                    <span class="detail-icon">🕐</span>
-                    <span>Added ${CamerasPage.formatDate(camera.created_at)}</span>
-                </div>
-
-                <div class="camera-actions-wrapper">
-                    <div class="camera-actions-primary">
-                        <button class="btn btn-primary btn-sm" onclick="CamerasPage.showLiveModal(${camera.id})" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
-                            <span>👁️</span> <span>Live Stream</span>
-                        </button>
-                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${camera.id})" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem; background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.35); color: var(--accent-blue);">
-                            <span>🎯</span> <span>Zones</span>
-                        </button>
-                    </div>
-                    <div class="camera-actions-secondary">
-                        <button class="btn btn-secondary btn-sm" onclick="CamerasPage.testCamera(${camera.id})" title="Test RTSP Connection" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem; justify-content: center;">
-                            ⚡ Test
-                        </button>
-                        <button class="btn btn-secondary btn-sm" onclick="CamerasPage.showEditModal(${camera.id})" title="Edit Camera Settings" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem; justify-content: center;">
-                            ✏️ Edit
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="CamerasPage.deleteCamera(${camera.id}, '${CamerasPage.escapeAttr(camera.name)}')" title="Delete Camera" style="padding: 0.4rem 0.65rem; justify-content: center;">
-                            🗑️
-                        </button>
+                    <div class="camera-actions-wrapper">
+                        <div class="camera-actions-primary">
+                            <button class="btn btn-primary btn-sm" onclick="CamerasPage.showLiveModal(${camera.id})" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                                <span>👁️</span> <span>${I18n.t('camera_live_stream')}</span>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${camera.id})" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem; background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.35); color: var(--accent-blue);">
+                                <span>🎯</span> <span>${I18n.t('camera_zones_btn')}</span>
+                            </button>
+                        </div>
+                        <div class="camera-actions-secondary">
+                            <button class="btn btn-secondary btn-sm" onclick="CamerasPage.testCamera(${camera.id})" title="${CamerasPage.escapeAttr(I18n.t('btn_test_connection'))}" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem; justify-content: center;">
+                                ${I18n.t('camera_test_btn')}
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="CamerasPage.showEditModal(${camera.id})" title="${CamerasPage.escapeAttr(I18n.t('camera_edit_btn'))}" style="flex: 1; font-size: 0.75rem; padding: 0.4rem 0.5rem; justify-content: center;">
+                                ${I18n.t('camera_edit_btn')}
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="CamerasPage.deleteCamera(${camera.id}, '${CamerasPage.escapeAttr(camera.name)}')" title="${CamerasPage.escapeAttr(I18n.t('delete'))}" style="padding: 0.4rem 0.65rem; justify-content: center;">
+                                🗑️
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     },
 
     /**
@@ -128,6 +132,7 @@ const CamerasPage = {
 
         const streamUrl = `/api/cameras/${camera.id}/stream?t=${Date.now()}`;
         const snapshotUrl = `/api/cameras/${camera.id}/snapshot?t=${Date.now()}`;
+        const liveStatusText = camera.is_active ? I18n.t('live') : I18n.t('inactive');
 
         const content = `
             <div class="modal-header">
@@ -135,7 +140,7 @@ const CamerasPage = {
                     <h2 class="modal-title">📹 ${CamerasPage.escapeHtml(camera.name)}</h2>
                     <span class="camera-status ${camera.is_active ? 'active' : 'inactive'}">
                         <span class="camera-status-dot"></span>
-                        ${camera.is_active ? 'LIVE' : 'Inactive'}
+                        ${liveStatusText}
                     </span>
                 </div>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
@@ -145,14 +150,14 @@ const CamerasPage = {
                 ${camera.location ? `
                     <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
                         <span>📍</span>
-                        <span>Location: <strong>${CamerasPage.escapeHtml(camera.location)}</strong></span>
+                        <span>${I18n.t('camera_location')} <strong>${CamerasPage.escapeHtml(camera.location)}</strong></span>
                     </div>
                 ` : ''}
 
                 <div class="camera-live-feed-wrapper">
                     <img id="camera-live-img" 
                          src="${streamUrl}" 
-                         alt="${CamerasPage.escapeAttr(camera.name)} Live View"
+                         alt="${CamerasPage.escapeAttr(camera.name)}"
                          onerror="CamerasPage.handleStreamError(${camera.id})"
                     />
                 </div>
@@ -161,13 +166,13 @@ const CamerasPage = {
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-secondary btn-sm" onclick="CamerasPage.refreshLiveFeed(${camera.id})">
-                        🔄 Refresh Snapshot
+                        ${I18n.t('refresh_snapshot')}
                     </button>
                     <a href="${snapshotUrl}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none;">
-                        🔗 Full Resolution
+                        ${I18n.t('full_resolution')}
                     </a>
                 </div>
-                <button class="btn btn-primary" onclick="App.closeModal()">Close</button>
+                <button class="btn btn-primary" onclick="App.closeModal()">${I18n.t('close')}</button>
             </div>
         `;
 
@@ -216,16 +221,16 @@ const CamerasPage = {
      * Test camera connection.
      */
     async testCamera(cameraId) {
-        App.toast('Testing connection...', 'info');
+        App.toast(I18n.t('testing_connection'), 'info');
         try {
             const result = await App.api(`/api/cameras/${cameraId}/test`, 'POST');
             if (result.success) {
-                App.toast('✅ Camera connection successful!', 'success');
+                App.toast(I18n.t('test_success'), 'success');
             } else {
                 App.toast(`❌ ${result.message}`, 'error');
             }
         } catch (err) {
-            App.toast(`Test failed: ${err.message}`, 'error');
+            App.toast(`${I18n.t('test_failed')}: ${err.message}`, 'error');
         }
     },
 
@@ -233,16 +238,16 @@ const CamerasPage = {
      * Delete a camera after confirmation.
      */
     async deleteCamera(cameraId, name) {
-        if (!confirm(`Delete camera "${name}"? This will stop its stream and remove all settings.`)) {
+        if (!confirm(I18n.t('confirm_delete_camera', { name }))) {
             return;
         }
 
         try {
             await App.api(`/api/cameras/${cameraId}`, 'DELETE');
-            App.toast(`Camera "${name}" deleted.`, 'success');
+            App.toast(I18n.t('camera_deleted_toast', { name }), 'success');
             await CamerasPage.loadCameras();
         } catch (err) {
-            App.toast(`Failed to delete: ${err.message}`, 'error');
+            App.toast(I18n.t('err_failed_delete', { msg: err.message }), 'error');
         }
     },
 
@@ -261,15 +266,7 @@ const CamerasPage = {
      * Format a date string.
      */
     formatDate(isoString) {
-        try {
-            return new Date(isoString).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-            });
-        } catch {
-            return isoString;
-        }
+        return I18n.formatDate(isoString);
     },
 
     escapeHtml(text) {

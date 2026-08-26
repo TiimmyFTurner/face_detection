@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Self-hosted real-time face detection and recognition dashboard for IP cameras.">
-    <title>FaceTrack — Real-Time Face Detection Dashboard</title>
-    <link rel="stylesheet" href="/css/style.css?v=1.2">
+    <meta name="description" content="سامانه تشخیص چهره و نظارت تصویری هوشمند دوربین‌های مداربسته IP">
+    <title>FaceTrack — سامانه تشخیص چهره و نظارت هوشمند</title>
+    <link rel="stylesheet" href="/css/style.css?v=2.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
 </head>
 <body>
@@ -17,8 +17,8 @@
                 <div class="sidebar-brand">
                     <div class="sidebar-brand-icon">🎯</div>
                     <div class="sidebar-brand-text">
-                        <span class="sidebar-brand-name">FaceTrack</span>
-                        <span class="sidebar-brand-subtitle">Detection System</span>
+                        <span class="sidebar-brand-name">فیس‌ترک</span>
+                        <span class="sidebar-brand-subtitle">سامانه تشخیص چهره</span>
                     </div>
                 </div>
             </div>
@@ -26,26 +26,34 @@
             <nav class="sidebar-nav">
                 <a class="nav-item active" data-page="dashboard" id="nav-dashboard">
                     <span class="nav-icon">📊</span>
-                    <span>Dashboard</span>
+                    <span>پیشخوان</span>
                 </a>
                 <a class="nav-item" data-page="zones" id="nav-zones">
                     <span class="nav-icon">🎯</span>
-                    <span>Zones & Shifts</span>
+                    <span>منطقه‌ها و شیفت‌ها</span>
                 </a>
                 <a class="nav-item" data-page="cameras" id="nav-cameras">
                     <span class="nav-icon">📹</span>
-                    <span>Cameras</span>
+                    <span>دوربین‌ها</span>
                 </a>
                 <a class="nav-item" data-page="persons" id="nav-persons">
                     <span class="nav-icon">👤</span>
-                    <span>Identities</span>
+                    <span>هویت‌ها و چهره‌ها</span>
                 </a>
             </nav>
+
+            <div class="lang-switcher-container">
+                <span class="lang-switcher-label" id="lang-switcher-label">زبان سیستم</span>
+                <div class="lang-btn-group">
+                    <button class="lang-btn active" id="lang-btn-fa" onclick="I18n.setLanguage('fa')">فارسی</button>
+                    <button class="lang-btn" id="lang-btn-en" onclick="I18n.setLanguage('en')">EN</button>
+                </div>
+            </div>
 
             <div class="sidebar-footer">
                 <div class="connection-status" id="ws-status">
                     <span class="status-dot disconnected" id="ws-dot"></span>
-                    <span id="ws-status-text">Connecting...</span>
+                    <span id="ws-status-text">در حال برقراری ارتباط...</span>
                 </div>
             </div>
         </aside>
@@ -53,7 +61,7 @@
         <!-- ── Main Content Area ────────────────────────── -->
         <main class="main-content">
             <header class="content-header" id="content-header">
-                <h1 id="page-title">Dashboard</h1>
+                <h1 id="page-title">پیشخوان</h1>
                 <div class="content-header-actions" id="header-actions"></div>
             </header>
 
@@ -73,14 +81,15 @@
     </div>
 
     <!-- ── JavaScript ───────────────────────────────────── -->
-    <script src="/js/components/eventCard.js?v=1.7"></script>
-    <script src="/js/components/cameraForm.js?v=1.7"></script>
-    <script src="/js/components/personForm.js?v=1.7"></script>
-    <script src="/js/components/zoneModal.js?v=1.7"></script>
-    <script src="/js/pages/dashboard.js?v=1.7"></script>
-    <script src="/js/pages/zonesPage.js?v=1.7"></script>
-    <script src="/js/pages/cameras.js?v=1.7"></script>
-    <script src="/js/pages/persons.js?v=1.7"></script>
-    <script src="/js/app.js?v=1.7"></script>
+    <script src="/js/i18n.js?v=2.0"></script>
+    <script src="/js/components/eventCard.js?v=2.0"></script>
+    <script src="/js/components/cameraForm.js?v=2.0"></script>
+    <script src="/js/components/personForm.js?v=2.0"></script>
+    <script src="/js/components/zoneModal.js?v=2.0"></script>
+    <script src="/js/pages/dashboard.js?v=2.0"></script>
+    <script src="/js/pages/zonesPage.js?v=2.0"></script>
+    <script src="/js/pages/cameras.js?v=2.0"></script>
+    <script src="/js/pages/persons.js?v=2.0"></script>
+    <script src="/js/app.js?v=2.0"></script>
 </body>
 </html>

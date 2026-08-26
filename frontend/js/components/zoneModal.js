@@ -20,7 +20,7 @@ const ZoneModal = {
         ZoneModal._camera = camera;
         ZoneModal._currentBox = { x: 20, y: 20, width: 40, height: 40 }; // Default box
 
-        App.toast('Loading camera zones...', 'info');
+        App.toast(I18n.t('loading'), 'info');
 
         try {
             const [zones, persons] = await Promise.all([
@@ -32,7 +32,7 @@ const ZoneModal = {
             ZoneModal._persons = persons || [];
             ZoneModal.renderModal();
         } catch (err) {
-            App.toast(`Failed to load zones: ${err.message}`, 'error');
+            App.toast(I18n.t('err_failed_load', { msg: err.message }), 'error');
         }
     },
 
@@ -43,18 +43,40 @@ const ZoneModal = {
         const camera = ZoneModal._camera;
         const snapshotUrl = `/api/cameras/${camera.id}/snapshot?t=${Date.now()}`;
 
+        const weekdays = I18n.isRTL() ? [
+            { key: 'Sat', label: 'شنبه' },
+            { key: 'Sun', label: 'یکشنبه' },
+            { key: 'Mon', label: 'دوشنبه' },
+            { key: 'Tue', label: 'سه‌شنبه' },
+            { key: 'Wed', label: 'چهارشنبه' },
+            { key: 'Thu', label: 'پنج‌شنبه' },
+            { key: 'Fri', label: 'جمعه' },
+        ] : [
+            { key: 'Mon', label: 'Mon' },
+            { key: 'Tue', label: 'Tue' },
+            { key: 'Wed', label: 'Wed' },
+            { key: 'Thu', label: 'Thu' },
+            { key: 'Fri', label: 'Fri' },
+            { key: 'Sat', label: 'Sat' },
+            { key: 'Sun', label: 'Sun' },
+        ];
+
+        const defaultCheckedDays = I18n.isRTL()
+            ? ['Sat', 'Sun', 'Mon', 'Tue', 'Wed']
+            : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
         const content = `
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <h2 class="modal-title">🎯 Important Areas (Zones) — ${ZoneModal.escapeHtml(camera.name)}</h2>
+                    <h2 class="modal-title">${I18n.t('zone_modal_title', { name: ZoneModal.escapeHtml(camera.name) })}</h2>
                 </div>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
 
             <div class="modal-body" style="padding: 1.25rem; max-height: 80vh; overflow-y: auto;">
-                <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
-                    <span>📍 Click and drag on the camera image to draw a designated area.</span>
-                    <button class="btn btn-secondary btn-sm" onclick="ZoneModal.refreshSnapshot()">🔄 Refresh Camera View</button>
+                <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                    <span>${I18n.t('zone_canvas_hint')}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="ZoneModal.refreshSnapshot()">${I18n.t('refresh_snapshot')}</button>
                 </div>
 
                 <!-- Interactive Snapshot & Canvas Drawing Container -->
@@ -73,66 +95,66 @@ const ZoneModal = {
                 <div class="zone-editor-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
                     <!-- Area Form -->
                     <div class="zone-form-panel" style="background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                        <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-primary);">➕ Add / Configure Area</h4>
+                        <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-primary);">${I18n.t('zone_add_title')}</h4>
                         
                         <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">Area Name</label>
-                            <input type="text" id="zone-name-input" class="form-input" placeholder="e.g. Work Desk, Reception Counter, Station 1" required />
+                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_zone_name')}</label>
+                            <input type="text" id="zone-name-input" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('placeholder_zone_name'))}" required />
                         </div>
 
                         <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">Attach Person(s) to this Area</label>
+                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_attach_persons')}</label>
                             <div id="zone-persons-picker" style="max-height: 120px; overflow-y: auto; background: var(--bg-surface); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.35rem;">
                                 ${ZoneModal._persons.length === 0 ? `
-                                    <span style="font-size: 0.75rem; color: var(--text-tertiary);">No enrolled persons yet. Add people in Identities page first.</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-tertiary);">${I18n.t('no_enrolled_persons_hint')}</span>
                                 ` : ZoneModal._persons.map(p => `
                                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-primary); cursor: pointer;">
                                         <input type="checkbox" name="zone-person" value="${p.id}" />
-                                        <span>👤 ${ZoneModal.escapeHtml(p.name)} <span style="font-size: 0.7rem; color: var(--text-tertiary);">(${p.role || 'Identity'})</span></span>
+                                        <span>👤 ${ZoneModal.escapeHtml(p.name)} <span style="font-size: 0.7rem; color: var(--text-tertiary);">(${ZoneModal.escapeHtml(p.role || I18n.t('known_identity'))})</span></span>
                                     </label>
                                 `).join('')}
                             </div>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">Notification Policy</label>
+                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_alert_policy')}</label>
                             <select id="zone-alert-mode" class="form-input" style="font-size: 0.8rem;">
-                                <option value="absence">🔔 Alert if attached person is NOT in this area</option>
-                                <option value="unauthorized">🚨 Alert if unauthorized person enters this area</option>
-                                <option value="both">⚠️ Both (Absence + Unauthorized entry)</option>
+                                <option value="absence">${I18n.t('policy_absence')}</option>
+                                <option value="unauthorized">${I18n.t('policy_unauthorized')}</option>
+                                <option value="both">${I18n.t('policy_both')}</option>
                             </select>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">🕐 Shift Timetable (Active Monitoring Hours)</label>
+                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_shift_schedule')}</label>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
                                 <div>
-                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">Start Time</span>
+                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">${I18n.t('label_start_time')}</span>
                                     <input type="time" id="zone-start-time" class="form-input" value="08:00" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" />
                                 </div>
                                 <div>
-                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">End Time</span>
+                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">${I18n.t('label_end_time')}</span>
                                     <input type="time" id="zone-end-time" class="form-input" value="17:00" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" />
                                 </div>
                             </div>
                             <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.25rem;" id="zone-days-picker">
-                                ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => `
+                                ${weekdays.map(item => `
                                     <label style="font-size: 0.72rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.2rem; cursor: pointer; background: var(--bg-surface); padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                                        <input type="checkbox" name="zone-day" value="${day}" ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day) ? 'checked' : ''} />
-                                        <span>${day}</span>
+                                        <input type="checkbox" name="zone-day" value="${item.key}" ${defaultCheckedDays.includes(item.key) ? 'checked' : ''} />
+                                        <span>${item.label}</span>
                                     </label>
                                 `).join('')}
                             </div>
                         </div>
 
                         <button class="btn btn-primary btn-sm" onclick="ZoneModal.saveZone()" style="width: 100%;">
-                            💾 Save Area & Timetable
+                            ${I18n.t('btn_save_zone')}
                         </button>
                     </div>
 
                     <!-- Configured Zones List -->
                     <div class="zone-list-panel" style="background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                        <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-primary);">📋 Active Areas (${ZoneModal._zones.length})</h4>
+                        <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-primary);">${I18n.t('active_zones_count', { count: I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._zones.length) : ZoneModal._zones.length })}</h4>
                         
                         <div id="active-zones-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 280px; overflow-y: auto;">
                             ${ZoneModal.renderZonesList()}
@@ -142,7 +164,7 @@ const ZoneModal = {
             </div>
 
             <div class="modal-footer" style="display: flex; justify-content: flex-end;">
-                <button class="btn btn-secondary" onclick="App.closeModal()">Done</button>
+                <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('close')}</button>
             </div>
         `;
 
@@ -175,7 +197,7 @@ const ZoneModal = {
      */
     renderZonesList() {
         if (ZoneModal._zones.length === 0) {
-            return `<div style="font-size: 0.8rem; color: var(--text-tertiary); text-align: center; padding: 1rem;">No areas defined yet. Draw on the image and click "Save Area".</div>`;
+            return `<div style="font-size: 0.8rem; color: var(--text-tertiary); text-align: center; padding: 1rem;">${I18n.t('no_camera_zones')}</div>`;
         }
 
         return ZoneModal._zones.map(zone => {
@@ -183,6 +205,8 @@ const ZoneModal = {
                 const person = ZoneModal._persons.find(p => p.id === pid);
                 return person ? person.name : `ID:${pid}`;
             });
+
+            const policyLabel = zone.alert_mode === 'absence' ? I18n.t('policy_absence') : zone.alert_mode === 'unauthorized' ? I18n.t('policy_unauthorized') : I18n.t('policy_both');
 
             return `
                 <div class="zone-item-card" style="background: var(--bg-surface); padding: 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: flex-start;">
@@ -192,13 +216,13 @@ const ZoneModal = {
                             <span>${ZoneModal.escapeHtml(zone.name)}</span>
                         </div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem;">
-                            👤 Attached: <strong>${assignedNames.length > 0 ? ZoneModal.escapeHtml(assignedNames.join(', ')) : 'None'}</strong>
+                            👤 ${I18n.t('assigned_staff')} <strong>${assignedNames.length > 0 ? ZoneModal.escapeHtml(assignedNames.join(', ')) : I18n.t('none')}</strong>
                         </div>
                         <div style="font-size: 0.68rem; color: var(--accent-blue); margin-top: 0.15rem;">
-                            🕐 Shift: ${zone.start_time || '00:00'} - ${zone.end_time || '23:59'} (${(zone.active_days || []).join(', ')})
+                            🕐 ${zone.start_time || '00:00'} - ${zone.end_time || '23:59'} (${(zone.active_days || []).join(', ')})
                         </div>
                         <div style="font-size: 0.68rem; color: var(--text-tertiary);">
-                            ${zone.alert_mode === 'absence' ? '🔔 Alert if NOT in area' : zone.alert_mode === 'unauthorized' ? '🚨 Alert if unauthorized' : '⚠️ Both alerts'}
+                            ${policyLabel}
                         </div>
                     </div>
                     <button class="btn btn-danger btn-sm" onclick="ZoneModal.deleteZone(${zone.id})" style="padding: 2px 6px; font-size: 0.7rem;">
@@ -253,7 +277,7 @@ const ZoneModal = {
             if (ZoneModal._isDrawing) {
                 ZoneModal._isDrawing = false;
                 if (ZoneModal._currentBox && ZoneModal._currentBox.width > 2 && ZoneModal._currentBox.height > 2) {
-                    App.toast('Area drawn! Enter area name and click Save.', 'info');
+                    App.toast(I18n.t('zone_drawn_toast'), 'info');
                 }
             }
         };
@@ -266,12 +290,12 @@ const ZoneModal = {
         const nameInput = document.getElementById('zone-name-input');
         const name = (nameInput ? nameInput.value : '').trim();
         if (!name) {
-            App.toast('Please enter an area name.', 'error');
+            App.toast(I18n.t('err_zone_name'), 'error');
             return;
         }
 
         if (!ZoneModal._currentBox || ZoneModal._currentBox.width < 1 || ZoneModal._currentBox.height < 1) {
-            App.toast('Please draw a rectangular area on the camera image first.', 'error');
+            App.toast(I18n.t('err_draw_box'), 'error');
             return;
         }
 
@@ -300,13 +324,13 @@ const ZoneModal = {
         };
 
         try {
-            App.toast('Saving important area...', 'info');
+            App.toast(I18n.t('loading'), 'info');
             const created = await App.api(`/api/cameras/${ZoneModal._camera.id}/zones`, 'POST', payload);
             ZoneModal._zones.push(created);
-            App.toast(`✅ Area "${created.name}" saved!`, 'success');
+            App.toast(I18n.t('zone_saved_toast', { name: created.name }), 'success');
             ZoneModal.renderModal();
         } catch (err) {
-            App.toast(`Failed to save area: ${err.message}`, 'error');
+            App.toast(I18n.t('err_failed_save', { msg: err.message }), 'error');
         }
     },
 
@@ -314,15 +338,15 @@ const ZoneModal = {
      * Delete a camera zone.
      */
     async deleteZone(zoneId) {
-        if (!confirm('Remove this designated area?')) return;
+        if (!confirm(I18n.t('confirm_delete_zone'))) return;
 
         try {
             await App.api(`/api/zones/${zoneId}`, 'DELETE');
             ZoneModal._zones = ZoneModal._zones.filter(z => z.id !== zoneId);
-            App.toast('Area removed.', 'success');
+            App.toast(I18n.t('zone_deleted_toast'), 'success');
             ZoneModal.renderModal();
         } catch (err) {
-            App.toast(`Failed to delete: ${err.message}`, 'error');
+            App.toast(I18n.t('err_failed_delete', { msg: err.message }), 'error');
         }
     },
 

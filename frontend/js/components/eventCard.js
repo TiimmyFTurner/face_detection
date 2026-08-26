@@ -16,39 +16,42 @@ const EventCard = {
 
         const isKnown = event.is_known;
         const statusClass = isKnown ? 'known' : 'unknown';
-        const badgeText = isKnown ? 'Known' : 'Unknown';
-        const timestamp = EventCard.formatTimestamp(event.timestamp);
+        const badgeText = isKnown ? I18n.t('known') : I18n.t('unknown');
+        const timestamp = I18n.formatTimestamp(event.timestamp);
         const confidence = Math.round((event.confidence_score || 0) * 100);
+        const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low';
         const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
+        const personName = event.person_name || I18n.t('unknown');
+        const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
 
         return `
-            <div class="event-card ${statusClass}" data-event-id="${event.id}" onclick="EventCard.showDetailModal(${event.id})" style="cursor: pointer;" title="Click to view event details">
+            <div class="event-card ${statusClass}" data-event-id="${event.id}" onclick="EventCard.showDetailModal(${event.id})" style="cursor: pointer;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
                 <img
                     class="event-card-image"
                     src="${snapshotUrl}"
-                    alt="Detection snapshot"
+                    alt="${EventCard.escapeAttr(personName)}"
                     loading="lazy"
-                    onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 180%22><rect fill=%22%230c1020%22 width=%22300%22 height=%22180%22/><text x=%22150%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2214%22>No Image</text></svg>'"
+                    onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 180%22><rect fill=%22%230c1020%22 width=%22300%22 height=%22180%22/><text x=%22150%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2214%22>${encodeURIComponent(I18n.t('no_image'))}</text></svg>'"
                 />
                 <div class="event-card-body">
                     <div class="event-card-header">
-                        <span class="event-person-name">${EventCard.escapeHtml(event.person_name || 'Unknown')}</span>
+                        <span class="event-person-name">${EventCard.escapeHtml(personName)}</span>
                         <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
                             <span class="event-badge ${statusClass}">${badgeText}</span>
-                            ${event.alert_type === 'out_of_zone' ? '<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">⚠️ Out of Area</span>' : ''}
-                            ${event.alert_type === 'unauthorized_entry' ? '<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">🚨 Unauthorized</span>' : ''}
+                            ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
+                            ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
                         </div>
                     </div>
                     <div class="event-card-meta">
                         <div class="event-meta-row">
                             <span class="meta-icon">📹</span>
-                            <span>${EventCard.escapeHtml(event.camera_name || 'Camera ' + event.camera_id)}</span>
+                            <span>${EventCard.escapeHtml(cameraName)}</span>
                         </div>
                         ${event.zone_name ? `
                         <div class="event-meta-row" style="color: var(--accent-blue);">
                             <span class="meta-icon">🎯</span>
-                            <span>Area: ${EventCard.escapeHtml(event.zone_name)}</span>
+                            <span>${I18n.t('event_area')}: ${EventCard.escapeHtml(event.zone_name)}</span>
                         </div>
                         ` : ''}
                         <div class="event-meta-row">
@@ -57,7 +60,7 @@ const EventCard = {
                         </div>
                         <div class="event-meta-row">
                             <span class="meta-icon">🎯</span>
-                            <span>Confidence: ${confidence}%</span>
+                            <span>${I18n.t('event_confidence')}: ${confidenceDisplay}%</span>
                         </div>
                     </div>
                     <div class="confidence-bar">
@@ -80,16 +83,20 @@ const EventCard = {
 
         const isKnown = event.is_known;
         const statusClass = isKnown ? 'known' : 'unknown';
-        const badgeText = isKnown ? 'Known Identity' : 'Unidentified Face';
+        const badgeText = isKnown ? I18n.t('known_identity') : I18n.t('unidentified');
         const confidence = Math.round((event.confidence_score || 0) * 100);
+        const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low';
         const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
-        const fullTimeStr = EventCard.formatFullTimestamp(event.timestamp);
+        const fullTimeStr = I18n.formatFullTimestamp(event.timestamp);
+        const personName = event.person_name || I18n.t('unknown');
+        const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
+        const eventIdStr = I18n.isRTL() ? I18n.toPersianDigits(event.id) : event.id;
 
         const content = `
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <h2 class="modal-title">🎯 Event #${event.id}</h2>
+                    <h2 class="modal-title">${I18n.t('event_details_title', { id: eventIdStr })}</h2>
                     <span class="event-badge ${statusClass}">${badgeText}</span>
                 </div>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
@@ -99,28 +106,28 @@ const EventCard = {
                 <div class="event-detail-dialog-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.25rem; align-items: start;">
                     <div class="event-detail-image-wrapper" style="background: #090d16; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 280px;">
                         <img src="${snapshotUrl}" 
-                             alt="Event Snapshot" 
+                             alt="${EventCard.escapeAttr(personName)}" 
                              style="width: 100%; max-height: 420px; object-fit: contain; display: block;" 
-                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 180%22><rect fill=%22%230c1020%22 width=%22300%22 height=%22180%22/><text x=%22150%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2214%22>Image Not Found</text></svg>'"
+                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 180%22><rect fill=%22%230c1020%22 width=%22300%22 height=%22180%22/><text x=%22150%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2214%22>${encodeURIComponent(I18n.t('no_image'))}</text></svg>'"
                         />
                     </div>
 
                     <div class="event-detail-info" style="display: flex; flex-direction: column; gap: 1rem;">
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">Person Identity</div>
-                            <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${EventCard.escapeHtml(event.person_name || 'Unknown')}</div>
+                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_person_identity')}</div>
+                            <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${EventCard.escapeHtml(personName)}</div>
                         </div>
 
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">Camera Source</div>
+                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_camera')}</div>
                             <div style="font-size: 1rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
                                 <span>📹</span>
-                                <span>${EventCard.escapeHtml(event.camera_name || 'Camera ' + event.camera_id)}</span>
+                                <span>${EventCard.escapeHtml(cameraName)}</span>
                             </div>
                         </div>
 
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">Timestamp (Local Time)</div>
+                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_timestamp')}</div>
                             <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
                                 <span>🕐</span>
                                 <span>${fullTimeStr}</span>
@@ -129,8 +136,8 @@ const EventCard = {
 
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">
-                                <span>Matching Confidence</span>
-                                <span style="color: var(--text-primary); font-weight: 700;">${confidence}%</span>
+                                <span>${I18n.t('event_confidence')}</span>
+                                <span style="color: var(--text-primary); font-weight: 700;">${confidenceDisplay}%</span>
                             </div>
                             <div class="confidence-bar" style="height: 8px;">
                                 <div class="confidence-bar-fill ${confidenceClass}" style="width: ${confidence}%;"></div>
@@ -146,15 +153,15 @@ const EventCard = {
                 <div>
                     ${!isKnown ? `
                         <button class="btn btn-primary btn-sm" onclick="PersonsPage.showAddModal();">
-                            ➕ Enroll Person
+                            ${I18n.t('enroll_person')}
                         </button>
                     ` : `
                         <button class="btn btn-secondary btn-sm" onclick="App.navigate('persons'); App.closeModal();">
-                            👤 View Persons
+                            ${I18n.t('view_persons')}
                         </button>
                     `}
                 </div>
-                <button class="btn btn-secondary" onclick="App.closeModal()">Close</button>
+                <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('close')}</button>
             </div>
         `;
 
@@ -176,20 +183,23 @@ const EventCard = {
             const historyContainer = document.getElementById('event-detail-person-history');
             if (!historyContainer || events.length <= 1) return;
 
+            const nameStr = event.person_name || I18n.t('unknown');
+            const countStr = I18n.isRTL() ? I18n.toPersianDigits(events.length) : events.length;
+
             historyContainer.innerHTML = `
                 <div style="margin-top: 1rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
                     <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
                         <span>📸</span>
-                        <span>Other Detections for ${EventCard.escapeHtml(event.person_name)} (${events.length})</span>
+                        <span>${I18n.t('other_detections_for', { name: EventCard.escapeHtml(nameStr), count: countStr })}</span>
                     </div>
                     <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.4rem;">
                         ${events.map(ev => {
                             EventCard._cache[ev.id] = ev;
                             const isActive = ev.id === event.id;
                             return `
-                                <div onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 75px; cursor: pointer; opacity: ${isActive ? '1' : '0.65'}; border: ${isActive ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface-hover);" title="View this event">
+                                <div onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 75px; cursor: pointer; opacity: ${isActive ? '1' : '0.65'}; border: ${isActive ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface-hover);" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
                                     <img src="${ev.snapshot_url || '/api/snapshots/' + ev.snapshot_path}" style="width: 100%; height: 60px; object-fit: cover; display: block;" />
-                                    <div style="font-size: 0.6rem; text-align: center; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 0;">${EventCard.formatTimestamp(ev.timestamp)}</div>
+                                    <div style="font-size: 0.6rem; text-align: center; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 0;">${I18n.formatTimestamp(ev.timestamp)}</div>
                                 </div>
                             `;
                         }).join('')}
@@ -202,63 +212,17 @@ const EventCard = {
     },
 
     /**
-     * Format ISO timestamp to human-readable form.
+     * Format ISO timestamp to human-readable form (delegates to I18n).
      */
     formatTimestamp(isoString) {
-        if (!isoString) return 'Unknown time';
-        try {
-            let str = String(isoString).trim();
-            if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
-                str += 'Z';
-            }
-            const date = new Date(str);
-            if (isNaN(date.getTime())) return isoString;
-
-            const now = new Date();
-            const diffMs = now.getTime() - date.getTime();
-            const diffMins = Math.floor(diffMs / 60000);
-
-            let relative = 'Just now';
-            if (diffMins >= 1 && diffMins < 60) {
-                relative = `${diffMins}m ago`;
-            } else if (diffMins >= 60 && diffMins < 1440) {
-                relative = `${Math.floor(diffMins / 60)}h ago`;
-            } else if (diffMins >= 1440) {
-                relative = `${Math.floor(diffMins / 1440)}d ago`;
-            }
-
-            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            return `${timeStr} (${relative})`;
-        } catch {
-            return isoString;
-        }
+        return I18n.formatTimestamp(isoString);
     },
 
     /**
-     * Format full date + time for event detail modal.
+     * Format full date + time for event detail modal (delegates to I18n).
      */
     formatFullTimestamp(isoString) {
-        if (!isoString) return 'Unknown time';
-        try {
-            let str = String(isoString).trim();
-            if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
-                str += 'Z';
-            }
-            const date = new Date(str);
-            if (isNaN(date.getTime())) return isoString;
-
-            return date.toLocaleString('en-US', {
-                weekday: 'short',
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            });
-        } catch {
-            return isoString;
-        }
+        return I18n.formatFullTimestamp(isoString);
     },
 
     /**
@@ -269,5 +233,11 @@ const EventCard = {
         div.textContent = text || '';
         return div.innerHTML;
     },
-};
 
+    escapeAttr(str) {
+        return (str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+};

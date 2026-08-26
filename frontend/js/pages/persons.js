@@ -8,10 +8,10 @@ const PersonsPage = {
      * Load and render the identity management page.
      */
     async load() {
-        document.getElementById('page-title').textContent = 'Identity Management';
+        document.getElementById('page-title').textContent = I18n.t('persons_title');
         document.getElementById('header-actions').innerHTML = `
             <button class="btn btn-primary" onclick="PersonsPage.showAddModal()">
-                ＋ Add Person
+                ${I18n.t('add_person_btn')}
             </button>
         `;
 
@@ -20,7 +20,7 @@ const PersonsPage = {
             <div class="persons-grid" id="persons-grid">
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">⏳</div>
-                    <div class="empty-state-title">Loading identities...</div>
+                    <div class="empty-state-title">${I18n.t('loading_persons')}</div>
                 </div>
             </div>
         `;
@@ -40,7 +40,7 @@ const PersonsPage = {
             document.getElementById('persons-grid').innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">⚠️</div>
-                    <div class="empty-state-title">Failed to load identities</div>
+                    <div class="empty-state-title">${I18n.t('test_failed')}</div>
                     <div class="empty-state-text">${err.message}</div>
                 </div>
             `;
@@ -58,10 +58,9 @@ const PersonsPage = {
             grid.innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">👤</div>
-                    <div class="empty-state-title">No known persons enrolled</div>
+                    <div class="empty-state-title">${I18n.t('no_persons_title')}</div>
                     <div class="empty-state-text">
-                        Add known individuals by uploading their reference photos.
-                        The system will then recognize them automatically in camera feeds.
+                        ${I18n.t('no_persons_desc')}
                     </div>
                 </div>
             `;
@@ -71,6 +70,8 @@ const PersonsPage = {
         grid.innerHTML = PersonsPage._persons.map(person => {
             const initials = PersonsPage.getInitials(person.name);
             const hasPhoto = person.reference_photos && person.reference_photos.length > 0;
+            const countDisplay = I18n.isRTL() ? I18n.toPersianDigits(person.embedding_count || 0) : (person.embedding_count || 0);
+            const enrolledDateStr = I18n.formatDate(person.created_at);
 
             return `
                 <div class="person-card" data-person-id="${person.id}">
@@ -85,25 +86,25 @@ const PersonsPage = {
                     }
 
                     <div class="person-name">${PersonsPage.escapeHtml(person.name)}</div>
-                    <div class="person-role">${PersonsPage.escapeHtml(person.role || 'No role assigned')}</div>
+                    <div class="person-role">${PersonsPage.escapeHtml(person.role || I18n.t('no_role_assigned'))}</div>
 
                     <div class="person-stats">
                         <div class="person-stat">
-                            <div class="person-stat-value">${person.embedding_count || 0}</div>
-                            <div class="person-stat-label">Photos</div>
+                            <div class="person-stat-value">${countDisplay}</div>
+                            <div class="person-stat-label">${I18n.t('person_photos_count')}</div>
                         </div>
                         <div class="person-stat">
-                            <div class="person-stat-value">${PersonsPage.formatDate(person.created_at)}</div>
-                            <div class="person-stat-label">Enrolled</div>
+                            <div class="person-stat-value">${enrolledDateStr}</div>
+                            <div class="person-stat-label">${I18n.t('person_enrolled_date')}</div>
                         </div>
                     </div>
 
                     <div class="person-actions">
                         <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')">
-                            📸 Add Photos
+                            ${I18n.t('btn_add_photos')}
                         </button>
                         <button class="btn btn-danger btn-sm" onclick="PersonsPage.deletePerson(${person.id}, '${PersonsPage.escapeAttr(person.name)}')">
-                            🗑️ Delete
+                            🗑️ ${I18n.t('delete')}
                         </button>
                     </div>
                 </div>
@@ -131,16 +132,16 @@ const PersonsPage = {
      * Delete a person after confirmation.
      */
     async deletePerson(personId, name) {
-        if (!confirm(`Delete "${name}"? This will remove all their reference photos and embeddings.`)) {
+        if (!confirm(I18n.t('confirm_delete_person', { name }))) {
             return;
         }
 
         try {
             await App.api(`/api/persons/${personId}`, 'DELETE');
-            App.toast(`"${name}" has been removed.`, 'success');
+            App.toast(I18n.t('person_deleted_toast', { name }), 'success');
             await PersonsPage.loadPersons();
         } catch (err) {
-            App.toast(`Failed to delete: ${err.message}`, 'error');
+            App.toast(I18n.t('err_failed_delete', { msg: err.message }), 'error');
         }
     },
 
@@ -160,14 +161,7 @@ const PersonsPage = {
      * Format date to short form.
      */
     formatDate(isoString) {
-        try {
-            return new Date(isoString).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-            });
-        } catch {
-            return '—';
-        }
+        return I18n.formatDate(isoString);
     },
 
     escapeHtml(text) {

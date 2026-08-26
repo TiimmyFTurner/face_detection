@@ -9,8 +9,8 @@ const CameraForm = {
      */
     renderModal(camera = null) {
         const isEdit = camera !== null;
-        const title = isEdit ? 'Edit Camera' : 'Add Camera';
-        const submitText = isEdit ? 'Save Changes' : 'Add Camera';
+        const title = isEdit ? I18n.t('modal_edit_camera') : I18n.t('modal_add_camera');
+        const submitText = isEdit ? I18n.t('save_changes') : I18n.t('add_camera_btn');
 
         return `
             <div class="modal-header">
@@ -20,42 +20,44 @@ const CameraForm = {
             <div class="modal-body">
                 <form id="camera-form" onsubmit="CameraForm.handleSubmit(event, ${isEdit ? camera.id : 'null'})">
                     <div class="form-group">
-                        <label class="form-label" for="camera-name">Camera Name</label>
+                        <label class="form-label" for="camera-name">${I18n.t('label_camera_name')}</label>
                         <input
                             class="form-input"
                             type="text"
                             id="camera-name"
                             name="name"
-                            placeholder="e.g., Front Door Camera"
+                            placeholder="${CameraForm.escapeAttr(I18n.t('placeholder_camera_name'))}"
                             value="${isEdit ? CameraForm.escapeAttr(camera.name) : ''}"
                             required
                         />
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="camera-url">RTSP URL</label>
+                        <label class="form-label" for="camera-url">${I18n.t('label_rtsp_url')}</label>
                         <input
                             class="form-input"
                             type="text"
                             id="camera-url"
                             name="rtsp_url"
-                            placeholder="rtsp://user:pass@192.168.1.100:554/stream"
+                            placeholder="${CameraForm.escapeAttr(I18n.t('placeholder_rtsp_url'))}"
                             value="${isEdit ? CameraForm.escapeAttr(camera.rtsp_url) : ''}"
                             required
+                            dir="ltr"
+                            style="text-align: left;"
                         />
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="camera-location">Location</label>
+                        <label class="form-label" for="camera-location">${I18n.t('label_location')}</label>
                         <input
                             class="form-input"
                             type="text"
                             id="camera-location"
                             name="location"
-                            placeholder="e.g., Main Entrance, Parking Lot"
+                            placeholder="${CameraForm.escapeAttr(I18n.t('placeholder_location'))}"
                             value="${isEdit ? CameraForm.escapeAttr(camera.location || '') : ''}"
                         />
                     </div>
                     <div class="form-group" style="display: flex; align-items: center; gap: 12px;">
-                        <label class="form-label" style="margin-bottom: 0;">Active</label>
+                        <label class="form-label" style="margin-bottom: 0;">${I18n.t('label_active')}</label>
                         <button
                             type="button"
                             class="toggle ${isEdit ? (camera.is_active ? 'active' : '') : 'active'}"
@@ -69,9 +71,9 @@ const CameraForm = {
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="CameraForm.testConnection()">
-                    ⚡ Test Connection
+                    ${I18n.t('btn_test_connection')}
                 </button>
-                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('cancel')}</button>
                 <button class="btn btn-primary" type="submit" form="camera-form">
                     ${submitText}
                 </button>
@@ -96,23 +98,23 @@ const CameraForm = {
         };
 
         if (!data.name || !data.rtsp_url) {
-            App.toast('Please fill in all required fields.', 'error');
+            App.toast(I18n.t('err_enter_name'), 'error');
             return;
         }
 
         try {
             if (cameraId) {
                 await App.api(`/api/cameras/${cameraId}`, 'PUT', data);
-                App.toast('Camera updated successfully!', 'success');
+                App.toast(I18n.t('camera_saved_success'), 'success');
             } else {
                 await App.api('/api/cameras', 'POST', data);
-                App.toast('Camera added successfully!', 'success');
+                App.toast(I18n.t('camera_added_success'), 'success');
             }
 
             App.closeModal();
             CamerasPage.load();
         } catch (err) {
-            App.toast(`Failed to save camera: ${err.message}`, 'error');
+            App.toast(I18n.t('err_failed_save', { msg: err.message }), 'error');
         }
     },
 
@@ -129,11 +131,11 @@ const CameraForm = {
     async testConnection() {
         const url = document.getElementById('camera-url').value.trim();
         if (!url) {
-            App.toast('Please enter an RTSP URL first.', 'error');
+            App.toast(I18n.t('placeholder_rtsp_url'), 'error');
             return;
         }
 
-        App.toast('Testing connection...', 'info');
+        App.toast(I18n.t('testing_connection'), 'info');
 
         try {
             const result = await App.api('/api/cameras/test-url', 'POST', {
@@ -142,12 +144,12 @@ const CameraForm = {
             });
 
             if (result.success) {
-                App.toast('✅ Connection successful!', 'success');
+                App.toast(I18n.t('test_success'), 'success');
             } else {
                 App.toast(`❌ ${result.message}`, 'error');
             }
         } catch (err) {
-            App.toast(`Connection test failed: ${err.message}`, 'error');
+            App.toast(`${I18n.t('test_failed')}: ${err.message}`, 'error');
         }
     },
 

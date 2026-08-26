@@ -11,6 +11,12 @@ const App = {
 
     // ─── Initialization ────────────────────────────────────
     init() {
+        // Initialize Internationalization
+        I18n.init();
+        I18n.onLanguageChange(() => {
+            App.navigate(App._currentPage);
+        });
+
         // Set up navigation
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
@@ -127,12 +133,14 @@ const App = {
         const dot = document.getElementById('ws-dot');
         const text = document.getElementById('ws-status-text');
 
+        if (!dot || !text) return;
+
         if (connected) {
             dot.classList.remove('disconnected');
-            text.textContent = 'Connected';
+            text.textContent = I18n.t('ws_connected');
         } else {
             dot.classList.add('disconnected');
-            text.textContent = 'Reconnecting...';
+            text.textContent = I18n.t('ws_reconnecting');
         }
     },
 
@@ -215,7 +223,10 @@ const App = {
     },
 
     showZoneAlert(data) {
-        App.toast(`${data.message}`, 'error');
+        const localizedMsg = (typeof I18n !== 'undefined' && I18n.formatAlertNotification)
+            ? I18n.formatAlertNotification(data)
+            : (data.message || '⚠️ Zone Alert');
+        App.toast(localizedMsg, 'error');
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();

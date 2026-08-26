@@ -11,34 +11,34 @@ const PersonForm = {
     renderModal() {
         return `
             <div class="modal-header">
-                <h2>Add Known Person</h2>
+                <h2>${I18n.t('modal_add_person')}</h2>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
             <div class="modal-body">
                 <form id="person-form" onsubmit="PersonForm.handleSubmit(event)">
                     <div class="form-group">
-                        <label class="form-label" for="person-name">Full Name</label>
+                        <label class="form-label" for="person-name">${I18n.t('label_full_name')}</label>
                         <input
                             class="form-input"
                             type="text"
                             id="person-name"
                             name="name"
-                            placeholder="e.g., John Doe"
+                            placeholder="${PersonForm.escapeAttr(I18n.t('placeholder_full_name'))}"
                             required
                         />
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="person-role">Role / Title</label>
+                        <label class="form-label" for="person-role">${I18n.t('label_role')}</label>
                         <input
                             class="form-input"
                             type="text"
                             id="person-role"
                             name="role"
-                            placeholder="e.g., Employee, Visitor, Security"
+                            placeholder="${PersonForm.escapeAttr(I18n.t('placeholder_role'))}"
                         />
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Reference Photos</label>
+                        <label class="form-label">${I18n.t('label_ref_photos')}</label>
                         <div
                             class="upload-zone"
                             id="upload-zone"
@@ -49,10 +49,10 @@ const PersonForm = {
                         >
                             <div class="upload-zone-icon">📸</div>
                             <div class="upload-zone-text">
-                                Click or drag photos here
+                                ${I18n.t('upload_drag_text')}
                             </div>
                             <div class="upload-zone-hint">
-                                Upload 1 or more clear face photos (JPG, PNG)
+                                ${I18n.t('upload_hint_1')}
                             </div>
                         </div>
                         <input
@@ -68,9 +68,9 @@ const PersonForm = {
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('cancel')}</button>
                 <button class="btn btn-primary" type="submit" form="person-form">
-                    Add Person
+                    ${I18n.t('add_person_btn')}
                 </button>
             </div>
         `;
@@ -82,13 +82,13 @@ const PersonForm = {
     renderAddPhotosModal(personId, personName) {
         return `
             <div class="modal-header">
-                <h2>Add Photos — ${PersonForm.escapeHtml(personName)}</h2>
+                <h2>${I18n.t('modal_add_photos', { name: PersonForm.escapeHtml(personName) })}</h2>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
             <div class="modal-body">
                 <form id="add-photos-form" onsubmit="PersonForm.handleAddPhotos(event, ${personId})">
                     <div class="form-group">
-                        <label class="form-label">Additional Reference Photos</label>
+                        <label class="form-label">${I18n.t('label_add_more_photos')}</label>
                         <div
                             class="upload-zone"
                             id="upload-zone"
@@ -98,8 +98,8 @@ const PersonForm = {
                             ondrop="PersonForm.handleDrop(event)"
                         >
                             <div class="upload-zone-icon">📸</div>
-                            <div class="upload-zone-text">Click or drag photos here</div>
-                            <div class="upload-zone-hint">More photos = better recognition accuracy</div>
+                            <div class="upload-zone-text">${I18n.t('upload_drag_text')}</div>
+                            <div class="upload-zone-hint">${I18n.t('upload_hint_2')}</div>
                         </div>
                         <input
                             type="file"
@@ -114,9 +114,9 @@ const PersonForm = {
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('cancel')}</button>
                 <button class="btn btn-primary" type="submit" form="add-photos-form">
-                    Upload Photos
+                    ${I18n.t('btn_add_photos')}
                 </button>
             </div>
         `;
@@ -175,7 +175,7 @@ const PersonForm = {
             img.className = 'upload-preview-item';
             img.src = url;
             img.alt = file.name;
-            img.title = `${file.name} — Click to remove`;
+            img.title = `${file.name} — ${I18n.t('delete')}`;
             img.style.cursor = 'pointer';
             img.onclick = () => {
                 PersonForm._selectedFiles.splice(index, 1);
@@ -195,12 +195,12 @@ const PersonForm = {
         const role = document.getElementById('person-role').value.trim();
 
         if (!name) {
-            App.toast('Please enter a name.', 'error');
+            App.toast(I18n.t('err_enter_name'), 'error');
             return;
         }
 
         if (PersonForm._selectedFiles.length === 0) {
-            App.toast('Please upload at least one reference photo.', 'error');
+            App.toast(I18n.t('err_select_photo'), 'error');
             return;
         }
 
@@ -213,7 +213,7 @@ const PersonForm = {
         });
 
         try {
-            App.toast('Processing photos...', 'info');
+            App.toast(I18n.t('processing_photos'), 'info');
 
             const response = await fetch('/api/persons', {
                 method: 'POST',
@@ -227,10 +227,10 @@ const PersonForm = {
 
             PersonForm._selectedFiles = [];
             App.closeModal();
-            App.toast(`${name} has been enrolled successfully!`, 'success');
+            App.toast(I18n.t('person_enrolled_success', { name }), 'success');
             PersonsPage.load();
         } catch (err) {
-            App.toast(`Error: ${err.message}`, 'error');
+            App.toast(I18n.t('err_generic', { msg: err.message }), 'error');
         }
     },
 
@@ -241,7 +241,7 @@ const PersonForm = {
         event.preventDefault();
 
         if (PersonForm._selectedFiles.length === 0) {
-            App.toast('Please select at least one photo.', 'error');
+            App.toast(I18n.t('err_select_photo'), 'error');
             return;
         }
 
@@ -251,7 +251,7 @@ const PersonForm = {
         });
 
         try {
-            App.toast('Processing photos...', 'info');
+            App.toast(I18n.t('processing_photos'), 'info');
 
             const response = await fetch(`/api/persons/${personId}/photos`, {
                 method: 'POST',
@@ -265,10 +265,10 @@ const PersonForm = {
 
             PersonForm._selectedFiles = [];
             App.closeModal();
-            App.toast('Photos added successfully!', 'success');
+            App.toast(I18n.t('photos_added_success'), 'success');
             PersonsPage.load();
         } catch (err) {
-            App.toast(`Error: ${err.message}`, 'error');
+            App.toast(I18n.t('err_generic', { msg: err.message }), 'error');
         }
     },
 
@@ -284,7 +284,14 @@ const PersonForm = {
      */
     escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = text || '';
         return div.innerHTML;
+    },
+
+    escapeAttr(str) {
+        return (str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 };

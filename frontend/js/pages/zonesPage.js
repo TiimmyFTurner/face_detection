@@ -6,6 +6,10 @@ const ZonesPage = {
     _zones: [],
     _cameras: [],
     _logs: [],
+    _logTotal: 0,
+    _logPage: 1,
+    _logLimit: 25,
+    _logLoading: false,
     _activeSubTab: 'board', // 'board', 'zones', 'logs'
     _pollTimer: null,
 
@@ -53,13 +57,22 @@ const ZonesPage = {
                 App.api('/api/zones/status'),
                 App.api('/api/zones'),
                 App.api('/api/cameras'),
-                App.api('/api/zones/logs?limit=40'),
+                App.api(`/api/zones/logs?limit=${ZonesPage._logLimit}&offset=${(ZonesPage._logPage - 1) * ZonesPage._logLimit}`),
             ]);
 
             ZonesPage._statusData = statusRes.status === 'fulfilled' && Array.isArray(statusRes.value) ? statusRes.value : [];
             ZonesPage._zones = zonesRes.status === 'fulfilled' && Array.isArray(zonesRes.value) ? zonesRes.value : [];
             ZonesPage._cameras = camerasRes.status === 'fulfilled' && Array.isArray(camerasRes.value) ? camerasRes.value : [];
-            ZonesPage._logs = logsRes.status === 'fulfilled' && Array.isArray(logsRes.value) ? logsRes.value : [];
+            
+            if (logsRes.status === 'fulfilled' && logsRes.value) {
+                if (Array.isArray(logsRes.value)) {
+                    ZonesPage._logs = logsRes.value;
+                    ZonesPage._logTotal = logsRes.value.length;
+                } else {
+                    ZonesPage._logs = logsRes.value.events || [];
+                    ZonesPage._logTotal = logsRes.value.total || 0;
+                }
+            }
         } catch (err) {
             console.error('Error fetching zone data:', err);
         }
@@ -358,7 +371,54 @@ const ZonesPage = {
     },
 
     /**
-     * Render the Security & Absence Logs sub-tab.
+     * Load a specific page of Security & Absence Logs.
+     */
+    async loadLogs(page = 1, limit = ZonesPage._logLimit) {
+        ZonesPage._logLoading = true;
+        try {
+            const offset = Math.max(0, (page - 1) * limit);
+            const data = await App.api(`/api/zones/logs?limit=${limit}&offset=${offset}`);
+            if (Array.isArray(data)) {
+                ZonesPage._logs = data;
+                ZonesPage._logTotal = data.length;
+            } else if (data) {
+                ZonesPage._logs = data.events || [];
+                ZonesPage._logTotal = data.total || 0;
+            }
+            ZonesPage._logPage = page;
+            ZonesPage._logLimit = limit;
+
+            // Update sub-tab count badge
+            const logsBtn = document.querySelector('button[onclick*="switchSubTab(\'logs\')"]');
+            if (logsBtn) {
+                const logsCount = I18n.isRTL() ? I18n.toPersianDigits(ZonesPage._logTotal) : ZonesPage._logTotal;
+                logsBtn.textContent = I18n.t('subtab_logs', { count: logsCount });
+            }
+
+            if (ZonesPage._activeSubTab === 'logs') {
+                const content = document.getElementById('zone-subtab-content');
+                if (content) {
+                    content.innerHTML = ZonesPage.renderLogsTab();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load zone logs:', err);
+        } finally {
+            ZonesPage._logLoading = false;
+        }
+    },
+
+    async changeLogsPerPage(limit) {
+        const parsed = parseInt(limit, 10) || 25;
+        await ZonesPage.loadLogs(1, parsed);
+    },
+
+    async goToLogsPage(page) {
+        await ZonesPage.loadLogs(page, ZonesPage._logLimit);
+    },
+
+    /**
+     * Render the Security & Absence Logs sub-tab with pagination.
      */
     renderLogsTab() {
         if (ZonesPage._logs.length === 0) {
@@ -371,8 +431,21 @@ const ZonesPage = {
             `;
         }
 
+        const total = ZonesPage._logTotal || ZonesPage._logs.length;
+        const limit = ZonesPage._logLimit || 25;
+        const page = ZonesPage._logPage || 1;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const from = total === 0 ? 0 : (page - 1) * limit + 1;
+        const to = Math.min(total, page * limit);
+
+        const fromFormatted = I18n.isRTL() ? I18n.toPersianDigits(from) : from;
+        const toFormatted = I18n.isRTL() ? I18n.toPersianDigits(to) : to;
+        const totalFormatted = I18n.isRTL() ? I18n.toPersianDigits(total) : total;
+        const pageFormatted = I18n.isRTL() ? I18n.toPersianDigits(page) : page;
+        const totalPagesFormatted = I18n.isRTL() ? I18n.toPersianDigits(totalPages) : totalPages;
+
         return `
-            <div style="background: var(--bg-glass); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); overflow: hidden;">
+            <div style="background: var(--bg-glass); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); overflow: hidden; display: flex; flex-direction: column;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
                     <thead>
                         <tr style="background: var(--bg-surface-hover); border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 0.75rem; text-transform: uppercase;">
@@ -411,12 +484,12 @@ const ZonesPage = {
                                     </td>
                                     <td style="padding: 0.6rem 1rem;">
                                         <div style="display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-start;">
-                                            <div>${alertBadge}</div>
-                                            ${(log.duration_seconds || log.duration_str) ? `
-                                                <div style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); padding: 2px 7px; border-radius: var(--radius-sm);">
-                                                    <span>${I18n.t('absence_duration_pill', { duration: log.duration_seconds ? I18n.formatDuration(log.duration_seconds) : log.duration_str })}</span>
-                                                </div>
-                                            ` : ''}
+                                             <div>${alertBadge}</div>
+                                             ${(log.duration_seconds || log.duration_str) ? `
+                                                 <div style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); padding: 2px 7px; border-radius: var(--radius-sm);">
+                                                     <span>${I18n.t('absence_duration_pill', { duration: log.duration_seconds ? I18n.formatDuration(log.duration_seconds) : log.duration_str })}</span>
+                                                 </div>
+                                             ` : ''}
                                         </div>
                                     </td>
                                 </tr>
@@ -424,6 +497,47 @@ const ZonesPage = {
                         }).join('')}
                     </tbody>
                 </table>
+
+                <!-- Pagination Footer Bar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; background: var(--bg-surface-hover); border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 0.75rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                        ${I18n.t('pagination_showing', { from: fromFormatted, to: toFormatted, total: totalFormatted })}
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-tertiary);">
+                            <span>${I18n.t('pagination_per_page')}</span>
+                            <select class="form-input" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; width: auto;" onchange="ZonesPage.changeLogsPerPage(this.value)">
+                                <option value="15" ${limit === 15 ? 'selected' : ''}>15</option>
+                                <option value="25" ${limit === 25 ? 'selected' : ''}>25</option>
+                                <option value="50" ${limit === 50 ? 'selected' : ''}>50</option>
+                                <option value="100" ${limit === 100 ? 'selected' : ''}>100</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <button
+                                class="btn btn-secondary btn-sm"
+                                ${page <= 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
+                                onclick="ZonesPage.goToLogsPage(${page - 1})"
+                            >
+                                ${I18n.t('pagination_prev')}
+                            </button>
+                            
+                            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); padding: 0 0.4rem;">
+                                ${I18n.t('pagination_page_of', { page: pageFormatted, totalPages: totalPagesFormatted })}
+                            </span>
+
+                            <button
+                                class="btn btn-secondary btn-sm"
+                                ${page >= totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
+                                onclick="ZonesPage.goToLogsPage(${page + 1})"
+                            >
+                                ${I18n.t('pagination_next')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     },

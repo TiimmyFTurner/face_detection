@@ -6,6 +6,10 @@ const DashboardPage = {
     _viewMode: 'stream', // 'stream' | 'grouped'
     _events: [],
     _groupedEvents: [],
+    _eventPage: 1,
+    _eventLimit: 30,
+    _eventTotal: 0,
+    _eventLoading: false,
 
     /**
      * Load and render the dashboard page.
@@ -71,19 +75,22 @@ const DashboardPage = {
                 </div>
             </div>
 
-            <!-- Events Grid -->
-            <div class="events-grid" id="events-grid">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📡</div>
-                    <div class="empty-state-title">${I18n.t('loading')}</div>
+            <!-- Events Grid & Pagination Container -->
+            <div id="events-container" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div class="events-grid" id="events-grid">
+                    <div class="empty-state">
+                        <div class="spinner"></div>
+                        <div class="empty-state-title">${I18n.t('loading')}</div>
+                    </div>
                 </div>
+                <div id="events-pagination"></div>
             </div>
         `;
 
         // Load data
         await Promise.all([
             DashboardPage.loadStats(),
-            DashboardPage.loadEvents(),
+            DashboardPage.loadEvents(1),
         ]);
     },
 
@@ -105,7 +112,8 @@ const DashboardPage = {
     /**
      * Load events list with current filter and view mode.
      */
-    async loadEvents() {
+    async loadEvents(page = DashboardPage._eventPage) {
+        DashboardPage._eventLoading = true;
         try {
             if (DashboardPage._viewMode === 'grouped') {
                 let url = '/api/events/grouped?limit_per_group=15';
@@ -114,13 +122,18 @@ const DashboardPage = {
 
                 DashboardPage._groupedEvents = await App.api(url);
                 DashboardPage.renderGroupedEvents();
+                const pagContainer = document.getElementById('events-pagination');
+                if (pagContainer) pagContainer.innerHTML = '';
             } else {
-                let url = '/api/events?limit=50';
+                const offset = Math.max(0, (page - 1) * DashboardPage._eventLimit);
+                let url = `/api/events?limit=${DashboardPage._eventLimit}&offset=${offset}`;
                 if (DashboardPage._filter === 'known') url += '&is_known=true';
                 if (DashboardPage._filter === 'unknown') url += '&is_known=false';
 
                 const data = await App.api(url);
                 DashboardPage._events = data.events || [];
+                DashboardPage._eventTotal = data.total || 0;
+                DashboardPage._eventPage = page;
                 DashboardPage.renderEvents();
             }
         } catch (err) {
@@ -132,14 +145,26 @@ const DashboardPage = {
                     <div class="empty-state-text">${err.message}</div>
                 </div>
             `;
+        } finally {
+            DashboardPage._eventLoading = false;
         }
     },
 
+    async changeEventLimit(limit) {
+        DashboardPage._eventLimit = parseInt(limit, 10) || 30;
+        await DashboardPage.loadEvents(1);
+    },
+
+    async goToEventPage(page) {
+        await DashboardPage.loadEvents(page);
+    },
+
     /**
-     * Render chronological activity stream.
+     * Render chronological activity stream with pagination bar.
      */
     renderEvents() {
         const grid = document.getElementById('events-grid');
+        const pagContainer = document.getElementById('events-pagination');
         if (!grid) return;
         grid.style.display = 'grid';
 
@@ -153,12 +178,70 @@ const DashboardPage = {
                     </div>
                 </div>
             `;
+            if (pagContainer) pagContainer.innerHTML = '';
             return;
         }
 
         grid.innerHTML = DashboardPage._events
             .map(event => EventCard.render(event))
             .join('');
+
+        if (pagContainer) {
+            const total = DashboardPage._eventTotal || DashboardPage._events.length;
+            const limit = DashboardPage._eventLimit || 30;
+            const page = DashboardPage._eventPage || 1;
+            const totalPages = Math.max(1, Math.ceil(total / limit));
+            const from = total === 0 ? 0 : (page - 1) * limit + 1;
+            const to = Math.min(total, page * limit);
+
+            const fromFormatted = I18n.isRTL() ? I18n.toPersianDigits(from) : from;
+            const toFormatted = I18n.isRTL() ? I18n.toPersianDigits(to) : to;
+            const totalFormatted = I18n.isRTL() ? I18n.toPersianDigits(total) : total;
+            const pageFormatted = I18n.isRTL() ? I18n.toPersianDigits(page) : page;
+            const totalPagesFormatted = I18n.isRTL() ? I18n.toPersianDigits(totalPages) : totalPages;
+
+            pagContainer.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; background: var(--bg-surface-hover); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem;">
+                    <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                        ${I18n.t('pagination_showing', { from: fromFormatted, to: toFormatted, total: totalFormatted })}
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--text-tertiary);">
+                            <span>${I18n.t('pagination_per_page')}</span>
+                            <select class="form-input" style="padding: 0.25rem 0.5rem; font-size: 0.82rem; width: auto;" onchange="DashboardPage.changeEventLimit(this.value)">
+                                <option value="20" ${limit === 20 ? 'selected' : ''}>20</option>
+                                <option value="30" ${limit === 30 ? 'selected' : ''}>30</option>
+                                <option value="50" ${limit === 50 ? 'selected' : ''}>50</option>
+                                <option value="100" ${limit === 100 ? 'selected' : ''}>100</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <button
+                                class="btn btn-secondary btn-sm"
+                                ${page <= 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
+                                onclick="DashboardPage.goToEventPage(${page - 1})"
+                            >
+                                ${I18n.t('pagination_prev')}
+                            </button>
+                            
+                            <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); padding: 0 0.4rem;">
+                                ${I18n.t('pagination_page_of', { page: pageFormatted, totalPages: totalPagesFormatted })}
+                            </span>
+
+                            <button
+                                class="btn btn-secondary btn-sm"
+                                ${page >= totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
+                                onclick="DashboardPage.goToEventPage(${page + 1})"
+                            >
+                                ${I18n.t('pagination_next')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     },
 
     /**

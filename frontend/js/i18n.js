@@ -261,6 +261,15 @@ const I18n = {
             setting_frame_skip_desc: 'پردازش یک فریم از هر N فریم برای بهینه‌سازی بار پردازشی سخت‌افزار',
             settings_saved_success: 'تنظیمات سیستم با موفقیت ذخیره و اعمال شد.',
 
+            // Pagination
+            pagination_showing: 'نمایش {from} تا {to} از مجموع {total} رویداد',
+            pagination_prev: '« صفحه قبلی',
+            pagination_next: 'صفحه بعدی »',
+            pagination_page_of: 'صفحه {page} از {totalPages}',
+            pagination_per_page: 'تعداد در صفحه:',
+            pagination_load_more: 'بارگذاری رویدادهای بیشتر...',
+            pagination_all_loaded: 'تمامی رویدادها نمایش داده شده‌اند.',
+
             // Time Relative
             just_now: 'هم‌اکنون',
             minutes_ago: '{mins} دقیقه پیش',
@@ -519,6 +528,15 @@ const I18n = {
             setting_frame_skip: 'Frame Skip Rate',
             setting_frame_skip_desc: 'Process 1 frame every N frames for performance optimization',
             settings_saved_success: 'System settings updated and applied successfully.',
+
+            // Pagination
+            pagination_showing: 'Showing {from} to {to} of {total} events',
+            pagination_prev: '« Previous',
+            pagination_next: 'Next »',
+            pagination_page_of: 'Page {page} of {totalPages}',
+            pagination_per_page: 'Per page:',
+            pagination_load_more: 'Load More Events...',
+            pagination_all_loaded: 'All events have been loaded.',
 
             // Time Relative
             just_now: 'Just now',

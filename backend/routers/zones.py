@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, desc, or_
+from sqlalchemy import select, desc, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
@@ -31,6 +31,7 @@ from backend.schemas import (
     ZoneStatusResponse,
     ZonePersonStatus,
     EventResponse,
+    EventListResponse,
 )
 from backend.stream_processor import stream_processor
 
@@ -220,22 +221,29 @@ async def get_zones_status(db: AsyncSession = Depends(get_db)):
     return response_list
 
 
-@router.get("/api/zones/logs", response_model=list[EventResponse])
+@router.get("/api/zones/logs", response_model=EventListResponse)
 async def get_zone_logs(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get recent zone violations, absence timeout alerts, and unauthorized entry logs."""
+    """Get paginated zone violations, absence timeout alerts, and unauthorized entry logs."""
+    where_clause = or_(
+        Event.alert_type.in_(["out_of_zone", "unauthorized_entry", "absence_timeout"]),
+        Event.zone_id.isnot(None),
+    )
+
+    # Total count
+    count_query = select(func.count(Event.id)).where(where_clause)
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
     query = (
         select(Event)
-        .where(
-            or_(
-                Event.alert_type.in_(["out_of_zone", "unauthorized_entry", "absence_timeout"]),
-                Event.zone_id.isnot(None),
-            )
-        )
+        .where(where_clause)
         .order_by(desc(Event.timestamp))
         .limit(limit)
+        .offset(offset)
     )
     result = await db.execute(query)
     events = result.scalars().all()
@@ -250,7 +258,6 @@ async def get_zone_logs(
             ts = ts.replace(tzinfo=timezone.utc)
 
         cam_name = camera_map.get(e.camera_id, f"Camera #{e.camera_id}") if e.camera_id else ""
-
         dur_secs = getattr(e, "duration_seconds", None)
         event_responses.append(
             EventResponse(
@@ -271,7 +278,12 @@ async def get_zone_logs(
             )
         )
 
-    return event_responses
+    return EventListResponse(
+        events=event_responses,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # ── Direct Zone Endpoints ────────────────────────────────

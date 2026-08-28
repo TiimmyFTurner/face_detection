@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # ── Face Recognition ─────────────────────────────────
     match_threshold: float = 0.5
     insightface_model: str = "buffalo_l"
+    log_unknown_faces: bool = True  # If False, unidentified/unknown faces are ignored and not logged
 
     # ── Stream Processing ────────────────────────────────
     frame_skip: int = 5

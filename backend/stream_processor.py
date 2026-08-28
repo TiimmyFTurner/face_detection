@@ -540,6 +540,18 @@ class StreamProcessor:
             if matched_zone and match.person_id:
                 self._zone_last_seen[(matched_zone["id"], match.person_id)] = now
 
+            # Check if logging unknown persons is disabled in settings
+            if not match.is_known and not getattr(settings, "log_unknown_faces", True):
+                # If unknown person enters a restricted zone with unauthorized entry policy, still evaluate alert
+                is_unauthorized = False
+                if matched_zone:
+                    mode = matched_zone.get("alert_mode", "")
+                    assigned_ids = matched_zone.get("assigned_person_ids", [])
+                    if mode in ("unauthorized", "unauthorized_entry", "both") and assigned_ids:
+                        is_unauthorized = True
+                if not is_unauthorized:
+                    continue  # Skip event logging for unknown face
+
             # Check cooldown key for logging event to database & live feed
             if match.person_id:
                 cooldown_key = (camera_id, match.person_id)

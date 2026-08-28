@@ -21,6 +21,7 @@ async def get_settings() -> SystemSettingsResponse:
     """Retrieve current system configuration and snapshot saving status."""
     return SystemSettingsResponse(
         save_snapshots=bool(settings.save_snapshots),
+        log_unknown_faces=bool(getattr(settings, "log_unknown_faces", True)),
         match_threshold=float(settings.match_threshold),
         cooldown_seconds=int(settings.cooldown_seconds),
         frame_skip=int(settings.frame_skip),
@@ -36,6 +37,10 @@ async def update_settings(update_data: SystemSettingsUpdate) -> SystemSettingsRe
     if update_data.save_snapshots is not None:
         settings.save_snapshots = update_data.save_snapshots
         logger.info("Setting 'save_snapshots' updated to: %s", settings.save_snapshots)
+
+    if update_data.log_unknown_faces is not None:
+        settings.log_unknown_faces = update_data.log_unknown_faces
+        logger.info("Setting 'log_unknown_faces' updated to: %s", settings.log_unknown_faces)
 
     if update_data.match_threshold is not None:
         settings.match_threshold = max(0.1, min(1.0, update_data.match_threshold))
@@ -55,6 +60,7 @@ async def update_settings(update_data: SystemSettingsUpdate) -> SystemSettingsRe
 
     return SystemSettingsResponse(
         save_snapshots=bool(settings.save_snapshots),
+        log_unknown_faces=bool(getattr(settings, "log_unknown_faces", True)),
         match_threshold=float(settings.match_threshold),
         cooldown_seconds=int(settings.cooldown_seconds),
         frame_skip=int(settings.frame_skip),

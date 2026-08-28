@@ -264,6 +264,7 @@ class WSEvent(BaseModel):
 class SystemSettingsResponse(BaseModel):
     """Current runtime settings of the system."""
     save_snapshots: bool
+    log_unknown_faces: bool = True
     match_threshold: float
     cooldown_seconds: int
     frame_skip: int
@@ -273,6 +274,7 @@ class SystemSettingsResponse(BaseModel):
 class SystemSettingsUpdate(BaseModel):
     """Update runtime settings of the system."""
     save_snapshots: Optional[bool] = None
+    log_unknown_faces: Optional[bool] = None
     match_threshold: Optional[float] = None
     cooldown_seconds: Optional[int] = None
     frame_skip: Optional[int] = None

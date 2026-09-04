@@ -344,6 +344,48 @@ class ZoneStatusResponse(BaseModel):
     assigned_persons: list[ZonePersonStatus] = []
 
 
+class PersonDutyStatus(BaseModel):
+    """Real-time duty and absence tracking status for a person assigned to a shift."""
+    person_id: int
+    person_name: str
+    person_role: Optional[str] = None
+    avatar_url: Optional[str] = None
+    zone_id: int
+    zone_name: str
+    camera_id: int
+    camera_name: str
+    shift_start_time: str
+    shift_end_time: str
+    shift_window_str: str
+    shift_duration_hours: float
+    active_days: list[str] = []
+    is_in_duty_hours: bool
+    status: str  # "present", "absent", "off_duty"
+    is_in_zone: bool
+    last_seen_seconds_ago: Optional[float] = None
+    last_seen_str: str = ""
+    current_absence_minutes: int = 0
+    current_absence_str: str = "0m"
+    shift_elapsed_minutes: int = 0
+    shift_presence_minutes: int = 0
+    shift_presence_str: str = "0m"
+    shift_absence_minutes: int = 0
+    shift_absence_str: str = "0m"
+    shift_compliance_pct: float = 100.0
+
+
+class DutyRosterResponse(BaseModel):
+    """Aggregate live duty roster response."""
+    server_time: str
+    total_on_duty: int
+    present_count: int
+    absent_count: int
+    total_shift_absence_minutes: int
+    total_shift_absence_str: str
+    avg_compliance_pct: float
+    roster: list[PersonDutyStatus] = []
+
+
 # ═══════════════════════════════════════════════════════════
 # Event Schemas
 # ═══════════════════════════════════════════════════════════

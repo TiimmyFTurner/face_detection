@@ -49,6 +49,11 @@ const App = {
 
     // ─── Client-Side Router ────────────────────────────────
     navigate(page) {
+        // Clean up page timers if navigating away
+        if (typeof DutyPage !== 'undefined' && DutyPage.cleanup) {
+            DutyPage.cleanup();
+        }
+
         App._currentPage = page;
 
         // Update nav active state
@@ -60,6 +65,9 @@ const App = {
         switch (page) {
             case 'dashboard':
                 DashboardPage.load();
+                break;
+            case 'duty':
+                DutyPage.load();
                 break;
             case 'cameras':
                 CamerasPage.load();

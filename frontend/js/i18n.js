@@ -14,6 +14,7 @@ const I18n = {
             brand_name: 'فیس‌ترک',
             brand_subtitle: 'سامانه تشخیص چهره هوشمند',
             nav_dashboard: 'پیشخوان',
+            nav_duty: 'پرسنل در شیفت',
             nav_zones: 'منطقه‌ها و شیفت‌ها',
             nav_cameras: 'دوربین‌ها',
             nav_persons: 'هویت‌ها و چهره‌ها',
@@ -22,6 +23,32 @@ const I18n = {
             ws_reconnecting: 'در حال اتصال مجدد...',
             ws_connecting: 'در حال برقراری ارتباط...',
             lang_switcher_label: 'زبان سیستم',
+
+            // Live Duty Screen
+            duty_title: '⏱️ پایش زنده پرسنل در ساعات شیفت',
+            duty_subtitle: 'نظارت لحظه‌ای بر حضور، غیبت جاری و مجموع زمان عدم حضور در محل خدمت',
+            kpi_staff_on_duty: 'پرسنل در ساعت شیفت',
+            kpi_on_station: 'حاضر در منطقه',
+            kpi_absent_now: 'غایب از منطقه',
+            kpi_total_shift_absence: 'مجموع کل غیبت شیفت جاری',
+            kpi_avg_compliance: 'میانگین انضباط شیفت',
+            filter_all_duty: 'همه پرسنل در شیفت',
+            filter_present: '🟢 حاضرین در منطقه',
+            filter_absent: '🔴 غایبین از منطقه',
+            toggle_only_active: 'فقط شیفت‌های فعال هم‌اکنون',
+            auto_refresh_badge: 'بروزرسانی: {sec} ثانیه',
+            shift_window_badge: 'بازه زمانی شیفت: {window}',
+            current_absence_badge: '⏱️ غیبت لحظه‌ای: {time}',
+            current_absence_title: 'غیبت لحظه‌ای (عدم حضور در منطقه)',
+            sum_shift_absence_title: 'مجموع غیبت در شیفت جاری',
+            sum_shift_absence_desc: '{absent} غیبت از {elapsed} سپری شده',
+            in_zone_present: '🟢 حاضر در محل خدمت',
+            in_zone_ago: 'حاضر (رؤیت: {sec} ثانیه پیش)',
+            absent_missing_mins: '🔴 غایب از منطقه ({mins} دقیقه)',
+            absent_not_seen: '🔴 عدم حضور از ابتدای شیفت',
+            compliance_rate_label: 'نرخ حضور در شیفت: {pct}%',
+            no_duty_title: 'هیچ پرسنلی در این ساعت شیفت کاری فعال ندارد',
+            no_duty_desc: 'در حال حاضر هیچ شیفتی برای پرسنل فعال نیست یا ساعات کاری به اتمام رسیده است.',
 
             // Common / Actions
             live: 'زنده',
@@ -363,6 +390,7 @@ const I18n = {
             brand_name: 'FaceTrack',
             brand_subtitle: 'Detection System',
             nav_dashboard: 'Dashboard',
+            nav_duty: 'Live Duty',
             nav_zones: 'Zones & Shifts',
             nav_cameras: 'Cameras',
             nav_persons: 'Identities',
@@ -371,6 +399,32 @@ const I18n = {
             ws_reconnecting: 'Reconnecting...',
             ws_connecting: 'Connecting...',
             lang_switcher_label: 'Language',
+
+            // Live Duty Screen
+            duty_title: '⏱️ Live Duty Roster & Shift Absence Monitoring',
+            duty_subtitle: 'Real-time tracking of staff on duty, current zone absence, and cumulative shift absence',
+            kpi_staff_on_duty: 'Staff in Duty Hours',
+            kpi_on_station: 'Present in Zone',
+            kpi_absent_now: 'Absent from Zone',
+            kpi_total_shift_absence: 'Total Shift Absence',
+            kpi_avg_compliance: 'Avg Shift Compliance',
+            filter_all_duty: 'All on Duty',
+            filter_present: '🟢 Present in Zone',
+            filter_absent: '🔴 Absent from Zone',
+            toggle_only_active: 'Active Duty Hours Only',
+            auto_refresh_badge: 'Auto-refresh: {sec}s',
+            shift_window_badge: 'Shift Window: {window}',
+            current_absence_badge: '⏱️ Current Absence: {time}',
+            current_absence_title: 'Current Absence (Not in Zone)',
+            sum_shift_absence_title: 'Sum of Current Shift Absence',
+            sum_shift_absence_desc: '{absent} absent of {elapsed} elapsed',
+            in_zone_present: '🟢 Present on Station',
+            in_zone_ago: 'Present (seen {sec}s ago)',
+            absent_missing_mins: '🔴 Absent from Zone ({mins}m)',
+            absent_not_seen: '🔴 Absent Since Shift Start',
+            compliance_rate_label: 'Shift Presence: {pct}%',
+            no_duty_title: 'No Personnel in Duty Hours Right Now',
+            no_duty_desc: 'No staff members have an active shift timetable scheduled for this time, or shift hours have ended.',
 
             // Common / Actions
             live: 'LIVE',
@@ -771,6 +825,9 @@ const I18n = {
 
         const navDash = document.querySelector('#nav-dashboard span:last-child');
         if (navDash) navDash.textContent = I18n.t('nav_dashboard');
+
+        const navDuty = document.querySelector('#nav-duty span:last-child');
+        if (navDuty) navDuty.textContent = I18n.t('nav_duty');
 
         const navZones = document.querySelector('#nav-zones span:last-child');
         if (navZones) navZones.textContent = I18n.t('nav_zones');

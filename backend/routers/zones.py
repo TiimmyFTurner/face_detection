@@ -15,21 +15,24 @@ Endpoints:
 import json
 import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, desc, or_, func
+from sqlalchemy import select, desc, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
-from backend.models import Camera, CameraZone, Person, Event
+from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding
 from backend.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
     CameraZoneResponse,
     ZoneStatusResponse,
     ZonePersonStatus,
+    PersonDutyStatus,
+    DutyRosterResponse,
     EventResponse,
     EventListResponse,
 )
@@ -38,6 +41,28 @@ from backend.stream_processor import stream_processor
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["zones"])
+
+
+def _to_local_dt(dt: datetime) -> datetime:
+    """Convert UTC or naive datetime to local timezone datetime."""
+    if dt is None:
+        return datetime.now()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone()
+
+
+def _format_duration(seconds: int) -> str:
+    """Format duration in seconds to a human-readable string."""
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    rem_mins = minutes % 60
+    return f"{hours}h {rem_mins}m" if rem_mins > 0 else f"{hours}h"
+
 
 
 def _parse_list_field(val: Any, default: list) -> list:
@@ -219,6 +244,234 @@ async def get_zones_status(db: AsyncSession = Depends(get_db)):
         )
 
     return response_list
+
+
+@router.get("/api/zones/duty-roster", response_model=DutyRosterResponse)
+async def get_duty_roster(
+    only_active: bool = Query(True, description="Filter only persons currently in their active duty hours"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Real-time duty roster monitoring:
+    - Lists personnel currently in scheduled duty hours (or all assigned if only_active=False)
+    - Shift time window and active days
+    - Real-time absence if not currently in the assigned zone (< 120s)
+    - Cumulative sum of absence for the active shift today
+    """
+    now_ts = time.time()
+    now_local = datetime.now()
+    today_date = now_local.date()
+    today_start_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    current_hm_mins = now_local.hour * 60 + now_local.minute
+
+    # 1. Fetch active zones
+    zones_result = await db.execute(
+        select(CameraZone).where(CameraZone.is_active == True).order_by(CameraZone.created_at.asc())
+    )
+    zones = zones_result.scalars().all()
+
+    # 2. Camera map
+    cameras_result = await db.execute(select(Camera))
+    camera_map = {c.id: c.name for c in cameras_result.scalars().all()}
+
+    # 3. Person map
+    persons_result = await db.execute(select(Person))
+    persons = {p.id: p for p in persons_result.scalars().all()}
+
+    # 4. Avatar map
+    emb_result = await db.execute(select(PersonEmbedding))
+    embeddings = emb_result.scalars().all()
+    avatar_map: dict[int, str] = {}
+    for e in embeddings:
+        if e.person_id not in avatar_map and e.reference_photo_path:
+            avatar_map[e.person_id] = f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
+
+    # 5. Today's events
+    events_result = await db.execute(
+        select(Event)
+        .where(Event.timestamp >= today_start_utc)
+        .order_by(Event.timestamp.asc())
+    )
+    today_events = events_result.scalars().all()
+
+    roster: list[PersonDutyStatus] = []
+
+    for z in zones:
+        camera_name = camera_map.get(z.camera_id, f"Camera #{z.camera_id}")
+        start_str = z.start_time or "00:00"
+        end_str = z.end_time or "23:59"
+        active_days = _parse_list_field(z.active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+        in_schedule = is_time_in_timetable(start_str, end_str, active_days)
+
+        try:
+            sh, sm = map(int, start_str.split(":"))
+            eh, em = map(int, end_str.split(":"))
+            start_mins = sh * 60 + sm
+            end_mins = eh * 60 + em
+            if end_mins >= start_mins:
+                dur_h = round((end_mins - start_mins) / 60.0, 1)
+                total_shift_mins = end_mins - start_mins
+            else:
+                dur_h = round(((24 * 60 - start_mins) + end_mins) / 60.0, 1)
+                total_shift_mins = (24 * 60 - start_mins) + end_mins
+        except Exception:
+            dur_h = 8.0
+            start_mins = 8 * 60
+            end_mins = 16 * 60
+            total_shift_mins = 480
+
+        shift_window_str = f"{start_str} - {end_str}"
+
+        # Elapsed minutes of current shift so far today
+        if in_schedule:
+            if current_hm_mins >= start_mins:
+                elapsed_shift_mins = min(total_shift_mins, current_hm_mins - start_mins)
+            else:
+                elapsed_shift_mins = min(total_shift_mins, (24 * 60 - start_mins) + current_hm_mins)
+        else:
+            elapsed_shift_mins = 0
+
+        raw_assigned = _parse_list_field(z.assigned_person_ids, [])
+        assigned_ids = [int(x) for x in raw_assigned if str(x).isdigit()]
+
+        for pid in assigned_ids:
+            if only_active and not in_schedule:
+                continue
+
+            person = persons.get(pid)
+            person_name = person.name if person else f"Person #{pid}"
+            person_role = person.role if person else None
+            avatar_url = avatar_map.get(pid)
+
+            # Check live presence via stream processor
+            key = (z.id, pid)
+            last_seen = stream_processor._zone_last_seen.get(key, 0)
+
+            if not in_schedule:
+                status_str = "off_duty"
+                is_in_zone = False
+                last_seen_sec = None
+                last_seen_str = "Off Duty (Outside Shift)"
+                curr_absence_mins = 0
+            elif last_seen > 0 and (now_ts - last_seen) < 120.0:
+                status_str = "present"
+                is_in_zone = True
+                last_seen_sec = round(now_ts - last_seen, 1)
+                last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                curr_absence_mins = 0
+            else:
+                status_str = "absent"
+                is_in_zone = False
+                if last_seen > 0:
+                    last_seen_sec = round(now_ts - last_seen, 1)
+                    curr_absence_mins = max(1, int(last_seen_sec // 60))
+                    last_seen_str = f"Missing for {curr_absence_mins}m"
+                else:
+                    last_seen_sec = None
+                    curr_absence_mins = max(1, elapsed_shift_mins) if elapsed_shift_mins > 0 else 0
+                    last_seen_str = "Not Seen Yet"
+
+            # Compute cumulative absence during this shift today
+            p_events = [
+                ev for ev in today_events
+                if ev.person_id == pid
+            ]
+
+            shift_events = []
+            for ev in p_events:
+                ev_loc = _to_local_dt(ev.timestamp)
+                if ev_loc.date() == today_date:
+                    ev_mins = ev_loc.hour * 60 + ev_loc.minute
+                    if start_mins <= end_mins:
+                        if start_mins <= ev_mins <= min(current_hm_mins, end_mins):
+                            shift_events.append(ev)
+                    else:
+                        if (ev_mins >= start_mins or ev_mins <= end_mins) and ev_mins <= current_hm_mins:
+                            shift_events.append(ev)
+
+            if in_schedule and elapsed_shift_mins > 0:
+                if not shift_events:
+                    shift_absence_mins = elapsed_shift_mins
+                    shift_presence_mins = 0
+                    compliance = 0.0
+                else:
+                    first_ev_loc = _to_local_dt(shift_events[0].timestamp)
+                    first_ev_mins = first_ev_loc.hour * 60 + first_ev_loc.minute
+                    arrival_delay = max(0, first_ev_mins - start_mins)
+
+                    # Gaps between detections inside shift
+                    gaps_mins = 0
+                    for idx in range(len(shift_events) - 1):
+                        gap_sec = (shift_events[idx + 1].timestamp - shift_events[idx].timestamp).total_seconds()
+                        if gap_sec > 180:
+                            gaps_mins += int((gap_sec - 60) // 60)
+
+                    # Trailing absence from last sighting to now
+                    if is_in_zone:
+                        trailing_absence = 0
+                    else:
+                        last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
+                        last_ev_mins = last_ev_loc.hour * 60 + last_ev_loc.minute
+                        trailing_absence = max(0, current_hm_mins - last_ev_mins)
+
+                    shift_absence_mins = min(elapsed_shift_mins, arrival_delay + gaps_mins + trailing_absence)
+                    shift_presence_mins = max(0, elapsed_shift_mins - shift_absence_mins)
+                    compliance = round((shift_presence_mins / elapsed_shift_mins) * 100, 1)
+            else:
+                shift_absence_mins = 0
+                shift_presence_mins = 0
+                compliance = 100.0
+
+            roster.append(
+                PersonDutyStatus(
+                    person_id=pid,
+                    person_name=person_name,
+                    person_role=person_role,
+                    avatar_url=avatar_url,
+                    zone_id=z.id,
+                    zone_name=z.name,
+                    camera_id=z.camera_id,
+                    camera_name=camera_name,
+                    shift_start_time=start_str,
+                    shift_end_time=end_str,
+                    shift_window_str=shift_window_str,
+                    shift_duration_hours=dur_h,
+                    active_days=active_days,
+                    is_in_duty_hours=in_schedule,
+                    status=status_str,
+                    is_in_zone=is_in_zone,
+                    last_seen_seconds_ago=last_seen_sec,
+                    last_seen_str=last_seen_str,
+                    current_absence_minutes=curr_absence_mins,
+                    current_absence_str=_format_duration(curr_absence_mins * 60),
+                    shift_elapsed_minutes=elapsed_shift_mins,
+                    shift_presence_minutes=shift_presence_mins,
+                    shift_presence_str=_format_duration(shift_presence_mins * 60),
+                    shift_absence_minutes=shift_absence_mins,
+                    shift_absence_str=_format_duration(shift_absence_mins * 60),
+                    shift_compliance_pct=compliance,
+                )
+            )
+
+    # Sort: absent first, then by current absence minutes desc, then by name
+    roster.sort(key=lambda r: (0 if r.status == "absent" else 1, -r.current_absence_minutes, r.person_name))
+
+    total_on_duty = len([r for r in roster if r.is_in_duty_hours])
+    present_count = len([r for r in roster if r.status == "present"])
+    absent_count = len([r for r in roster if r.status == "absent"])
+    total_shift_absence_minutes = sum(r.shift_absence_minutes for r in roster)
+    avg_compliance = round(sum(r.shift_compliance_pct for r in roster) / len(roster), 1) if roster else 100.0
+
+    return DutyRosterResponse(
+        server_time=now_local.strftime("%H:%M:%S"),
+        total_on_duty=total_on_duty,
+        present_count=present_count,
+        absent_count=absent_count,
+        total_shift_absence_minutes=total_shift_absence_minutes,
+        total_shift_absence_str=_format_duration(total_shift_absence_minutes * 60),
+        avg_compliance_pct=avg_compliance,
+        roster=roster,
+    )
 
 
 @router.get("/api/zones/logs", response_model=EventListResponse)

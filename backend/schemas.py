@@ -64,6 +64,125 @@ class PersonUpdate(BaseModel):
     role: Optional[str] = Field(None, max_length=255)
 
 
+class PersonShiftInfo(BaseModel):
+    """Details of a shift schedule assigned to a person."""
+    zone_id: int
+    zone_name: str
+    camera_id: int
+    camera_name: str
+    start_time: str = "00:00"
+    end_time: str = "23:59"
+    active_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    is_in_schedule_now: bool = False
+    shift_duration_hours: float = 0.0
+
+
+class PersonShiftCompliance(BaseModel):
+    """Punctuality and attendance metrics calculated against scheduled shifts."""
+    has_assigned_shift: bool = False
+    primary_shift_time: Optional[str] = None
+    current_absence_minutes: Optional[int] = None
+    today_absence_minutes: int = 0
+    today_absence_hours_str: str = "0h"
+    week_absence_minutes: int = 0
+    week_absence_hours_str: str = "0h"
+    month_absence_minutes: int = 0
+    month_absence_hours_str: str = "0h"
+    total_absence_minutes: int = 0
+    total_absence_hours_str: str = "0h"
+    scheduled_shift_days: int = 0
+    present_shift_days: int = 0
+    absent_shift_days: int = 0
+    on_time_arrivals: int = 0
+    late_arrivals: int = 0
+    total_delay_minutes: int = 0
+    early_departures: int = 0
+    total_early_minutes: int = 0
+    overtime_days: int = 0
+    compliance_rate: float = 0.0
+    in_shift_detections: int = 0
+    out_of_shift_detections: int = 0
+
+
+class PersonDailyActivity(BaseModel):
+    """Daily detection and shift attendance breakdown."""
+    date: str  # YYYY-MM-DD
+    day_name: str  # e.g., "Sat", "Mon"
+    is_scheduled_shift_day: bool = False
+    shift_start_time: Optional[str] = None
+    shift_end_time: Optional[str] = None
+    shift_duration_minutes: int = 0
+    absence_from_shift_minutes: int = 0
+    absence_from_shift_str: Optional[str] = None
+    detections_count: int = 0
+    in_shift_detections: int = 0
+    first_seen_time: Optional[str] = None  # HH:MM:SS
+    last_seen_time: Optional[str] = None  # HH:MM:SS
+    arrival_status: str = "rest_day"  # "on_time", "late", "off_schedule", "absent", "rest_day"
+    delay_minutes: int = 0
+    departure_status: str = "none"  # "normal", "left_early", "overtime", "none"
+    early_leave_minutes: int = 0
+    overtime_minutes: int = 0
+    estimated_duration_seconds: Optional[int] = None
+    estimated_duration_str: Optional[str] = None
+    alerts_count: int = 0
+    primary_camera: Optional[str] = None
+
+
+class PersonHourlyActivity(BaseModel):
+    """Hourly frequency across the 24 hours of the day."""
+    hour: int  # 0 to 23
+    count: int = 0
+    in_shift_count: int = 0
+
+
+class PersonCameraDistribution(BaseModel):
+    """Distribution of detections across cameras."""
+    camera_id: Optional[int] = None
+    camera_name: str
+    count: int = 0
+    percentage: float = 0.0
+
+
+class PersonAlertStats(BaseModel):
+    """Security alert counts for a specific person."""
+    out_of_zone_count: int = 0
+    unauthorized_entry_count: int = 0
+    absence_timeout_count: int = 0
+    total_alerts: int = 0
+
+
+class PersonSummaryStats(BaseModel):
+    """High-level summary metrics for a person."""
+    total_detections: int = 0
+    today_detections: int = 0
+    week_detections: int = 0
+    month_detections: int = 0
+    first_seen: Optional[datetime] = None
+    last_seen: Optional[datetime] = None
+    last_seen_relative: str = ""
+    last_seen_camera: Optional[str] = None
+    last_seen_zone: Optional[str] = None
+    last_seen_snapshot_url: Optional[str] = None
+    avg_confidence: float = 0.0
+    max_confidence: float = 0.0
+    min_confidence: float = 0.0
+    top_camera: Optional[dict[str, Any]] = None
+    top_zone: Optional[dict[str, Any]] = None
+    current_status: str = "never_seen"  # "present", "absent", "off_duty", "never_seen"
+    assigned_zones_count: int = 0
+    primary_shift_time: Optional[str] = None
+    current_absence_minutes: Optional[int] = None
+    today_absence_minutes: int = 0
+    today_absence_hours_str: str = "0h"
+    week_absence_minutes: int = 0
+    week_absence_hours_str: str = "0h"
+    month_absence_minutes: int = 0
+    month_absence_hours_str: str = "0h"
+    today_presence_minutes: int = 0
+
+
+
 class PersonResponse(BaseModel):
     """Schema for person API responses."""
     id: int
@@ -72,8 +191,27 @@ class PersonResponse(BaseModel):
     embedding_count: int = 0
     reference_photos: list[str] = []
     created_at: datetime
+    summary: Optional[PersonSummaryStats] = None
 
     model_config = {"from_attributes": True}
+
+
+class PersonAnalyticsResponse(BaseModel):
+    """Full comprehensive analytics report for a person."""
+    person_id: int
+    name: str
+    role: str
+    enrolled_at: datetime
+    reference_photos: list[str] = []
+    summary: PersonSummaryStats
+    shifts: list[PersonShiftInfo] = []
+    shift_compliance: PersonShiftCompliance
+    hourly_distribution: list[PersonHourlyActivity] = []
+    daily_activity_last_14_days: list[PersonDailyActivity] = []
+    camera_distribution: list[PersonCameraDistribution] = []
+    alerts: PersonAlertStats
+    recent_events: list[EventResponse] = []
+
 
 
 # ═══════════════════════════════════════════════════════════

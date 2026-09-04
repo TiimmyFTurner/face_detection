@@ -345,35 +345,36 @@ async def test_zone_status_and_logs(client: AsyncClient):
     logs_resp = await client.get("/api/zones/logs")
     assert logs_resp.status_code == 200
     logs = logs_resp.json()
-    assert isinstance(logs, list)
-
+    assert "events" in logs
 
 @pytest.mark.asyncio
-async def test_legacy_zone_backward_compatibility(client: AsyncClient, test_session):
+async def test_legacy_zone_backward_compatibility(client: AsyncClient):
     # Insert a legacy CameraZone directly with NULL fields
     from backend.models import Camera, CameraZone
 
-    cam = Camera(name="Legacy Cam", rtsp_url="rtsp://localhost/legacy", is_active=False)
-    test_session.add(cam)
-    await test_session.commit()
-    await test_session.refresh(cam)
+    async with test_session() as session:
+        cam = Camera(name="Legacy Cam", rtsp_url="rtsp://localhost/legacy", is_active=False)
+        session.add(cam)
+        await session.commit()
+        await session.refresh(cam)
 
-    legacy_zone = CameraZone(
-        camera_id=cam.id,
-        name="Old Legacy Area",
-        x=10.0,
-        y=10.0,
-        width=30.0,
-        height=30.0,
-        alert_mode=None,
-        assigned_person_ids=None,
-        start_time=None,
-        end_time=None,
-        active_days=None,
-    )
-    test_session.add(legacy_zone)
-    await test_session.commit()
-    await test_session.refresh(legacy_zone)
+        legacy_zone = CameraZone(
+            camera_id=cam.id,
+            name="Old Legacy Area",
+            x=10.0,
+            y=10.0,
+            width=30.0,
+            height=30.0,
+            alert_mode=None,
+            assigned_person_ids=None,
+            start_time=None,
+            end_time=None,
+            active_days=None,
+        )
+        session.add(legacy_zone)
+        await session.commit()
+        await session.refresh(legacy_zone)
+        cam_id = cam.id
 
     # Verify listing all zones works and doesn't 500
     all_zones_resp = await client.get("/api/zones")
@@ -382,7 +383,7 @@ async def test_legacy_zone_backward_compatibility(client: AsyncClient, test_sess
     assert any(z["name"] == "Old Legacy Area" for z in all_zones)
 
     # Verify camera-scoped zones endpoint works
-    cam_zones_resp = await client.get(f"/api/cameras/{cam.id}/zones")
+    cam_zones_resp = await client.get(f"/api/cameras/{cam_id}/zones")
     assert cam_zones_resp.status_code == 200
     cam_zones = cam_zones_resp.json()
     assert len(cam_zones) == 1

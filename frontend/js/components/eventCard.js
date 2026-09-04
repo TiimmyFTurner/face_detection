@@ -116,7 +116,14 @@ const EventCard = {
                     <div class="event-detail-info" style="display: flex; flex-direction: column; gap: 1rem;">
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_person_identity')}</div>
-                            <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${EventCard.escapeHtml(personName)}</div>
+                            ${isKnown && event.person_id ? `
+                                <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="PersonAnalyticsModal.show(${event.person_id})" title="${EventCard.escapeAttr(I18n.t('view_person_analytics'))}">
+                                    <span>${EventCard.escapeHtml(personName)}</span>
+                                    <span style="font-size: 0.85rem; font-weight: 600; background: rgba(59, 130, 246, 0.2); padding: 0.2rem 0.6rem; border-radius: var(--radius-sm);">📊 ${I18n.t('btn_person_analytics')}</span>
+                                </div>
+                            ` : `
+                                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${EventCard.escapeHtml(personName)}</div>
+                            `}
                         </div>
 
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
@@ -161,12 +168,17 @@ const EventCard = {
             </div>
 
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
+                <div style="display: flex; gap: 0.5rem;">
                     ${!isKnown ? `
                         <button class="btn btn-primary btn-sm" onclick="PersonsPage.showAddModal();">
                             ${I18n.t('enroll_person')}
                         </button>
                     ` : `
+                        ${event.person_id ? `
+                            <button class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.show(${event.person_id})">
+                                ${I18n.t('view_person_analytics')}
+                            </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="App.navigate('persons'); App.closeModal();">
                             ${I18n.t('view_persons')}
                         </button>

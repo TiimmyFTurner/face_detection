@@ -832,6 +832,35 @@ body {
     transition: transform var(--transition-normal);
 }
 
+/* ── Modal Size Variants ─────────────────────────────────── */
+.modal.modal-analytics,
+.modal.modal-xl,
+.modal.modal-wide,
+.modal:has(.analytics-modal-header),
+.modal:has(.analytics-tab-bar) {
+    max-width: 1200px;
+    width: 95%;
+    max-height: 92vh;
+}
+
+.modal.modal-lg {
+    max-width: 840px;
+    width: 92%;
+}
+
+.analytics-modal-header {
+    padding: 1.25rem 1.5rem;
+    background: var(--bg-surface);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.analytics-modal-body {
+    padding: 1.25rem 1.5rem 2rem;
+}
+
 .modal-overlay.active .modal {
     transform: scale(1) translateY(0);
 }
@@ -1334,3 +1363,245 @@ html[dir="rtl"] textarea {
         transform: translateX(0);
     }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Person Analytics & Shift Summary Styles
+   ═══════════════════════════════════════════════════════════ */
+
+.analytics-avatar {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--border-accent);
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-sm);
+    display: block;
+}
+
+.analytics-avatar-placeholder {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: white;
+    box-shadow: var(--shadow-glow-blue);
+}
+
+/* ── Sub Navigation Tabs ─────────────────────────────────── */
+.analytics-tab-bar {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding: 0.6rem 1.25rem;
+    background: rgba(8, 12, 26, 0.95);
+    border-bottom: 1px solid var(--border-subtle);
+    scrollbar-width: none;
+}
+
+.analytics-tab-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.analytics-tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--transition-fast);
+}
+
+.analytics-tab-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+}
+
+.analytics-tab-btn.active {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: var(--border-accent);
+    color: var(--accent-blue);
+    font-weight: 700;
+}
+
+/* ── KPI Cards ───────────────────────────────────────────── */
+.analytics-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.85rem;
+}
+
+.kpi-card {
+    background: var(--bg-surface);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-medium);
+}
+
+.kpi-card.blue { border-left: 3px solid var(--accent-blue); }
+.kpi-card.emerald { border-left: 3px solid var(--accent-emerald); }
+.kpi-card.violet { border-left: 3px solid var(--accent-violet); }
+.kpi-card.amber { border-left: 3px solid var(--accent-amber); }
+.kpi-card.rose { border-left: 3px solid var(--accent-rose); }
+
+[dir="rtl"] .kpi-card.blue { border-left: 1px solid var(--border-subtle); border-right: 3px solid var(--accent-blue); }
+[dir="rtl"] .kpi-card.emerald { border-left: 1px solid var(--border-subtle); border-right: 3px solid var(--accent-emerald); }
+[dir="rtl"] .kpi-card.violet { border-left: 1px solid var(--border-subtle); border-right: 3px solid var(--accent-violet); }
+[dir="rtl"] .kpi-card.amber { border-left: 1px solid var(--border-subtle); border-right: 3px solid var(--accent-amber); }
+[dir="rtl"] .kpi-card.rose { border-left: 1px solid var(--border-subtle); border-right: 3px solid var(--accent-rose); }
+
+.kpi-icon {
+    font-size: 1.8rem;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.kpi-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--text-primary);
+}
+
+.kpi-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+}
+
+.kpi-sub {
+    font-size: 0.65rem;
+    color: var(--text-tertiary);
+    margin-top: 0.15rem;
+}
+
+/* ── Analytics Cards ─────────────────────────────────────── */
+.analytics-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.analytics-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+/* ── 24h Activity Histogram ──────────────────────────────── */
+.histogram-col {
+    cursor: pointer;
+}
+
+.histogram-col:hover .histogram-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-6px);
+}
+
+.histogram-tooltip {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-medium);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.15s ease;
+    z-index: 10;
+    box-shadow: var(--shadow-sm);
+}
+
+.histogram-col.peak .histogram-bar-fill {
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+}
+
+/* ── Table Row Hover ─────────────────────────────────────── */
+.analytics-table tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+/* ── Recent Snapshot Cards ───────────────────────────────── */
+.recent-snapshot-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-accent) !important;
+    box-shadow: var(--shadow-md);
+}
+
+/* ── Print Styles ────────────────────────────────────────── */
+@media print {
+    body {
+        background: #fff !important;
+        color: #000 !important;
+    }
+    .sidebar, .modal-close, .analytics-tab-bar, .modal-footer, button {
+        display: none !important;
+    }
+    .modal-overlay {
+        position: static !important;
+        background: transparent !important;
+    }
+    .modal {
+        max-width: 100% !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: #fff !important;
+        color: #000 !important;
+    }
+    .analytics-card, .kpi-card, .info-block {
+        background: #fff !important;
+        border: 1px solid #ddd !important;
+        color: #000 !important;
+        box-shadow: none !important;
+    }
+}
+

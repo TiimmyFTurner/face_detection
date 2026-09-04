@@ -201,12 +201,29 @@ const App = {
     // ─── Modal Management ──────────────────────────────────
     _modalCloseTimer: null,
 
-    openModal(contentHtml) {
+    openModal(contentHtml, modalClass = '') {
         if (App._modalCloseTimer) {
             clearTimeout(App._modalCloseTimer);
             App._modalCloseTimer = null;
         }
-        document.getElementById('modal-content').innerHTML = contentHtml;
+        const modalEl = document.getElementById('modal-content');
+        if (modalEl) {
+            modalEl.className = 'modal' + (modalClass ? ' ' + modalClass : '');
+            if (modalClass.includes('modal-analytics') || modalClass.includes('modal-xl') || modalClass.includes('modal-wide')) {
+                modalEl.style.maxWidth = '1300px';
+                modalEl.style.width = '96vw';
+                modalEl.style.maxHeight = '92vh';
+            } else if (modalClass.includes('modal-lg')) {
+                modalEl.style.maxWidth = '840px';
+                modalEl.style.width = '92vw';
+                modalEl.style.maxHeight = '88vh';
+            } else {
+                modalEl.style.maxWidth = '';
+                modalEl.style.width = '';
+                modalEl.style.maxHeight = '';
+            }
+            modalEl.innerHTML = contentHtml;
+        }
         document.getElementById('modal-overlay').classList.add('active');
     },
 
@@ -216,7 +233,14 @@ const App = {
             clearTimeout(App._modalCloseTimer);
         }
         App._modalCloseTimer = setTimeout(() => {
-            document.getElementById('modal-content').innerHTML = '';
+            const modalEl = document.getElementById('modal-content');
+            if (modalEl) {
+                modalEl.className = 'modal';
+                modalEl.style.maxWidth = '';
+                modalEl.style.width = '';
+                modalEl.style.maxHeight = '';
+                modalEl.innerHTML = '';
+            }
             App._modalCloseTimer = null;
         }, 300);
     },

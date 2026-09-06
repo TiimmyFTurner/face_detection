@@ -217,13 +217,17 @@ const App = {
         const modalEl = document.getElementById('modal-content');
         if (modalEl) {
             modalEl.className = 'modal' + (modalClass ? ' ' + modalClass : '');
-            if (modalClass.includes('modal-analytics') || modalClass.includes('modal-xl') || modalClass.includes('modal-wide')) {
-                modalEl.style.maxWidth = '1300px';
-                modalEl.style.width = '96vw';
+            if (modalClass.includes('modal-analytics') || modalClass.includes('modal-xl') || modalClass.includes('modal-wide') || modalClass.includes('modal-zones')) {
+                modalEl.style.maxWidth = '1200px';
+                modalEl.style.width = '95vw';
                 modalEl.style.maxHeight = '92vh';
-            } else if (modalClass.includes('modal-lg')) {
-                modalEl.style.maxWidth = '840px';
+            } else if (modalClass.includes('modal-event') || modalClass.includes('modal-lg')) {
+                modalEl.style.maxWidth = '980px';
                 modalEl.style.width = '92vw';
+                modalEl.style.maxHeight = '90vh';
+            } else if (modalClass.includes('modal-md')) {
+                modalEl.style.maxWidth = '720px';
+                modalEl.style.width = '90vw';
                 modalEl.style.maxHeight = '88vh';
             } else {
                 modalEl.style.maxWidth = '';

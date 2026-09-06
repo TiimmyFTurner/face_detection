@@ -242,7 +242,7 @@ const ZonesPage = {
     renderSubTabContent() {
         if (ZonesPage._activeSubTab === 'board') {
             return `
-                <div id="zones-presence-grid" class="presence-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
+                <div id="zones-presence-grid" class="presence-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem;">
                     ${ZonesPage.renderPresenceGrid()}
                 </div>
             `;
@@ -377,7 +377,7 @@ const ZonesPage = {
                                     </button>
                                 </div>
 
-                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem;">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
                                     ${camZones.length === 0 ? `
                                         <div style="font-size: 0.8rem; color: var(--text-tertiary); padding: 0.5rem 0;">${I18n.t('no_camera_zones')}</div>
                                     ` : camZones.map(z => {
@@ -386,10 +386,10 @@ const ZonesPage = {
                                         const attachedIds = (z.assigned_person_ids || []).map(id => I18n.isRTL() ? I18n.toPersianDigits(id) : id).join(', ') || I18n.t('none');
 
                                         return `
-                                            <div style="background: var(--bg-surface); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                                                <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.25rem;">🎯 ${ZonesPage.escapeHtml(z.name)}</div>
-                                                <div style="font-size: 0.72rem; color: var(--accent-blue); margin-bottom: 0.2rem;">🕐 ${formattedTimetable}</div>
-                                                <div style="font-size: 0.7rem; color: var(--text-tertiary);">${I18n.t('attached_ids', { ids: attachedIds })}</div>
+                                            <div style="background: var(--bg-surface); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                                                <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.35rem;">🎯 ${ZonesPage.escapeHtml(z.name)}</div>
+                                                <div style="font-size: 0.78rem; color: var(--accent-blue); margin-bottom: 0.3rem;">🕐 ${formattedTimetable}</div>
+                                                <div style="font-size: 0.75rem; color: var(--text-tertiary);">${I18n.t('attached_ids', { ids: attachedIds })}</div>
                                             </div>
                                         `;
                                     }).join('')}

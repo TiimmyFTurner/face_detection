@@ -196,7 +196,7 @@ const CamerasPage = {
             </div>
         `;
 
-        App.openModal(content);
+        App.openModal(content, 'modal-lg');
     },
 
     /**

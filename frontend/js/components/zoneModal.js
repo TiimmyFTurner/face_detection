@@ -80,8 +80,8 @@ const ZoneModal = {
                 </div>
 
                 <!-- Interactive Snapshot & Canvas Drawing Container -->
-                <div id="zone-canvas-container" class="zone-canvas-wrapper" style="position: relative; width: 100%; max-height: 420px; background: #090d16; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); user-select: none; margin-bottom: 1.25rem;">
-                    <img id="zone-snapshot-img" src="${snapshotUrl}" alt="${ZoneModal.escapeAttr(camera.name)}" style="width: 100%; height: 100%; max-height: 420px; object-fit: contain; display: block;" onload="ZoneModal.initCanvas()" />
+                <div id="zone-canvas-container" class="zone-canvas-wrapper" style="position: relative; width: 100%; max-height: 480px; min-height: 280px; background: #090d16; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-subtle); user-select: none; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 24px rgba(0,0,0,0.6);">
+                    <img id="zone-snapshot-img" src="${snapshotUrl}" alt="${ZoneModal.escapeAttr(camera.name)}" style="width: 100%; height: 100%; max-height: 480px; object-fit: contain; display: block;" />
                     
                     <!-- Overlay SVG / Boxes -->
                     <div id="zone-overlay-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair;">
@@ -92,23 +92,25 @@ const ZoneModal = {
                     </div>
                 </div>
 
-                <div class="zone-editor-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                <div class="zone-editor-grid" style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 1.5rem; align-items: start;">
                     <!-- Area Form -->
-                    <div class="zone-form-panel" style="background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                        <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-primary);">${I18n.t('zone_add_title')}</h4>
+                    <div class="zone-form-panel" style="background: var(--bg-surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);">
+                        <h4 style="margin-top: 0; margin-bottom: 0.9rem; font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                            <span>➕</span> <span>${I18n.t('zone_add_title')}</span>
+                        </h4>
                         
-                        <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_zone_name')}</label>
-                            <input type="text" id="zone-name-input" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('placeholder_zone_name'))}" required />
+                        <div class="form-group" style="margin-bottom: 0.85rem;">
+                            <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_zone_name')}</label>
+                            <input type="text" id="zone-name-input" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('placeholder_zone_name'))}" required style="padding: 0.6rem 0.85rem;" />
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_attach_persons')}</label>
-                            <div id="zone-persons-picker" style="max-height: 120px; overflow-y: auto; background: var(--bg-surface); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.35rem;">
+                        <div class="form-group" style="margin-bottom: 0.85rem;">
+                            <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_attach_persons')}</label>
+                            <div id="zone-persons-picker" style="max-height: 140px; overflow-y: auto; background: var(--bg-surface); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.4rem;">
                                 ${ZoneModal._persons.length === 0 ? `
-                                    <span style="font-size: 0.75rem; color: var(--text-tertiary);">${I18n.t('no_enrolled_persons_hint')}</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-tertiary); grid-column: 1 / -1;">${I18n.t('no_enrolled_persons_hint')}</span>
                                 ` : ZoneModal._persons.map(p => `
-                                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-primary); cursor: pointer;">
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-primary); cursor: pointer; background: var(--bg-surface-hover); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                                         <input type="checkbox" name="zone-person" value="${p.id}" />
                                         <span>👤 ${ZoneModal.escapeHtml(p.name)} <span style="font-size: 0.7rem; color: var(--text-tertiary);">(${ZoneModal.escapeHtml(p.role || I18n.t('known_identity'))})</span></span>
                                     </label>
@@ -116,30 +118,30 @@ const ZoneModal = {
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_alert_policy')}</label>
-                            <select id="zone-alert-mode" class="form-input" style="font-size: 0.8rem;">
+                        <div class="form-group" style="margin-bottom: 0.85rem;">
+                            <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_alert_policy')}</label>
+                            <select id="zone-alert-mode" class="form-input" style="font-size: 0.85rem; padding: 0.55rem 0.85rem;">
                                 <option value="absence">${I18n.t('policy_absence')}</option>
                                 <option value="unauthorized">${I18n.t('policy_unauthorized')}</option>
                                 <option value="both">${I18n.t('policy_both')}</option>
                             </select>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 0.75rem;">
-                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary);">${I18n.t('label_shift_schedule')}</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_shift_schedule')}</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
                                 <div>
-                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">${I18n.t('label_start_time')}</span>
-                                    <input type="time" id="zone-start-time" class="form-input" value="08:00" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" />
+                                    <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block; margin-bottom: 0.2rem;">${I18n.t('label_start_time')}</span>
+                                    <input type="time" id="zone-start-time" class="form-input" value="08:00" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
                                 </div>
                                 <div>
-                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">${I18n.t('label_end_time')}</span>
-                                    <input type="time" id="zone-end-time" class="form-input" value="17:00" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" />
+                                    <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block; margin-bottom: 0.2rem;">${I18n.t('label_end_time')}</span>
+                                    <input type="time" id="zone-end-time" class="form-input" value="17:00" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.25rem;" id="zone-days-picker">
+                            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem;" id="zone-days-picker">
                                 ${weekdays.map(item => `
-                                    <label style="font-size: 0.72rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.2rem; cursor: pointer; background: var(--bg-surface); padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem; cursor: pointer; background: var(--bg-surface); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                                         <input type="checkbox" name="zone-day" value="${item.key}" ${defaultCheckedDays.includes(item.key) ? 'checked' : ''} />
                                         <span>${item.label}</span>
                                     </label>
@@ -147,28 +149,30 @@ const ZoneModal = {
                             </div>
                         </div>
 
-                        <button class="btn btn-primary btn-sm" onclick="ZoneModal.saveZone()" style="width: 100%;">
-                            ${I18n.t('btn_save_zone')}
+                        <button class="btn btn-primary" onclick="ZoneModal.saveZone()" style="width: 100%; justify-content: center; padding: 0.65rem 1rem; font-weight: 700; font-size: 0.9rem;">
+                            💾 ${I18n.t('btn_save_zone')}
                         </button>
                     </div>
 
                     <!-- Configured Zones List -->
-                    <div class="zone-list-panel" style="background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                        <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-primary);">${I18n.t('active_zones_count', { count: I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._zones.length) : ZoneModal._zones.length })}</h4>
+                    <div class="zone-list-panel" style="background: var(--bg-surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);">
+                        <h4 style="margin-top: 0; margin-bottom: 0.9rem; font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                            <span>🎯</span> <span>${I18n.t('active_zones_count', { count: I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._zones.length) : ZoneModal._zones.length })}</span>
+                        </h4>
                         
-                        <div id="active-zones-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 280px; overflow-y: auto;">
+                        <div id="active-zones-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 380px; overflow-y: auto; padding-inline-end: 2px;">
                             ${ZoneModal.renderZonesList()}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; padding: 1.1rem 1.5rem;">
                 <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('close')}</button>
             </div>
         `;
 
-        App.openModal(content);
+        App.openModal(content, 'modal-zones modal-xl');
         ZoneModal.initDrawingEvents();
     },
 
@@ -209,23 +213,24 @@ const ZoneModal = {
             const policyLabel = zone.alert_mode === 'absence' ? I18n.t('policy_absence') : zone.alert_mode === 'unauthorized' ? I18n.t('policy_unauthorized') : I18n.t('policy_both');
 
             return `
-                <div class="zone-item-card" style="background: var(--bg-surface); padding: 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                <div class="zone-item-card" style="background: var(--bg-surface); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
                             <span>🎯</span>
                             <span>${ZoneModal.escapeHtml(zone.name)}</span>
+                            <span style="font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: var(--radius-full); background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.3); margin-inline-start: auto;">
+                                ${policyLabel}
+                            </span>
                         </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                        <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
                             👤 ${I18n.t('assigned_staff')} <strong>${assignedNames.length > 0 ? ZoneModal.escapeHtml(assignedNames.join(', ')) : I18n.t('none')}</strong>
                         </div>
-                        <div style="font-size: 0.68rem; color: var(--accent-blue); margin-top: 0.15rem;">
-                            🕐 ${zone.start_time || '00:00'} - ${zone.end_time || '23:59'} (${(zone.active_days || []).join(', ')})
-                        </div>
-                        <div style="font-size: 0.68rem; color: var(--text-tertiary);">
-                            ${policyLabel}
+                        <div style="font-size: 0.74rem; color: var(--text-tertiary); display: flex; align-items: center; gap: 0.3rem;">
+                            <span>🕐</span>
+                            <span>${zone.start_time || '00:00'} - ${zone.end_time || '23:59'} (${(zone.active_days || []).join(', ')})</span>
                         </div>
                     </div>
-                    <button class="btn btn-danger btn-sm" onclick="ZoneModal.deleteZone(${zone.id})" style="padding: 2px 6px; font-size: 0.7rem;">
+                    <button class="btn btn-danger btn-sm" onclick="ZoneModal.deleteZone(${zone.id})" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; align-self: center;" title="${ZoneModal.escapeAttr(I18n.t('delete'))}">
                         🗑️
                     </button>
                 </div>

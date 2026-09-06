@@ -840,7 +840,7 @@ body {
     border: 1px solid var(--border-medium);
     border-radius: var(--radius-xl);
     width: 90%;
-    max-width: 520px;
+    max-width: 540px;
     max-height: 85vh;
     overflow-y: auto;
     box-shadow: var(--shadow-lg);
@@ -852,16 +852,29 @@ body {
 .modal.modal-analytics,
 .modal.modal-xl,
 .modal.modal-wide,
+.modal.modal-zones,
 .modal:has(.analytics-modal-header),
-.modal:has(.analytics-tab-bar) {
-    max-width: 1200px;
-    width: 95%;
-    max-height: 92vh;
+.modal:has(.analytics-tab-bar),
+.modal:has(#zone-canvas-container) {
+    max-width: 1200px !important;
+    width: 95vw !important;
+    max-height: 92vh !important;
 }
 
-.modal.modal-lg {
-    max-width: 840px;
-    width: 92%;
+.modal.modal-event,
+.modal.modal-event-detail,
+.modal.modal-lg,
+.modal:has(.event-detail-dialog-grid),
+.modal:has(.camera-live-feed-wrapper) {
+    max-width: 980px !important;
+    width: 92vw !important;
+    max-height: 90vh !important;
+}
+
+.modal.modal-md {
+    max-width: 720px !important;
+    width: 90vw !important;
+    max-height: 88vh !important;
 }
 
 .analytics-modal-header {

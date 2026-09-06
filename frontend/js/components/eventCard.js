@@ -103,57 +103,59 @@ const EventCard = {
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
 
-            <div class="modal-body" style="padding: 1.25rem;">
-                <div class="event-detail-dialog-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.25rem; align-items: start;">
-                    <div class="event-detail-image-wrapper" style="background: #090d16; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 280px;">
+            <div class="modal-body" style="padding: 1.5rem;">
+                <div class="event-detail-dialog-grid" style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 1.5rem; align-items: start;">
+                    <div class="event-detail-image-wrapper" style="background: #090d16; border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 320px; box-shadow: inset 0 0 24px rgba(0,0,0,0.5);">
                         <img src="${snapshotUrl}" 
                              alt="${EventCard.escapeAttr(personName)}" 
-                             style="width: 100%; max-height: 420px; object-fit: contain; display: block;" 
+                             style="width: 100%; max-height: 460px; object-fit: contain; display: block;" 
                              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 180%22><rect fill=%22%230c1020%22 width=%22300%22 height=%22180%22/><text x=%22150%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2214%22>${encodeURIComponent(I18n.t('no_image'))}</text></svg>'"
                         />
                     </div>
 
-                    <div class="event-detail-info" style="display: flex; flex-direction: column; gap: 1rem;">
-                        <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_person_identity')}</div>
+                    <div class="event-detail-info" style="display: flex; flex-direction: column; gap: 0.9rem;">
+                        <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.95rem 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem; letter-spacing: 0.05em;">${I18n.t('event_person_identity')}</div>
                             ${isKnown && event.person_id ? `
-                                <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="PersonAnalyticsModal.show(${event.person_id})" title="${EventCard.escapeAttr(I18n.t('view_person_analytics'))}">
+                                <div style="font-size: 1.3rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;" onclick="PersonAnalyticsModal.show(${event.person_id})" title="${EventCard.escapeAttr(I18n.t('view_person_analytics'))}">
                                     <span>${EventCard.escapeHtml(personName)}</span>
-                                    <span style="font-size: 0.85rem; font-weight: 600; background: rgba(59, 130, 246, 0.2); padding: 0.2rem 0.6rem; border-radius: var(--radius-sm);">📊 ${I18n.t('btn_person_analytics')}</span>
+                                    <span style="font-size: 0.8rem; font-weight: 600; background: rgba(59, 130, 246, 0.2); padding: 0.25rem 0.65rem; border-radius: var(--radius-sm);">📊 ${I18n.t('btn_person_analytics')}</span>
                                 </div>
                             ` : `
-                                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${EventCard.escapeHtml(personName)}</div>
+                                <div style="font-size: 1.3rem; font-weight: 700; color: var(--text-primary);">${EventCard.escapeHtml(personName)}</div>
                             `}
                         </div>
 
-                        <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_camera')}</div>
-                            <div style="font-size: 1rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                                <span>📹</span>
-                                <span>${EventCard.escapeHtml(cameraName)}</span>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+                            <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                                <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem; letter-spacing: 0.05em;">${I18n.t('event_camera')}</div>
+                                <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>📹</span>
+                                    <span>${EventCard.escapeHtml(cameraName)}</span>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">${I18n.t('event_timestamp')}</div>
-                            <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                                <span>🕐</span>
-                                <span>${fullTimeStr}</span>
+                            <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                                <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem; letter-spacing: 0.05em;">${I18n.t('event_timestamp')}</div>
+                                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>🕐</span>
+                                    <span>${fullTimeStr}</span>
+                                </div>
                             </div>
                         </div>
 
                         ${(event.duration_seconds || event.duration_str) ? `
-                            <div class="info-block" style="background: rgba(245, 158, 11, 0.1); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid rgba(245, 158, 11, 0.3);">
-                                <div style="font-size: 0.75rem; text-transform: uppercase; color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem;">${I18n.isRTL() ? 'مدت عدم حضور' : 'Absence Duration'}</div>
-                                <div style="font-size: 1.1rem; font-weight: 800; color: #f59e0b; display: flex; align-items: center; gap: 0.4rem;">
+                            <div class="info-block" style="background: rgba(245, 158, 11, 0.1); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid rgba(245, 158, 11, 0.3);">
+                                <div style="font-size: 0.72rem; text-transform: uppercase; color: #fbbf24; font-weight: 700; margin-bottom: 0.25rem; letter-spacing: 0.05em;">${I18n.isRTL() ? 'مدت عدم حضور' : 'Absence Duration'}</div>
+                                <div style="font-size: 1.15rem; font-weight: 800; color: #f59e0b; display: flex; align-items: center; gap: 0.4rem;">
                                     <span>⏱️</span>
                                     <span>${event.duration_seconds ? I18n.formatDuration(event.duration_seconds) : event.duration_str}</span>
                                 </div>
                             </div>
                         ` : ''}
 
-                        <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">
+                        <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.95rem 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.4rem; letter-spacing: 0.05em;">
                                 <span>${I18n.t('event_confidence')}</span>
                                 <span style="color: var(--text-primary); font-weight: 700;">${confidenceDisplay}%</span>
                             </div>
@@ -167,7 +169,7 @@ const EventCard = {
                 <div id="event-detail-person-history"></div>
             </div>
 
-            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.5rem;">
                 <div style="display: flex; gap: 0.5rem;">
                     ${!isKnown ? `
                         <button class="btn btn-primary btn-sm" onclick="PersonsPage.showAddModal();">
@@ -188,7 +190,7 @@ const EventCard = {
             </div>
         `;
 
-        App.openModal(content);
+        App.openModal(content, 'modal-event-detail');
 
         // Load photo history timeline for this person
         EventCard.loadPersonHistory(event);
@@ -210,19 +212,19 @@ const EventCard = {
             const countStr = I18n.isRTL() ? I18n.toPersianDigits(events.length) : events.length;
 
             historyContainer.innerHTML = `
-                <div style="margin-top: 1rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-subtle); padding-top: 1.1rem;">
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.65rem; display: flex; align-items: center; gap: 0.4rem; letter-spacing: 0.04em;">
                         <span>📸</span>
                         <span>${I18n.t('other_detections_for', { name: EventCard.escapeHtml(nameStr), count: countStr })}</span>
                     </div>
-                    <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.4rem;">
+                    <div style="display: flex; gap: 0.65rem; overflow-x: auto; padding-bottom: 0.5rem;">
                         ${events.map(ev => {
                             EventCard._cache[ev.id] = ev;
                             const isActive = ev.id === event.id;
                             return `
-                                <div onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 75px; cursor: pointer; opacity: ${isActive ? '1' : '0.65'}; border: ${isActive ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface-hover);" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
-                                    <img src="${ev.snapshot_url || '/api/snapshots/' + ev.snapshot_path}" style="width: 100%; height: 60px; object-fit: cover; display: block;" />
-                                    <div style="font-size: 0.6rem; text-align: center; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 0;">${I18n.formatTimestamp(ev.timestamp)}</div>
+                                <div onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 88px; cursor: pointer; opacity: ${isActive ? '1' : '0.7'}; border: ${isActive ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface-hover); transition: transform 0.15s ease, opacity 0.15s ease;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
+                                    <img src="${ev.snapshot_url || '/api/snapshots/' + ev.snapshot_path}" style="width: 100%; height: 70px; object-fit: cover; display: block;" />
+                                    <div style="font-size: 0.62rem; text-align: center; background: rgba(0,0,0,0.7); color: #fff; padding: 3px 0; font-weight: 600;">${I18n.formatTimestamp(ev.timestamp)}</div>
                                 </div>
                             `;
                         }).join('')}

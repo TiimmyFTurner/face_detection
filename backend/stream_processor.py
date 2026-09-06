@@ -84,8 +84,47 @@ class StreamProcessor:
         self._zones_cache: dict[int, list[dict]] = {}  # camera_id -> list of zone dicts
         self._zone_last_seen: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
         self._zone_last_absence_alert: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
+        self._last_preview_time: dict[int, float] = {}  # camera_id -> timestamp of last JPEG encode
         self._watchdog_task: Optional[asyncio.Task] = None
         self._cache_lock = asyncio.Lock()
+
+    def is_camera_in_detection_window(self, camera_id: int) -> bool:
+        """
+        Check if the camera is currently within its 2-second detection burst
+        of the 30-second cycle window.
+        If duty_stagger_cameras is enabled, cameras are evenly distributed across the 30s window.
+        """
+        window = getattr(settings, "duty_cycle_window", 30.0)
+        burst = getattr(settings, "duty_burst_duration", 2.0)
+
+        if burst >= window or window <= 0:
+            return True  # Continuous detection
+
+        now = time.time()
+        cycle_time = now % window
+
+        if not getattr(settings, "duty_stagger_cameras", True):
+            return cycle_time < burst
+
+        # Stagger across registered active cameras to eliminate CPU spikes
+        active_ids = sorted(list(self._tasks.keys()))
+        if not active_ids:
+            return cycle_time < burst
+
+        try:
+            cam_idx = active_ids.index(camera_id)
+        except ValueError:
+            cam_idx = 0
+
+        total_cams = max(1, len(active_ids))
+        step = min(burst, window / total_cams)
+        slot_start = (cam_idx * step) % window
+        slot_end = slot_start + burst
+
+        if slot_end <= window:
+            return slot_start <= cycle_time < slot_end
+        else:
+            return cycle_time >= slot_start or cycle_time < (slot_end % window)
 
     def get_latest_frame(self, camera_id: int) -> Optional[bytes]:
         """Get the most recent JPEG frame bytes for a camera."""
@@ -432,16 +471,27 @@ class StreamProcessor:
                         break
 
                     frame_count += 1
+                    now = time.time()
 
-                    # Update latest JPEG frame for live camera view
-                    try:
-                        ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                        if ret_enc:
-                            self._latest_frames[camera_id] = jpeg_buf.tobytes()
-                    except Exception:
-                        pass
+                    # Throttled JPEG preview encoding (avoids hundreds of encodings/sec across 15 cameras)
+                    last_preview = self._last_preview_time.get(camera_id, 0.0)
+                    preview_interval = 1.0 / max(0.1, getattr(settings, "live_preview_fps", 1.0))
+                    if (now - last_preview) >= preview_interval:
+                        try:
+                            ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            if ret_enc:
+                                self._latest_frames[camera_id] = jpeg_buf.tobytes()
+                                self._last_preview_time[camera_id] = now
+                        except Exception:
+                            pass
 
-                    # Frame skipping: only process every Nth frame for AI face detection
+                    # ── Duty Cycle Gating (e.g. 2s active detection window every 30s cycle) ──
+                    if not self.is_camera_in_detection_window(camera_id):
+                        # Outside active window: sleep briefly and keep reading frames without AI overhead
+                        await asyncio.sleep(0.01)
+                        continue
+
+                    # Frame skipping: only process every Nth frame during the active 2s burst
                     if frame_count % settings.frame_skip != 0:
                         await asyncio.sleep(0.005)
                         continue
@@ -475,30 +525,53 @@ class StreamProcessor:
     ) -> None:
         """
         Run face detection, recognition, and event logging on a single frame.
+        Supports Station Zone ROI cropping to minimize processed pixels.
         """
-        # Save latest JPEG frame for live camera view & snapshot
-        try:
-            ret, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
-            if ret:
-                self._latest_frames[camera_id] = jpeg_buf.tobytes()
-        except Exception as e:
-            logger.warning("Failed to encode JPEG frame for camera %d: %s", camera_id, e)
-
         if not face_engine.is_ready:
             return
+
+        camera_zones = self._zones_cache.get(camera_id, [])
+        crop_offset_x = 0
+        crop_offset_y = 0
+        input_frame = frame
+        frame_h, frame_w = frame.shape[:2]
+
+        # Station Zone (ROI) Cropping: Only detect faces within configured station areas
+        if getattr(settings, "roi_crop_enabled", True) and camera_zones:
+            min_x_pct = min(z["x"] for z in camera_zones)
+            min_y_pct = min(z["y"] for z in camera_zones)
+            max_x_pct = max(z["x"] + z["width"] for z in camera_zones)
+            max_y_pct = max(z["y"] + z["height"] for z in camera_zones)
+
+            pad_x = (max_x_pct - min_x_pct) * 0.10
+            pad_y = (max_y_pct - min_y_pct) * 0.10
+
+            x1 = max(0, int((min_x_pct - pad_x) * frame_w / 100.0))
+            y1 = max(0, int((min_y_pct - pad_y) * frame_h / 100.0))
+            x2 = min(frame_w, int((max_x_pct + pad_x) * frame_w / 100.0))
+            y2 = min(frame_h, int((max_y_pct + pad_y) * frame_h / 100.0))
+
+            roi_w = x2 - x1
+            roi_h = y2 - y1
+
+            # Only use ROI if valid size (at least 60x60 pixels)
+            if roi_w >= 60 and roi_h >= 60:
+                input_frame = frame[y1:y2, x1:x2]
+                crop_offset_x = x1
+                crop_offset_y = y1
 
         # Downscale for detection performance
         scale = settings.downscale_factor
         if scale < 1.0:
             small = cv2.resize(
-                frame,
+                input_frame,
                 None,
                 fx=scale,
                 fy=scale,
                 interpolation=cv2.INTER_LINEAR,
             )
         else:
-            small = frame
+            small = input_frame
 
         # Detect faces (blocking call offloaded to thread)
         faces: list[DetectedFace] = await asyncio.get_event_loop().run_in_executor(
@@ -508,11 +581,14 @@ class StreamProcessor:
         if not faces:
             return
 
-        # Scale bounding boxes back to original frame size
-        if scale < 1.0:
-            inv_scale = 1.0 / scale
-            for face in faces:
-                face.bbox = tuple(int(v * inv_scale) for v in face.bbox)
+        # Scale bounding boxes back to original full-frame coordinates
+        inv_scale = 1.0 / scale if scale < 1.0 else 1.0
+        for face in faces:
+            bx1 = int(face.bbox[0] * inv_scale) + crop_offset_x
+            by1 = int(face.bbox[1] * inv_scale) + crop_offset_y
+            bx2 = int(face.bbox[2] * inv_scale) + crop_offset_x
+            by2 = int(face.bbox[3] * inv_scale) + crop_offset_y
+            face.bbox = (bx1, by1, bx2, by2)
 
         # Get known persons from cache
         async with self._cache_lock:

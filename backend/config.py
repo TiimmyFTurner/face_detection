@@ -21,14 +21,21 @@ class Settings(BaseSettings):
 
     # ── Face Recognition ─────────────────────────────────
     match_threshold: float = 0.5
-    insightface_model: str = "buffalo_l"
+    insightface_model: str = "buffalo_s"  # buffalo_s is lightweight & 10x faster for multi-camera stations
     log_unknown_faces: bool = True  # If False, unidentified/unknown faces are ignored and not logged
 
-    # ── Stream Processing ────────────────────────────────
+    # ── Stream Processing & Duty Cycle Optimization ──────
     frame_skip: int = 5
     downscale_factor: float = 0.5
     cooldown_seconds: int = 60
     max_reconnect_backoff: int = 30
+
+    # 2s burst every 30s duty cycle monitoring
+    duty_cycle_window: float = 30.0    # Total cycle duration in seconds (e.g. 30s)
+    duty_burst_duration: float = 2.0   # Active detection burst in seconds (e.g. 2s)
+    duty_stagger_cameras: bool = True  # Stagger detection bursts so cameras don't spike simultaneously
+    roi_crop_enabled: bool = True      # Crop to station zone ROI before detection to save 70-85% pixels
+    live_preview_fps: float = 1.0      # Throttle JPEG compression for live dashboard previews (max 1 FPS per cam)
 
     # ── Storage ──────────────────────────────────────────
     save_snapshots: bool = True  # If False, events are only logged to DB without saving snapshot files to disk

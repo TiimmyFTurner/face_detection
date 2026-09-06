@@ -35,6 +35,7 @@ class CameraResponse(BaseModel):
     rtsp_url: str
     location: str
     is_active: bool
+    is_online: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -424,7 +425,8 @@ class EventStats(BaseModel):
     total_today: int = 0
     known_today: int = 0
     unknown_today: int = 0
-    active_cameras: int = 0
+    active_cameras: int = 0  # Number of currently connected & online cameras
+    total_cameras: int = 0   # Total configured active cameras
 
 
 # ═══════════════════════════════════════════════════════════

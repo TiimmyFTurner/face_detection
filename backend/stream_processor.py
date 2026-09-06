@@ -85,8 +85,24 @@ class StreamProcessor:
         self._zone_last_seen: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
         self._zone_last_absence_alert: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
         self._last_preview_time: dict[int, float] = {}  # camera_id -> timestamp of last JPEG encode
+        self._camera_last_frame_time: dict[int, float] = {}  # camera_id -> timestamp of last successfully read frame
+        self._camera_connected: dict[int, bool] = {}  # camera_id -> is stream actively open & receiving frames
         self._watchdog_task: Optional[asyncio.Task] = None
         self._cache_lock = asyncio.Lock()
+
+    def is_camera_online(self, camera_id: int) -> bool:
+        """
+        Check if a camera is actively connected and received a video frame
+        within the last 15 seconds.
+        """
+        if not self._camera_connected.get(camera_id, False):
+            return False
+        last_time = self._camera_last_frame_time.get(camera_id, 0.0)
+        return (time.time() - last_time) <= 15.0 and camera_id in self._tasks and not self._tasks[camera_id].done()
+
+    def get_online_cameras_count(self) -> int:
+        """Count number of cameras that are actively connected and delivering frames."""
+        return sum(1 for cam_id in list(self._tasks.keys()) if self.is_camera_online(cam_id))
 
     def is_camera_in_detection_window(self, camera_id: int) -> bool:
         """
@@ -204,6 +220,9 @@ class StreamProcessor:
         self._stop_flags.pop(camera_id, None)
         self._latest_frames.pop(camera_id, None)
         self._camera_names.pop(camera_id, None)
+        self._camera_connected.pop(camera_id, None)
+        self._camera_last_frame_time.pop(camera_id, None)
+        self._last_preview_time.pop(camera_id, None)
         logger.info("Stopped stream for camera %d.", camera_id)
 
     async def refresh_known_persons(self) -> None:
@@ -468,10 +487,13 @@ class StreamProcessor:
 
                     if not ret or frame is None:
                         logger.warning("Frame read failed for camera %d. Reconnecting...", camera_id)
+                        self._camera_connected[camera_id] = False
                         break
 
                     frame_count += 1
                     now = time.time()
+                    self._camera_connected[camera_id] = True
+                    self._camera_last_frame_time[camera_id] = now
 
                     # Throttled JPEG preview encoding (avoids hundreds of encodings/sec across 15 cameras)
                     last_preview = self._last_preview_time.get(camera_id, 0.0)
@@ -503,12 +525,14 @@ class StreamProcessor:
                     await asyncio.sleep(0.01)
 
             except Exception as e:
+                self._camera_connected[camera_id] = False
                 logger.error(
                     "Stream error for camera %d: %s. Reconnecting in %ds...",
                     camera_id, e, backoff,
                 )
 
             finally:
+                self._camera_connected[camera_id] = False
                 if cap is not None:
                     await asyncio.get_event_loop().run_in_executor(None, cap.release)
 

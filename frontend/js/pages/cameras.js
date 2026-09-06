@@ -68,14 +68,24 @@ const CamerasPage = {
         }
 
         grid.innerHTML = CamerasPage._cameras.map(camera => {
-            const statusText = camera.is_active ? I18n.t('active') : I18n.t('inactive');
+            let statusText = I18n.t('inactive');
+            let statusClass = 'inactive';
+            if (camera.is_active) {
+                if (camera.is_online) {
+                    statusText = I18n.t('online');
+                    statusClass = 'online';
+                } else {
+                    statusText = I18n.t('disconnected');
+                    statusClass = 'disconnected';
+                }
+            }
             const addedDateStr = I18n.formatDate(camera.created_at);
 
             return `
                 <div class="camera-card" data-camera-id="${camera.id}">
                     <div class="camera-card-header">
                         <span class="camera-name">${CamerasPage.escapeHtml(camera.name)}</span>
-                        <span class="camera-status ${camera.is_active ? 'active' : 'inactive'}">
+                        <span class="camera-status ${statusClass}">
                             <span class="camera-status-dot"></span>
                             ${statusText}
                         </span>
@@ -132,13 +142,23 @@ const CamerasPage = {
 
         const streamUrl = `/api/cameras/${camera.id}/stream?t=${Date.now()}`;
         const snapshotUrl = `/api/cameras/${camera.id}/snapshot?t=${Date.now()}`;
-        const liveStatusText = camera.is_active ? I18n.t('live') : I18n.t('inactive');
+        let liveStatusText = I18n.t('inactive');
+        let liveStatusClass = 'inactive';
+        if (camera.is_active) {
+            if (camera.is_online) {
+                liveStatusText = I18n.t('live');
+                liveStatusClass = 'online';
+            } else {
+                liveStatusText = I18n.t('disconnected');
+                liveStatusClass = 'disconnected';
+            }
+        }
 
         const content = `
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <h2 class="modal-title">📹 ${CamerasPage.escapeHtml(camera.name)}</h2>
-                    <span class="camera-status ${camera.is_active ? 'active' : 'inactive'}">
+                    <span class="camera-status ${liveStatusClass}">
                         <span class="camera-status-dot"></span>
                         ${liveStatusText}
                     </span>

@@ -146,16 +146,21 @@ async def get_event_stats(db: AsyncSession = Depends(get_db)):
     # Unknown events today
     unknown_today = total_today - known_today
 
-    # Active cameras
+    # Configured cameras in database
     cameras_query = select(func.count(Camera.id)).where(Camera.is_active == True)  # noqa: E712
     cameras_result = await db.execute(cameras_query)
-    active_cameras = cameras_result.scalar() or 0
+    total_configured = cameras_result.scalar() or 0
+
+    # Real-time online cameras actively receiving video frames
+    from backend.stream_processor import stream_processor
+    online_cameras = stream_processor.get_online_cameras_count()
 
     return EventStats(
         total_today=total_today,
         known_today=known_today,
         unknown_today=unknown_today,
-        active_cameras=active_cameras,
+        active_cameras=online_cameras,
+        total_cameras=total_configured,
     )
 
 

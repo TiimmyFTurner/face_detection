@@ -77,7 +77,7 @@ const DashboardPage = {
                         </span>
                     </div>
                 </div>
-                <div class="stat-card violet">
+                <div class="stat-card violet" id="stat-card-cameras">
                     <div class="stat-card-header">
                         <span class="stat-card-title">${I18n.t('stat_active_cameras')}</span>
                         <div class="stat-card-icon">📹</div>
@@ -86,8 +86,8 @@ const DashboardPage = {
                         <span class="stat-card-value stat-value" id="stat-cameras">—</span>
                     </div>
                     <div class="stat-card-footer">
-                        <span class="stat-card-badge violet">
-                            🟢 ${isRtl ? 'جریان‌های فعال' : 'Online Streams'}
+                        <span class="stat-card-badge violet" id="stat-cameras-badge">
+                            ${isRtl ? 'در حال بررسی...' : 'Checking...'}
                         </span>
                     </div>
                 </div>
@@ -142,10 +142,52 @@ const DashboardPage = {
     async loadStats() {
         try {
             const stats = await App.api('/api/events/stats');
+            const isRtl = I18n.isRTL();
             DashboardPage.animateCounter('stat-total', stats.total_today);
             DashboardPage.animateCounter('stat-known', stats.known_today);
             DashboardPage.animateCounter('stat-unknown', stats.unknown_today);
-            DashboardPage.animateCounter('stat-cameras', stats.active_cameras);
+
+            const activeCams = stats.active_cameras || 0;
+            const totalCams = stats.total_cameras !== undefined ? stats.total_cameras : activeCams;
+            DashboardPage.animateCounter('stat-cameras', activeCams);
+
+            const camValueEl = document.getElementById('stat-cameras');
+            const badgeEl = document.getElementById('stat-cameras-badge');
+
+            const activeStr = isRtl ? I18n.toPersianDigits(activeCams) : activeCams;
+            const totalStr = isRtl ? I18n.toPersianDigits(totalCams) : totalCams;
+
+            if (badgeEl) {
+                if (totalCams === 0) {
+                    badgeEl.className = 'stat-card-badge violet';
+                    badgeEl.innerHTML = `⚪ ${isRtl ? 'بدون دوربین' : 'No Cameras'}`;
+                    if (camValueEl) {
+                        camValueEl.style.color = '';
+                        camValueEl.style.textShadow = '';
+                    }
+                } else if (activeCams > 0 && activeCams === totalCams) {
+                    badgeEl.className = 'stat-card-badge emerald';
+                    badgeEl.innerHTML = `🟢 ${activeStr} / ${totalStr} ${isRtl ? 'آنلاین' : 'Online'}`;
+                    if (camValueEl) {
+                        camValueEl.style.color = '#34d399';
+                        camValueEl.style.textShadow = '0 0 16px rgba(16, 185, 129, 0.25)';
+                    }
+                } else if (activeCams > 0) {
+                    badgeEl.className = 'stat-card-badge amber';
+                    badgeEl.innerHTML = `⚠️ ${activeStr} / ${totalStr} ${isRtl ? 'آنلاین' : 'Online'}`;
+                    if (camValueEl) {
+                        camValueEl.style.color = '#fbbf24';
+                        camValueEl.style.textShadow = '0 0 16px rgba(245, 158, 11, 0.25)';
+                    }
+                } else {
+                    badgeEl.className = 'stat-card-badge rose';
+                    badgeEl.innerHTML = `🔴 0 / ${totalStr} ${isRtl ? 'آنلاین (قطع ارتباط)' : 'Online (Disconnected)'}`;
+                    if (camValueEl) {
+                        camValueEl.style.color = '#fb7185';
+                        camValueEl.style.textShadow = '0 0 16px rgba(244, 63, 94, 0.25)';
+                    }
+                }
+            }
         } catch (err) {
             console.error('Failed to load stats:', err);
         }

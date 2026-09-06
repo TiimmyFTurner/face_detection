@@ -33,10 +33,15 @@ router = APIRouter(prefix="/api/cameras", tags=["cameras"])
 
 @router.get("", response_model=list[CameraResponse])
 async def list_cameras(db: AsyncSession = Depends(get_db)):
-    """List all configured cameras."""
+    """List all configured cameras with real-time streaming status."""
     result = await db.execute(select(Camera).order_by(Camera.created_at.desc()))
     cameras = result.scalars().all()
-    return cameras
+    response = []
+    for c in cameras:
+        cr = CameraResponse.model_validate(c)
+        cr.is_online = stream_processor.is_camera_online(c.id) if c.is_active else False
+        response.append(cr)
+    return response
 
 
 @router.post("", response_model=CameraResponse, status_code=status.HTTP_201_CREATED)

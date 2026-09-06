@@ -557,12 +557,17 @@ body {
     letter-spacing: 0.05em;
 }
 
-.camera-status.active {
+.camera-status.active,
+.camera-status.online {
     color: var(--accent-emerald);
 }
 
-.camera-status.inactive {
+.camera-status.disconnected {
     color: var(--accent-rose);
+}
+
+.camera-status.inactive {
+    color: var(--text-tertiary);
 }
 
 .camera-status-dot {
@@ -571,13 +576,21 @@ body {
     border-radius: 50%;
 }
 
-.camera-status.active .camera-status-dot {
+.camera-status.active .camera-status-dot,
+.camera-status.online .camera-status-dot {
     background: var(--accent-emerald);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
     animation: pulse 2s ease-in-out infinite;
 }
 
-.camera-status.inactive .camera-status-dot {
+.camera-status.disconnected .camera-status-dot {
     background: var(--accent-rose);
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.4);
+}
+
+.camera-status.inactive .camera-status-dot {
+    background: var(--text-tertiary);
+    opacity: 0.7;
 }
 
 .camera-detail {

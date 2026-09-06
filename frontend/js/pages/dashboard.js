@@ -29,25 +29,67 @@ const DashboardPage = {
             </div>
         `;
 
+        const isRtl = I18n.isRTL();
         const body = document.getElementById('content-body');
         body.innerHTML = `
             <!-- Stats Grid -->
             <div class="stats-grid" id="stats-grid">
                 <div class="stat-card blue">
-                    <div class="stat-label">${I18n.t('stat_total_today')}</div>
-                    <div class="stat-value" id="stat-total">—</div>
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('stat_total_today')}</span>
+                        <div class="stat-card-icon">📊</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value" id="stat-total">—</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge blue">
+                            ⚡ ${isRtl ? 'ثبت‌های امروز' : 'Today Detections'}
+                        </span>
+                    </div>
                 </div>
                 <div class="stat-card emerald">
-                    <div class="stat-label">${I18n.t('stat_known_today')}</div>
-                    <div class="stat-value" id="stat-known">—</div>
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('stat_known_today')}</span>
+                        <div class="stat-card-icon">👤</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value" id="stat-known">—</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge emerald">
+                            <span class="status-indicator active" style="width: 7px; height: 7px; margin-inline-end: 2px;"></span>
+                            ${isRtl ? 'پرسنل شناسایی‌شده' : 'Verified Staff'}
+                        </span>
+                    </div>
                 </div>
                 <div class="stat-card rose">
-                    <div class="stat-label">${I18n.t('stat_unknown_today')}</div>
-                    <div class="stat-value" id="stat-unknown">—</div>
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('stat_unknown_today')}</span>
+                        <div class="stat-card-icon">❓</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value" id="stat-unknown">—</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge rose">
+                            🛡️ ${isRtl ? 'افراد ناشناس' : 'Unregistered'}
+                        </span>
+                    </div>
                 </div>
                 <div class="stat-card violet">
-                    <div class="stat-label">${I18n.t('stat_active_cameras')}</div>
-                    <div class="stat-value" id="stat-cameras">—</div>
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('stat_active_cameras')}</span>
+                        <div class="stat-card-icon">📹</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value" id="stat-cameras">—</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge violet">
+                            🟢 ${isRtl ? 'جریان‌های فعال' : 'Online Streams'}
+                        </span>
+                    </div>
                 </div>
             </div>
 

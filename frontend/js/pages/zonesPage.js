@@ -171,27 +171,59 @@ const ZonesPage = {
         const absentStr = I18n.isRTL() ? I18n.toPersianDigits(absentCount) : absentCount;
         const offDutyStr = I18n.isRTL() ? I18n.toPersianDigits(offDutyCount) : offDutyCount;
 
+        const isRtl = I18n.isRTL();
         return `
-            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">🎯</div>
-                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary);">${totalStr}</div>
-                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">${I18n.t('total_active_zones')}</div>
+            <div class="stats-grid" style="margin-bottom: 1.5rem;">
+                <div class="stat-card blue">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('total_active_zones')}</span>
+                        <div class="stat-card-icon">🎯</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value">${totalStr}</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge blue">📍 ${isRtl ? 'منطقه‌های فعال' : 'Active Zones'}</span>
+                    </div>
                 </div>
-                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.3);">
-                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">🟢</div>
-                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: var(--accent-emerald);">${presentStr}</div>
-                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">${I18n.t('staff_on_station')}</div>
+                <div class="stat-card emerald">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('staff_on_station')}</span>
+                        <div class="stat-card-icon">🟢</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value">${presentStr}</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge emerald">
+                            <span class="status-indicator active" style="width: 7px; height: 7px; margin-inline-end: 2px;"></span>
+                            ${I18n.t('in_zone_present')}
+                        </span>
+                    </div>
                 </div>
-                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid rgba(239, 68, 68, 0.3);">
-                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">🔴</div>
-                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: #f87171;">${absentStr}</div>
-                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">${I18n.t('absence_alerts')}</div>
+                <div class="stat-card rose">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('absence_alerts')}</span>
+                        <div class="stat-card-icon">🔴</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value">${absentStr}</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge rose">⚠️ ${absentCount > 0 ? (isRtl ? 'نیازمند پیگیری' : 'Needs attention') : (isRtl ? 'بدون هشدار' : 'All clear')}</span>
+                    </div>
                 </div>
-                <div class="stat-card" style="background: var(--bg-glass); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                    <div class="stat-icon" style="font-size: 1.5rem; margin-bottom: 0.4rem;">⚪</div>
-                    <div class="stat-value" style="font-size: 1.6rem; font-weight: 800; color: var(--text-secondary);">${offDutyStr}</div>
-                    <div class="stat-label" style="font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">${I18n.t('off_duty_stat')}</div>
+                <div class="stat-card violet">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">${I18n.t('off_duty_stat')}</span>
+                        <div class="stat-card-icon">⚪</div>
+                    </div>
+                    <div class="stat-card-body">
+                        <span class="stat-card-value stat-value">${offDutyStr}</span>
+                    </div>
+                    <div class="stat-card-footer">
+                        <span class="stat-card-badge violet">⏳ ${isRtl ? 'خارج از شیفت' : 'Off Duty'}</span>
+                    </div>
                 </div>
             </div>
         `;

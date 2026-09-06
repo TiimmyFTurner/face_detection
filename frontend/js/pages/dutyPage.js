@@ -82,7 +82,7 @@ const DutyPage = {
         if (body) {
             body.innerHTML = `
                 <div class="duty-page-container">
-                    <div class="duty-kpi-deck" id="duty-kpi-deck" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div class="duty-kpi-deck" id="duty-kpi-deck">
                         <!-- KPI Cards populated dynamically -->
                     </div>
 
@@ -200,62 +200,88 @@ const DutyPage = {
 
         deck.innerHTML = `
             <!-- KPI: Total in Duty Hours -->
-            <div class="kpi-card blue" style="background: var(--bg-card); border-radius: 12px; padding: 1.1rem; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${I18n.t('kpi_staff_on_duty')}</span>
-                    <span style="font-size: 1.3rem;">👥</span>
+            <div class="duty-kpi-card blue">
+                <div class="duty-kpi-header">
+                    <span class="duty-kpi-title">${I18n.t('kpi_staff_on_duty')}</span>
+                    <div class="duty-kpi-icon">👥</div>
                 </div>
-                <div style="font-size: 1.9rem; font-weight: 800; color: var(--text-primary);">${totalDuty}</div>
-                <div style="font-size: 0.75rem; color: var(--accent-blue); margin-top: 0.25rem;">
-                    ⏰ ${I18n.t('shift_window_badge', { window: isRtl ? I18n.toPersianDigits(d.server_time) : d.server_time })}
+                <div class="duty-kpi-body">
+                    <span class="duty-kpi-value">${totalDuty}</span>
+                </div>
+                <div class="duty-kpi-footer">
+                    <span class="duty-kpi-badge blue">
+                        ⏱️ ${I18n.t('shift_window_badge', { window: isRtl ? I18n.toPersianDigits(d.server_time) : d.server_time })}
+                    </span>
                 </div>
             </div>
 
             <!-- KPI: Present on Station -->
-            <div class="kpi-card emerald" style="background: var(--bg-card); border-radius: 12px; padding: 1.1rem; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${I18n.t('kpi_on_station')}</span>
-                    <span style="font-size: 1.3rem;">🟢</span>
+            <div class="duty-kpi-card emerald">
+                <div class="duty-kpi-header">
+                    <span class="duty-kpi-title">${I18n.t('kpi_on_station')}</span>
+                    <div class="duty-kpi-icon">🟢</div>
                 </div>
-                <div style="font-size: 1.9rem; font-weight: 800; color: var(--accent-emerald);">${presentCount}</div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.25rem;">
-                    ${I18n.t('in_zone_present')}
+                <div class="duty-kpi-body">
+                    <span class="duty-kpi-value">${presentCount}</span>
+                </div>
+                <div class="duty-kpi-footer">
+                    <span class="duty-kpi-badge emerald">
+                        <span class="status-indicator active" style="width: 7px; height: 7px; margin-inline-end: 2px;"></span>
+                        ${I18n.t('in_zone_present')}
+                    </span>
                 </div>
             </div>
 
             <!-- KPI: Absent from Zone -->
-            <div class="kpi-card rose" style="background: var(--bg-card); border-radius: 12px; padding: 1.1rem; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${I18n.t('kpi_absent_now')}</span>
-                    <span style="font-size: 1.3rem;">🔴</span>
+            <div class="duty-kpi-card rose">
+                <div class="duty-kpi-header">
+                    <span class="duty-kpi-title">${I18n.t('kpi_absent_now')}</span>
+                    <div class="duty-kpi-icon">🔴</div>
                 </div>
-                <div style="font-size: 1.9rem; font-weight: 800; color: var(--accent-rose);">${absentCount}</div>
-                <div style="font-size: 0.75rem; color: var(--accent-rose); margin-top: 0.25rem;">
-                    ${absentCount > 0 ? (isRtl ? 'نیازمند پیگیری و نظارت' : 'Needs attention') : (isRtl ? 'همه حاضر هستند' : 'All on station')}
+                <div class="duty-kpi-body">
+                    <span class="duty-kpi-value">${absentCount}</span>
+                </div>
+                <div class="duty-kpi-footer">
+                    <span class="duty-kpi-badge rose">
+                        ${absentCount > 0 ? '⚠️ ' + (isRtl ? 'نیازمند پیگیری' : 'Needs attention') : '✓ ' + (isRtl ? 'همه حاضر هستند' : 'All on station')}
+                    </span>
                 </div>
             </div>
 
             <!-- KPI: Sum of Current Shift Absence -->
-            <div class="kpi-card amber" style="background: var(--bg-card); border-radius: 12px; padding: 1.1rem; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${I18n.t('kpi_total_shift_absence')}</span>
-                    <span style="font-size: 1.3rem;">⌛</span>
+            <div class="duty-kpi-card amber">
+                <div class="duty-kpi-header">
+                    <span class="duty-kpi-title">${I18n.t('kpi_total_shift_absence')}</span>
+                    <div class="duty-kpi-icon">⏳</div>
                 </div>
-                <div style="font-size: 1.9rem; font-weight: 800; color: var(--accent-amber);">${totalAbsenceStr}</div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.25rem;">
-                    ${I18n.t('sum_shift_absence_title')}
+                <div class="duty-kpi-body">
+                    <span class="duty-kpi-value">${totalAbsenceStr}</span>
+                </div>
+                <div class="duty-kpi-footer">
+                    <span class="duty-kpi-badge amber">
+                        ${I18n.t('sum_shift_absence_title')}
+                    </span>
                 </div>
             </div>
 
             <!-- KPI: Average Compliance -->
-            <div class="kpi-card purple" style="background: var(--bg-card); border-radius: 12px; padding: 1.1rem; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">${I18n.t('kpi_avg_compliance')}</span>
-                    <span style="font-size: 1.3rem;">📊</span>
+            <div class="duty-kpi-card purple">
+                <div class="duty-kpi-header">
+                    <span class="duty-kpi-title">${I18n.t('kpi_avg_compliance')}</span>
+                    <div class="duty-kpi-icon">📊</div>
                 </div>
-                <div style="font-size: 1.9rem; font-weight: 800; color: var(--accent-purple);">${compliancePct}%</div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.25rem;">
-                    ${I18n.t('kpi_shift_compliance')}
+                <div class="duty-kpi-body">
+                    <span class="duty-kpi-value">${compliancePct}%</span>
+                </div>
+                <div class="duty-kpi-footer" style="flex-direction: column; align-items: stretch; gap: 0.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="duty-kpi-badge purple" style="padding: 2px 6px;">
+                            ${I18n.t('kpi_shift_compliance')}
+                        </span>
+                    </div>
+                    <div class="duty-compliance-bar">
+                        <div class="duty-compliance-fill" style="width: ${Math.min(100, Math.max(0, d.avg_compliance_pct))}%;"></div>
+                    </div>
                 </div>
             </div>
         `;
@@ -301,7 +327,7 @@ const DutyPage = {
         rosterEl.innerHTML = roster.map(person => {
             const isPresent = person.status === 'present';
             const isAbsent = person.status === 'absent';
-            const borderAccent = isPresent ? 'var(--accent-emerald)' : (isAbsent ? 'var(--accent-rose)' : 'var(--border-color)');
+            const borderAccent = isPresent ? 'var(--accent-emerald)' : (isAbsent ? 'var(--accent-rose)' : 'rgba(255, 255, 255, 0.2)');
 
             // Avatar / Initial fallback
             const avatarHtml = person.avatar_url
@@ -358,7 +384,7 @@ const DutyPage = {
                 : person.shift_compliance_pct.toFixed(1);
 
             return `
-                <div class="duty-card ${isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : '')}" style="background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-color); padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; position: relative; transition: all 0.2s ease; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);">
+                <div class="duty-card ${isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : '')}">
                     <!-- Top Info Row -->
                     <div style="display: flex; gap: 0.9rem; align-items: flex-start;">
                         ${avatarHtml}
@@ -379,11 +405,11 @@ const DutyPage = {
                     </div>
 
                     <!-- Shift Time Window Badge -->
-                    <div style="background: var(--bg-hover); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border: 1px solid rgba(255, 255, 255, 0.05);">
+                    <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border: 1px solid rgba(255, 255, 255, 0.1);">
                         <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
                             🕐 <strong>${I18n.t('th_shift_hours')}:</strong>
                         </span>
-                        <span style="font-weight: 700; color: var(--accent-cyan); direction: ltr;">
+                        <span style="font-weight: 700; color: #38bdf8; direction: ltr;">
                             ${windowStr} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 0.75rem;">(${shiftDurHours}h)</span>
                         </span>
                     </div>
@@ -391,27 +417,27 @@ const DutyPage = {
                     <!-- 2 Main Absence Metrics: Current Absence & Sum of Shift Absence -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                         <!-- Current Absence -->
-                        <div style="background: ${isPresent ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.25)' : 'rgba(244, 63, 94, 0.25)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
+                        <div style="background: ${isPresent ? 'rgba(16, 185, 129, 0.09)' : 'rgba(244, 63, 94, 0.09)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
                             <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                                 ${I18n.t('current_absence_title')}
                             </div>
-                            <div style="font-size: 1.15rem; font-weight: 800; color: ${isPresent ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
+                            <div style="font-size: 1.2rem; font-weight: 800; color: ${isPresent ? '#34d399' : '#fb7185'};">
                                 ${currAbsenceDisplay}
                             </div>
-                            <div style="font-size: 0.65rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
                                 ${isPresent ? I18n.t('in_zone_present') : (person.last_seen_str || I18n.t('absent_not_seen'))}
                             </div>
                         </div>
 
                         <!-- Sum of Current Shift Absence -->
-                        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                        <div style="background: rgba(245, 158, 11, 0.09); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
                             <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                                 ${I18n.t('sum_shift_absence_title')}
                             </div>
-                            <div style="font-size: 1.15rem; font-weight: 800; color: var(--accent-amber);">
+                            <div style="font-size: 1.2rem; font-weight: 800; color: #fbbf24;">
                                 ${sumShiftAbsenceDisplay}
                             </div>
-                            <div style="font-size: 0.65rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
                                 ${isRtl ? `از ${elapsedStr} دقیقه سپری شده` : `of ${elapsedStr}m elapsed`}
                             </div>
                         </div>

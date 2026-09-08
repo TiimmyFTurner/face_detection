@@ -3,6 +3,23 @@
  */
 const CamerasPage = {
     _cameras: [],
+    _viewMode: localStorage.getItem('facetrack_view_cameras') || 'grid',
+
+    /**
+     * Set view mode ('grid' or 'list') and update UI.
+     */
+    setViewMode(mode) {
+        CamerasPage._viewMode = mode;
+        try {
+            localStorage.setItem('facetrack_view_cameras', mode);
+        } catch (e) {}
+
+        const gridBtn = document.getElementById('cameras-view-grid');
+        const listBtn = document.getElementById('cameras-view-list');
+        if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+        if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+        CamerasPage.renderCameras();
+    },
 
     /**
      * Load and render the cameras management page.
@@ -10,14 +27,32 @@ const CamerasPage = {
     async load() {
         document.getElementById('page-title').textContent = I18n.t('cameras_title');
         document.getElementById('header-actions').innerHTML = `
-            <button class="btn btn-primary" onclick="CamerasPage.showAddModal()">
-                ${I18n.t('add_camera_btn')}
-            </button>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div class="view-toggle-group" role="group" aria-label="View mode">
+                    <button class="view-toggle-btn ${CamerasPage._viewMode === 'grid' ? 'active' : ''}" 
+                            id="cameras-view-grid" 
+                            onclick="CamerasPage.setViewMode('grid')" 
+                            title="${I18n.t('view_grid')}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                        <span>${I18n.t('view_grid')}</span>
+                    </button>
+                    <button class="view-toggle-btn ${CamerasPage._viewMode === 'list' ? 'active' : ''}" 
+                            id="cameras-view-list" 
+                            onclick="CamerasPage.setViewMode('list')" 
+                            title="${I18n.t('view_list')}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        <span>${I18n.t('view_list')}</span>
+                    </button>
+                </div>
+                <button class="btn btn-primary" onclick="CamerasPage.showAddModal()">
+                    ${I18n.t('add_camera_btn')}
+                </button>
+            </div>
         `;
 
         const body = document.getElementById('content-body');
         body.innerHTML = `
-            <div class="cameras-grid" id="cameras-grid">
+            <div class="cameras-grid ${CamerasPage._viewMode === 'list' ? 'list-view' : ''}" id="cameras-grid">
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">⏳</div>
                     <div class="empty-state-title">${I18n.t('loading_cameras')}</div>
@@ -54,6 +89,8 @@ const CamerasPage = {
         const grid = document.getElementById('cameras-grid');
         if (!grid) return;
 
+        grid.classList.toggle('list-view', CamerasPage._viewMode === 'list');
+
         if (CamerasPage._cameras.length === 0) {
             grid.innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
@@ -80,6 +117,54 @@ const CamerasPage = {
                 }
             }
             const addedDateStr = I18n.formatDate(camera.created_at);
+
+            if (CamerasPage._viewMode === 'list') {
+                return `
+                    <div class="camera-card list-item" data-camera-id="${camera.id}">
+                        <div class="camera-card-header">
+                            <span class="camera-status ${statusClass}">
+                                <span class="camera-status-dot"></span>
+                            </span>
+                            <div>
+                                <span class="camera-name" style="display: block;">${CamerasPage.escapeHtml(camera.name)}</span>
+                                ${camera.location ? `<span style="font-size: 0.75rem; color: var(--text-tertiary);">📍 ${CamerasPage.escapeHtml(camera.location)}</span>` : ''}
+                            </div>
+                        </div>
+
+                        <div class="camera-list-details">
+                            <span class="camera-status ${statusClass}" style="background: rgba(255,255,255,0.04); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem;">
+                                ${statusText}
+                            </span>
+                            <span dir="ltr" style="font-family: monospace; font-size: 0.78rem; color: var(--text-tertiary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${CamerasPage.escapeAttr(camera.rtsp_url)}">
+                                ${CamerasPage.escapeHtml(CamerasPage.maskUrl(camera.rtsp_url))}
+                            </span>
+                            <span style="font-size: 0.75rem; color: var(--text-tertiary);">🕐 ${addedDateStr}</span>
+                        </div>
+
+                        <div class="camera-actions-wrapper">
+                            <div class="camera-actions-primary">
+                                <button class="btn btn-primary btn-sm" onclick="CamerasPage.showLiveModal(${camera.id})" title="${CamerasPage.escapeAttr(I18n.t('camera_live_stream'))}">
+                                    <span>👁️</span> <span>${I18n.t('camera_live_stream')}</span>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${camera.id})" title="${CamerasPage.escapeAttr(I18n.t('camera_zones_btn'))}" style="background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.35); color: var(--accent-blue);">
+                                    <span>🎯</span> <span>${I18n.t('camera_zones_btn')}</span>
+                                </button>
+                            </div>
+                            <div class="camera-actions-secondary">
+                                <button class="btn btn-secondary btn-sm" onclick="CamerasPage.testCamera(${camera.id})" title="${CamerasPage.escapeAttr(I18n.t('btn_test_connection'))}">
+                                    ${I18n.t('camera_test_btn')}
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="CamerasPage.showEditModal(${camera.id})" title="${CamerasPage.escapeAttr(I18n.t('camera_edit_btn'))}">
+                                    ${I18n.t('camera_edit_btn')}
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="CamerasPage.deleteCamera(${camera.id}, '${CamerasPage.escapeAttr(camera.name)}')" title="${CamerasPage.escapeAttr(I18n.t('delete'))}">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
 
             return `
                 <div class="camera-card" data-camera-id="${camera.id}">

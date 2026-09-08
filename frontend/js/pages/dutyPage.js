@@ -13,6 +13,23 @@ const DutyPage = {
     _currentFilter: 'all', // 'all', 'present', 'absent'
     _onlyActive: true,
     _isLoading: false,
+    _viewMode: localStorage.getItem('facetrack_view_duty') || 'grid',
+
+    /**
+     * Set view mode ('grid' or 'list') and update UI.
+     */
+    setViewMode(mode) {
+        DutyPage._viewMode = mode;
+        try {
+            localStorage.setItem('facetrack_view_duty', mode);
+        } catch (e) {}
+
+        const gridBtn = document.getElementById('duty-view-grid');
+        const listBtn = document.getElementById('duty-view-list');
+        if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+        if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+        DutyPage.renderRoster();
+    },
 
     /**
      * Entry point when user navigates to Duty page.
@@ -65,6 +82,24 @@ const DutyPage = {
                         <span>${I18n.t('toggle_only_active')}</span>
                     </label>
 
+                    <!-- View Toggle Group -->
+                    <div class="view-toggle-group" role="group" aria-label="View mode">
+                        <button class="view-toggle-btn ${DutyPage._viewMode === 'grid' ? 'active' : ''}" 
+                                id="duty-view-grid" 
+                                onclick="DutyPage.setViewMode('grid')" 
+                                title="${I18n.t('view_grid')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                            <span>${I18n.t('view_grid')}</span>
+                        </button>
+                        <button class="view-toggle-btn ${DutyPage._viewMode === 'list' ? 'active' : ''}" 
+                                id="duty-view-list" 
+                                onclick="DutyPage.setViewMode('list')" 
+                                title="${I18n.t('view_list')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                            <span>${I18n.t('view_list')}</span>
+                        </button>
+                    </div>
+
                     <!-- Refresh & Timer Badge -->
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span class="badge-status-pill" id="duty-timer-badge" style="font-size: 0.78rem; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 12px;">
@@ -86,7 +121,7 @@ const DutyPage = {
                         <!-- KPI Cards populated dynamically -->
                     </div>
 
-                    <div id="duty-roster-list" class="duty-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.25rem;">
+                    <div id="duty-roster-list" class="duty-grid ${DutyPage._viewMode === 'list' ? 'list-view' : ''}">
                         <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-tertiary);">
                             <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
                             ${I18n.t('loading')}
@@ -294,6 +329,8 @@ const DutyPage = {
         const rosterEl = document.getElementById('duty-roster-list');
         if (!rosterEl || !DutyPage._data) return;
 
+        rosterEl.classList.toggle('list-view', DutyPage._viewMode === 'list');
+
         const isRtl = I18n.isRTL();
         let roster = DutyPage._data.roster || [];
 
@@ -382,6 +419,57 @@ const DutyPage = {
             const compliancePct = isRtl
                 ? I18n.toPersianDigits(person.shift_compliance_pct.toFixed(1))
                 : person.shift_compliance_pct.toFixed(1);
+
+            if (DutyPage._viewMode === 'list') {
+                return `
+                    <div class="duty-card list-item ${isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : '')}">
+                        <!-- Left: Staff Identity -->
+                        <div class="duty-list-identity">
+                            ${avatarHtml}
+                            <div class="duty-list-identity-info">
+                                <div class="duty-list-name-row">
+                                    <h4 class="duty-list-name" onclick="PersonAnalyticsModal.show(${person.person_id})">
+                                        ${person.person_name}
+                                    </h4>
+                                    ${statusBadgeHtml}
+                                </div>
+                                <div class="duty-list-meta">
+                                    <span>💼 ${person.person_role || I18n.t('no_role_assigned')}</span>
+                                    <span style="opacity: 0.4;">·</span>
+                                    <span style="color: var(--accent-blue);">📍 ${person.camera_name} (${person.zone_name})</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Center: Shift & Absence Metrics -->
+                        <div class="duty-list-metrics">
+                            <div class="duty-metric-pill" title="${I18n.t('shift_time')}">
+                                <span>🕐</span>
+                                <strong>${windowStr}</strong>
+                                <span style="color: var(--text-tertiary); font-size: 0.72rem;">(${shiftDurHours} ${isRtl ? 'ساعت' : 'hrs'})</span>
+                            </div>
+
+                            <div class="duty-metric-pill" style="${isAbsent ? 'border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);' : ''}" title="${I18n.t('today_absence')}">
+                                <span>⏱️</span>
+                                <span style="color: var(--text-tertiary);">${I18n.t('today_absence')}:</span>
+                                <strong style="color: ${isAbsent ? 'var(--accent-rose)' : 'var(--text-primary)'};">${sumShiftAbsenceDisplay}</strong>
+                            </div>
+
+                            <div class="duty-metric-pill" style="border-color: ${person.shift_compliance_pct >= 85 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}; background: ${person.shift_compliance_pct >= 85 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; color: ${person.shift_compliance_pct >= 85 ? 'var(--accent-emerald)' : 'var(--accent-amber)'}; font-weight: 700;" title="${I18n.t('kpi_shift_compliance')}">
+                                <span>🎯</span>
+                                <span>${compliancePct}%</span>
+                            </div>
+                        </div>
+
+                        <!-- Right: Action Button -->
+                        <div class="duty-list-actions">
+                            <button class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.show(${person.person_id})" style="padding: 7px 14px; font-size: 0.8rem; border-radius: 8px; white-space: nowrap;">
+                                📊 <span>${I18n.t('btn_person_analytics')}</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
 
             return `
                 <div class="duty-card ${isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : '')}">

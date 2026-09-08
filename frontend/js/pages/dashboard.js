@@ -4,12 +4,34 @@
 const DashboardPage = {
     _filter: 'all', // 'all' | 'known' | 'unknown'
     _viewMode: 'stream', // 'stream' | 'grouped'
+    _displayMode: localStorage.getItem('facetrack_view_dashboard') || 'grid', // 'grid' | 'list'
     _events: [],
     _groupedEvents: [],
     _eventPage: 1,
     _eventLimit: 30,
     _eventTotal: 0,
     _eventLoading: false,
+
+    /**
+     * Switch display layout ('grid' | 'list').
+     */
+    setDisplayMode(mode) {
+        DashboardPage._displayMode = mode;
+        try {
+            localStorage.setItem('facetrack_view_dashboard', mode);
+        } catch (e) {}
+
+        const gridBtn = document.getElementById('dashboard-view-grid');
+        const listBtn = document.getElementById('dashboard-view-list');
+        if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+        if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+
+        if (DashboardPage._viewMode === 'stream') {
+            DashboardPage.renderEvents();
+        } else {
+            DashboardPage.renderGroupedEvents();
+        }
+    },
 
     /**
      * Load and render the dashboard page.
@@ -107,19 +129,38 @@ const DashboardPage = {
                     </button>
                 </div>
 
-                <div class="view-mode-toggle" style="display: flex; background: var(--bg-surface-hover); padding: 3px; border-radius: var(--radius-full); border: 1px solid var(--border-medium);">
-                    <button class="filter-btn ${DashboardPage._viewMode === 'stream' ? 'active' : ''}" id="btn-mode-stream" onclick="DashboardPage.setViewMode('stream')">
-                        ${I18n.t('mode_stream')}
-                    </button>
-                    <button class="filter-btn ${DashboardPage._viewMode === 'grouped' ? 'active' : ''}" id="btn-mode-grouped" onclick="DashboardPage.setViewMode('grouped')">
-                        ${I18n.t('mode_grouped')}
-                    </button>
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="view-mode-toggle" style="display: flex; background: var(--bg-surface-hover); padding: 3px; border-radius: var(--radius-full); border: 1px solid var(--border-medium);">
+                        <button class="filter-btn ${DashboardPage._viewMode === 'stream' ? 'active' : ''}" id="btn-mode-stream" onclick="DashboardPage.setViewMode('stream')">
+                            ${I18n.t('mode_stream')}
+                        </button>
+                        <button class="filter-btn ${DashboardPage._viewMode === 'grouped' ? 'active' : ''}" id="btn-mode-grouped" onclick="DashboardPage.setViewMode('grouped')">
+                            ${I18n.t('mode_grouped')}
+                        </button>
+                    </div>
+
+                    <div class="view-toggle-group" role="group" aria-label="View mode">
+                        <button class="view-toggle-btn ${DashboardPage._displayMode === 'grid' ? 'active' : ''}" 
+                                id="dashboard-view-grid" 
+                                onclick="DashboardPage.setDisplayMode('grid')" 
+                                title="${I18n.t('view_grid')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                            <span>${I18n.t('view_grid')}</span>
+                        </button>
+                        <button class="view-toggle-btn ${DashboardPage._displayMode === 'list' ? 'active' : ''}" 
+                                id="dashboard-view-list" 
+                                onclick="DashboardPage.setDisplayMode('list')" 
+                                title="${I18n.t('view_list')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                            <span>${I18n.t('view_list')}</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <!-- Events Grid & Pagination Container -->
             <div id="events-container" style="display: flex; flex-direction: column; gap: 1.25rem;">
-                <div class="events-grid" id="events-grid">
+                <div class="events-grid ${DashboardPage._displayMode === 'list' ? 'list-view' : ''}" id="events-grid">
                     <div class="empty-state">
                         <div class="spinner"></div>
                         <div class="empty-state-title">${I18n.t('loading')}</div>
@@ -250,7 +291,18 @@ const DashboardPage = {
         const grid = document.getElementById('events-grid');
         const pagContainer = document.getElementById('events-pagination');
         if (!grid) return;
-        grid.style.display = 'grid';
+
+        const isList = DashboardPage._displayMode === 'list';
+        grid.classList.toggle('list-view', isList);
+        if (isList) {
+            grid.style.display = 'flex';
+            grid.style.flexDirection = 'column';
+            grid.style.gap = '0.75rem';
+        } else {
+            grid.style.display = 'grid';
+            grid.style.flexDirection = '';
+            grid.style.gap = '';
+        }
 
         if (DashboardPage._events.length === 0) {
             grid.innerHTML = `
@@ -267,7 +319,7 @@ const DashboardPage = {
         }
 
         grid.innerHTML = DashboardPage._events
-            .map(event => EventCard.render(event))
+            .map(event => isList ? EventCard.renderListItem(event) : EventCard.render(event))
             .join('');
 
         if (pagContainer) {
@@ -373,22 +425,27 @@ const DashboardPage = {
                         <span style="font-size: 0.8rem; color: var(--text-tertiary);">${I18n.t('latest_time', { time: latestTimeStr })}</span>
                     </div>
 
-                    <!-- Photo Gallery Strip -->
-                    <div class="person-photo-gallery" style="display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; margin-bottom: 1rem; scrollbar-width: thin;">
-                        ${group.events.map(ev => {
-                            // Ensure cache populated for clicking
-                            EventCard._cache[ev.id] = ev;
-                            const timeLabel = I18n.formatTimestamp(ev.timestamp);
-                            const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
-                            return `
-                                <div class="gallery-item" onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 110px; cursor: pointer; text-align: center; background: var(--bg-surface-hover); border-radius: var(--radius-md); padding: 6px; border: 1px solid var(--border-subtle); transition: transform 150ms ease;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
-                                    <img src="${ev.snapshot_url}" alt="${EventCard.escapeHtml(ev.person_name || I18n.t('unknown'))}" style="width: 100%; height: 90px; object-fit: cover; border-radius: var(--radius-sm); display: block; margin-bottom: 4px;" />
-                                    <div style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${EventCard.escapeHtml(camName)}</div>
-                                    <div style="font-size: 0.65rem; color: var(--text-tertiary);">${timeLabel}</div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
+                    <!-- Events List / Photo Gallery Strip -->
+                    ${DashboardPage._displayMode === 'list' ? `
+                        <div class="events-grid list-view" style="margin-bottom: 0.75rem;">
+                            ${group.events.map(ev => EventCard.renderListItem(ev)).join('')}
+                        </div>
+                    ` : `
+                        <div class="person-photo-gallery" style="display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; margin-bottom: 1rem; scrollbar-width: thin;">
+                            ${group.events.map(ev => {
+                                EventCard._cache[ev.id] = ev;
+                                const timeLabel = I18n.formatTimestamp(ev.timestamp);
+                                const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
+                                return `
+                                    <div class="gallery-item" onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 110px; cursor: pointer; text-align: center; background: var(--bg-surface-hover); border-radius: var(--radius-md); padding: 6px; border: 1px solid var(--border-subtle); transition: transform 150ms ease;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
+                                        <img src="${ev.snapshot_url}" alt="${EventCard.escapeHtml(ev.person_name || I18n.t('unknown'))}" style="width: 100%; height: 90px; object-fit: cover; border-radius: var(--radius-sm); display: block; margin-bottom: 4px;" />
+                                        <div style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${EventCard.escapeHtml(camName)}</div>
+                                        <div style="font-size: 0.65rem; color: var(--text-tertiary);">${timeLabel}</div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
 
                     <!-- History Timeline Summary -->
                     <div class="person-timeline-summary" style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">

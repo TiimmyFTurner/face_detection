@@ -73,6 +73,8 @@ const I18n = {
             all: 'همه',
             details: 'جزئیات',
             search: 'جستجو',
+            view_grid: 'نمای شبکه‌ای',
+            view_list: 'نمای لیستی',
 
             // Dashboard
             dashboard_title: 'پیشخوان رویدادها',
@@ -458,6 +460,8 @@ const I18n = {
             all: 'All',
             details: 'Details',
             search: 'Search',
+            view_grid: 'Grid View',
+            view_list: 'List View',
 
             // Dashboard
             dashboard_title: 'Dashboard',

@@ -76,6 +76,69 @@ const EventCard = {
     },
 
     /**
+     * Render an event card as a compact horizontal list item.
+     * @param {Object} event - Event data object
+     * @returns {string} HTML string
+     */
+    renderListItem(event) {
+        if (event && event.id) {
+            EventCard._cache[event.id] = event;
+        }
+
+        const isKnown = event.is_known;
+        const statusClass = isKnown ? 'known' : 'unknown';
+        const badgeText = isKnown ? I18n.t('known') : I18n.t('unknown');
+        const timestamp = I18n.formatTimestamp(event.timestamp);
+        const confidence = Math.round((event.confidence_score || 0) * 100);
+        const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
+        const confidenceClass = confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low';
+        const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
+        const personName = event.person_name || I18n.t('unknown');
+        const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
+
+        return `
+            <div class="event-card list-item ${statusClass}" data-event-id="${event.id}" onclick="EventCard.showDetailModal(${event.id})" style="cursor: pointer;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
+                <div class="event-list-primary">
+                    <img
+                        class="event-list-thumb"
+                        src="${snapshotUrl}"
+                        alt="${EventCard.escapeAttr(personName)}"
+                        loading="lazy"
+                        onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 50 50%22><rect fill=%22%230c1020%22 width=%2250%22 height=%2250%22/><text x=%2225%22 y=%2228%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2210%22>${encodeURIComponent(I18n.t('no_image'))}</text></svg>'"
+                    />
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 2px;">
+                            ${EventCard.escapeHtml(personName)}
+                        </div>
+                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                            <span class="event-badge ${statusClass}" style="font-size: 0.65rem; padding: 1px 7px;">${badgeText}</span>
+                            ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
+                            ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
+                            ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="event-list-meta">
+                    <span title="${I18n.t('event_camera')}">📹 ${EventCard.escapeHtml(cameraName)}</span>
+                    ${event.zone_name ? `<span style="color: var(--accent-blue);" title="${I18n.t('event_area')}">🎯 ${EventCard.escapeHtml(event.zone_name)}</span>` : ''}
+                    <span title="${I18n.t('event_timestamp')}">🕐 ${timestamp}</span>
+                </div>
+
+                <div class="event-list-confidence">
+                    <div style="flex: 1; min-width: 60px;">
+                        <div style="font-size: 0.72rem; color: var(--text-tertiary); text-align: end; margin-bottom: 2px;">${confidenceDisplay}%</div>
+                        <div class="confidence-bar" style="margin-top: 0;">
+                            <div class="confidence-bar-fill ${confidenceClass}" style="width: ${confidence}%"></div>
+                        </div>
+                    </div>
+                    <span style="color: var(--text-tertiary); font-size: 0.85rem;">🔍</span>
+                </div>
+            </div>
+        `;
+    },
+
+    /**
      * Show big event detail modal.
      */
     showDetailModal(eventId) {

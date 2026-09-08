@@ -12,6 +12,28 @@ const ZonesPage = {
     _logLoading: false,
     _activeSubTab: 'board', // 'board', 'zones', 'logs'
     _pollTimer: null,
+    _viewMode: localStorage.getItem('facetrack_view_zones') || 'grid',
+
+    /**
+     * Set view mode ('grid' or 'list') and update UI.
+     */
+    setViewMode(mode) {
+        ZonesPage._viewMode = mode;
+        try {
+            localStorage.setItem('facetrack_view_zones', mode);
+        } catch (e) {}
+
+        const gridBtn = document.getElementById('zones-view-grid');
+        const listBtn = document.getElementById('zones-view-list');
+        if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+        if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+
+        const boardContainer = document.getElementById('zones-presence-grid');
+        if (boardContainer) {
+            boardContainer.classList.toggle('list-view', mode === 'list');
+            boardContainer.innerHTML = ZonesPage.renderPresenceGrid();
+        }
+    },
 
     /**
      * Load the Zone Monitoring page.
@@ -88,6 +110,7 @@ const ZonesPage = {
             if (ZonesPage._activeSubTab === 'board') {
                 const boardContainer = document.getElementById('zones-presence-grid');
                 if (boardContainer) {
+                    boardContainer.classList.toggle('list-view', ZonesPage._viewMode === 'list');
                     boardContainer.innerHTML = ZonesPage.renderPresenceGrid();
                 }
                 ZonesPage.updateSummaryStats();
@@ -113,16 +136,37 @@ const ZonesPage = {
             </div>
 
             <!-- Sub-tab Navigation Bar -->
-            <div class="view-toggle-bar" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem; flex-wrap: wrap;">
-                <button class="btn btn-sm ${ZonesPage._activeSubTab === 'board' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('board')">
-                    ${I18n.t('subtab_board')}
-                </button>
-                <button class="btn btn-sm ${ZonesPage._activeSubTab === 'zones' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('zones')">
-                    ${I18n.t('subtab_zones', { count: zonesCount })}
-                </button>
-                <button class="btn btn-sm ${ZonesPage._activeSubTab === 'logs' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('logs')">
-                    ${I18n.t('subtab_logs', { count: logsCount })}
-                </button>
+            <div class="view-toggle-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;">
+                <div style="display: flex; gap: 0.75rem;">
+                    <button class="btn btn-sm ${ZonesPage._activeSubTab === 'board' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('board')">
+                        ${I18n.t('subtab_board')}
+                    </button>
+                    <button class="btn btn-sm ${ZonesPage._activeSubTab === 'zones' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('zones')">
+                        ${I18n.t('subtab_zones', { count: zonesCount })}
+                    </button>
+                    <button class="btn btn-sm ${ZonesPage._activeSubTab === 'logs' ? 'btn-primary' : 'btn-secondary'}" onclick="ZonesPage.switchSubTab('logs')">
+                        ${I18n.t('subtab_logs', { count: logsCount })}
+                    </button>
+                </div>
+
+                ${ZonesPage._activeSubTab === 'board' ? `
+                    <div class="view-toggle-group" role="group" aria-label="View mode">
+                        <button class="view-toggle-btn ${ZonesPage._viewMode === 'grid' ? 'active' : ''}" 
+                                id="zones-view-grid" 
+                                onclick="ZonesPage.setViewMode('grid')" 
+                                title="${I18n.t('view_grid')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                            <span>${I18n.t('view_grid')}</span>
+                        </button>
+                        <button class="view-toggle-btn ${ZonesPage._viewMode === 'list' ? 'active' : ''}" 
+                                id="zones-view-list" 
+                                onclick="ZonesPage.setViewMode('list')" 
+                                title="${I18n.t('view_list')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                            <span>${I18n.t('view_list')}</span>
+                        </button>
+                    </div>
+                ` : ''}
             </div>
 
             <!-- Tab Content Container -->
@@ -242,7 +286,7 @@ const ZonesPage = {
     renderSubTabContent() {
         if (ZonesPage._activeSubTab === 'board') {
             return `
-                <div id="zones-presence-grid" class="presence-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem;">
+                <div id="zones-presence-grid" class="presence-grid ${ZonesPage._viewMode === 'list' ? 'list-view' : ''}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem;">
                     ${ZonesPage.renderPresenceGrid()}
                 </div>
             `;
@@ -281,6 +325,50 @@ const ZonesPage = {
                 overallStatus = 'absent';
                 statusColor = '#ef4444';
                 statusBadge = I18n.t('badge_absent');
+            }
+
+            if (ZonesPage._viewMode === 'list') {
+                return `
+                    <div class="presence-card list-item" style="background: var(--bg-glass); border: 1px solid ${overallStatus === 'absent' ? 'rgba(239, 68, 68, 0.4)' : overallStatus === 'present' ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); padding: 0.85rem 1.25rem; backdrop-filter: blur(12px);">
+                        <div class="presence-list-zone">
+                            <div>
+                                <div style="font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>🎯</span>
+                                    <span>${ZonesPage.escapeHtml(z.zone_name)}</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 2px;">
+                                    📹 ${ZonesPage.escapeHtml(z.camera_name)} · <span style="color: var(--accent-blue);">${ZonesPage.escapeHtml(I18n.formatTimetableText(z.timetable_text))}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="presence-list-staff">
+                            ${z.assigned_persons.length === 0 ? `
+                                <span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">${I18n.t('no_staff_assigned')}</span>
+                            ` : z.assigned_persons.map(p => {
+                                const lastSeenDisplay = I18n.formatLastSeen(p);
+                                const isP = p.status === 'present';
+                                const isA = p.status === 'absent';
+                                return `
+                                    <span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 3px 8px; border-radius: var(--radius-sm); font-size: 0.75rem; background: var(--bg-surface); border: 1px solid var(--border-subtle);">
+                                        <span>${isP ? '🟢' : isA ? '🔴' : '⚪'}</span>
+                                        <strong>${ZonesPage.escapeHtml(p.person_name)}</strong>
+                                        <span style="font-size: 0.68rem; color: var(--text-tertiary);">(${lastSeenDisplay})</span>
+                                    </span>
+                                `;
+                            }).join('')}
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: var(--radius-full); background: ${statusColor}22; color: ${statusColor}; border: 1px solid ${statusColor}55;">
+                                ${statusBadge}
+                            </span>
+                            <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${z.camera_id})" style="font-size: 0.75rem; padding: 4px 10px;">
+                                ${I18n.t('edit_area_shift')}
+                            </button>
+                        </div>
+                    </div>
+                `;
             }
 
             return `

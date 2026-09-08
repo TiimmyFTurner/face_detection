@@ -5,6 +5,23 @@ const PersonsPage = {
     _persons: [],
     _searchQuery: '',
     _sortBy: 'detections', // 'detections', 'name', 'last_seen'
+    _viewMode: localStorage.getItem('facetrack_view_persons') || 'grid',
+
+    /**
+     * Set view mode ('grid' or 'list') and update UI.
+     */
+    setViewMode(mode) {
+        PersonsPage._viewMode = mode;
+        try {
+            localStorage.setItem('facetrack_view_persons', mode);
+        } catch (e) {}
+
+        const gridBtn = document.getElementById('persons-view-grid');
+        const listBtn = document.getElementById('persons-view-list');
+        if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+        if (listBtn) listBtn.classList.toggle('active', mode === 'list');
+        PersonsPage.renderPersons();
+    },
 
     /**
      * Load and render the identity management page.
@@ -33,17 +50,36 @@ const PersonsPage = {
                     <span style="position: absolute; ${I18n.isRTL() ? 'right' : 'left'}: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">🔍</span>
                 </div>
 
-                <div class="persons-sort-box" style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="font-size: 0.85rem; color: var(--text-secondary);">${I18n.t('sort_by')}</span>
-                    <select class="form-control" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.85rem;" onchange="PersonsPage.handleSort(this.value)">
-                        <option value="detections" ${PersonsPage._sortBy === 'detections' ? 'selected' : ''}>${I18n.t('sort_detections')}</option>
-                        <option value="last_seen" ${PersonsPage._sortBy === 'last_seen' ? 'selected' : ''}>${I18n.t('sort_last_seen')}</option>
-                        <option value="name" ${PersonsPage._sortBy === 'name' ? 'selected' : ''}>${I18n.t('sort_name')}</option>
-                    </select>
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="persons-sort-box" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">${I18n.t('sort_by')}</span>
+                        <select class="form-control" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.85rem;" onchange="PersonsPage.handleSort(this.value)">
+                            <option value="detections" ${PersonsPage._sortBy === 'detections' ? 'selected' : ''}>${I18n.t('sort_detections')}</option>
+                            <option value="last_seen" ${PersonsPage._sortBy === 'last_seen' ? 'selected' : ''}>${I18n.t('sort_last_seen')}</option>
+                            <option value="name" ${PersonsPage._sortBy === 'name' ? 'selected' : ''}>${I18n.t('sort_name')}</option>
+                        </select>
+                    </div>
+
+                    <div class="view-toggle-group" role="group" aria-label="View mode">
+                        <button class="view-toggle-btn ${PersonsPage._viewMode === 'grid' ? 'active' : ''}" 
+                                id="persons-view-grid" 
+                                onclick="PersonsPage.setViewMode('grid')" 
+                                title="${I18n.t('view_grid')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                            <span>${I18n.t('view_grid')}</span>
+                        </button>
+                        <button class="view-toggle-btn ${PersonsPage._viewMode === 'list' ? 'active' : ''}" 
+                                id="persons-view-list" 
+                                onclick="PersonsPage.setViewMode('list')" 
+                                title="${I18n.t('view_list')}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                            <span>${I18n.t('view_list')}</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="persons-grid" id="persons-grid">
+            <div class="persons-grid ${PersonsPage._viewMode === 'list' ? 'list-view' : ''}" id="persons-grid">
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <div class="empty-state-icon">⏳</div>
                     <div class="empty-state-title">${I18n.t('loading_persons')}</div>
@@ -95,6 +131,8 @@ const PersonsPage = {
     renderPersons() {
         const grid = document.getElementById('persons-grid');
         if (!grid) return;
+
+        grid.classList.toggle('list-view', PersonsPage._viewMode === 'list');
 
         let filtered = PersonsPage._persons;
 
@@ -163,6 +201,70 @@ const PersonsPage = {
             }
 
             const shiftTimeStr = s.primary_shift_time ? (I18n.isRTL() ? I18n.toPersianDigits(s.primary_shift_time) : s.primary_shift_time) : null;
+
+            if (PersonsPage._viewMode === 'list') {
+                return `
+                    <div class="person-card list-item" data-person-id="${person.id}">
+                        <div class="person-list-identity">
+                            ${hasPhoto
+                                ? `<img
+                                    class="person-avatar"
+                                    src="${person.reference_photos[0]}"
+                                    alt="${PersonsPage.escapeAttr(person.name)}"
+                                    onclick="PersonAnalyticsModal.show(${person.id})"
+                                    style="cursor: pointer;"
+                                    title="${PersonsPage.escapeAttr(I18n.t('btn_person_analytics'))}"
+                                    onerror="this.outerHTML='<div class=\\'person-avatar-placeholder\\' onclick=\\'PersonAnalyticsModal.show(${person.id})\\'>${initials}</div>'"
+                                />`
+                                : `<div class="person-avatar-placeholder" onclick="PersonAnalyticsModal.show(${person.id})" style="cursor: pointer;" title="${PersonsPage.escapeAttr(I18n.t('btn_person_analytics'))}">${initials}</div>`
+                            }
+                            <div class="person-list-info">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <span class="person-name" onclick="PersonAnalyticsModal.show(${person.id})" style="cursor: pointer;" title="${PersonsPage.escapeAttr(I18n.t('btn_person_analytics'))}">
+                                        ${PersonsPage.escapeHtml(person.name)}
+                                    </span>
+                                    ${statusPill}
+                                </div>
+                                <div class="person-role">
+                                    ${PersonsPage.escapeHtml(person.role || I18n.t('no_role_assigned'))}
+                                    ${shiftTimeStr ? ` · <span style="color: var(--accent-blue); font-weight: 600;">⏰ ${shiftTimeStr}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="person-list-stats">
+                            <div class="person-list-stat-badge" title="${I18n.t('kpi_total_detections')}">
+                                <span>🎯</span>
+                                <strong>${totalDetections}</strong>
+                                <span style="font-size: 0.72rem; color: var(--text-tertiary);">${I18n.t('kpi_total_detections')}</span>
+                                ${todayDetections > 0 ? `<span style="font-size: 0.7rem; color: var(--accent-emerald); font-weight: 700;">(+${todayStr})</span>` : ''}
+                            </div>
+
+                            <div class="person-list-stat-badge" title="${I18n.t('person_photos_count')}">
+                                <span>📸</span>
+                                <strong style="color: var(--accent-violet);">${countDisplay}</strong>
+                                <span style="font-size: 0.72rem; color: var(--text-tertiary);">${I18n.t('person_photos_count')}</span>
+                            </div>
+
+                            <div style="font-size: 0.78rem; color: var(--text-tertiary); max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${PersonsPage.escapeAttr(lastSeenText)}">
+                                🕒 ${lastSeenText}
+                            </div>
+                        </div>
+
+                        <div class="person-actions">
+                            <button class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.show(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('btn_person_analytics'))}">
+                                📊 <span>${I18n.t('btn_person_analytics')}</span>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('btn_add_photos'))}">
+                                📸 <span>${I18n.t('btn_add_photos')}</span>
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="PersonsPage.deletePerson(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('delete'))}">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
 
             return `
                 <div class="person-card" data-person-id="${person.id}">

@@ -21,9 +21,11 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from typing import Union
+
 from backend.database import get_db
 from backend.models import Camera
-from backend.schemas import CameraCreate, CameraUpdate, CameraResponse, CameraTestResult
+from backend.schemas import CameraCreate, CameraBatchCreate, CameraUpdate, CameraResponse, CameraTestResult
 from backend.stream_processor import stream_processor
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,43 @@ async def create_camera(
 
     logger.info("Camera created: id=%d name='%s'", camera.id, camera.name)
     return camera
+
+
+@router.post("/batch", response_model=list[CameraResponse], status_code=status.HTTP_201_CREATED)
+async def create_cameras_batch(
+    data: Union[CameraBatchCreate, list[CameraCreate]],
+    db: AsyncSession = Depends(get_db),
+):
+    """Add multiple individual cameras in batch. Each camera is stored and operated independently."""
+    camera_items = data.cameras if isinstance(data, CameraBatchCreate) else data
+    if not camera_items:
+        raise HTTPException(status_code=400, detail="No cameras provided")
+
+    created_cameras = []
+    for item in camera_items:
+        cam = Camera(
+            name=item.name,
+            rtsp_url=item.rtsp_url,
+            location=item.location,
+            is_active=item.is_active,
+        )
+        db.add(cam)
+        created_cameras.append(cam)
+
+    await db.commit()
+
+    response = []
+    for cam in created_cameras:
+        await db.refresh(cam)
+        # Each individual camera gets its own independent stream task
+        if cam.is_active:
+            await stream_processor.start_camera(cam.id, cam.name, cam.rtsp_url)
+        cr = CameraResponse.model_validate(cam)
+        cr.is_online = stream_processor.is_camera_online(cam.id) if cam.is_active else False
+        response.append(cr)
+        logger.info("Batch individual camera created: id=%d name='%s'", cam.id, cam.name)
+
+    return response
 
 
 @router.get("/{camera_id}", response_model=CameraResponse)

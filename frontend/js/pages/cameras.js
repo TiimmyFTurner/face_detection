@@ -309,7 +309,9 @@ const CamerasPage = {
      * Show add camera modal.
      */
     showAddModal() {
-        App.openModal(CameraForm.renderModal());
+        CameraForm._activeTab = 'direct';
+        CameraForm._parsedBatchCameras = [];
+        App.openModal(CameraForm.renderModal(), 'modal-md');
     },
 
     /**

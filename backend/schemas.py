@@ -20,6 +20,12 @@ class CameraCreate(BaseModel):
     is_active: bool = Field(default=True)
 
 
+class CameraBatchCreate(BaseModel):
+    """Schema for batch creating multiple individual cameras."""
+    cameras: list[CameraCreate] = Field(..., min_length=1)
+
+
+
 class CameraUpdate(BaseModel):
     """Schema for updating a camera (all fields optional)."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)

@@ -12,6 +12,7 @@ Endpoints:
 
 import asyncio
 import base64
+import concurrent.futures
 import logging
 
 import cv2
@@ -27,6 +28,8 @@ from backend.database import get_db
 from backend.models import Camera
 from backend.schemas import CameraCreate, CameraBatchCreate, CameraUpdate, CameraResponse, CameraTestResult
 from backend.stream_processor import stream_processor
+
+test_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="cam-test")
 
 logger = logging.getLogger(__name__)
 
@@ -185,33 +188,47 @@ async def test_camera_url(data: CameraCreate):
     return await _test_rtsp_connection(data.rtsp_url)
 
 
-async def _test_rtsp_connection(rtsp_url: str) -> CameraTestResult:
-    """Test an RTSP connection and capture a thumbnail."""
+def _open_and_read_test(rtsp_url: str):
+    cap = cv2.VideoCapture()
     try:
-        loop = asyncio.get_event_loop()
-        cap = await loop.run_in_executor(None, lambda: cv2.VideoCapture(rtsp_url))
+        if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC"):
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+        if hasattr(cv2, "CAP_PROP_READ_TIMEOUT_MSEC"):
+            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
 
-        if not cap.isOpened():
-            return CameraTestResult(success=False, message="Cannot connect to RTSP stream.")
+        opened = cap.open(rtsp_url, cv2.CAP_FFMPEG, [
+            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
+            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
+        ]) if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC") else cap.open(rtsp_url)
 
-        ret, frame = await loop.run_in_executor(None, cap.read)
-        await loop.run_in_executor(None, cap.release)
+        if not opened or not cap.isOpened():
+            return False, None, "Cannot connect to RTSP stream (timeout or unreachable)."
 
+        ret, frame = cap.read()
         if not ret or frame is None:
-            return CameraTestResult(success=False, message="Connected but failed to read frame.")
+            return False, None, "Connected but failed to read frame."
 
-        # Encode thumbnail as base64 JPEG
         _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         thumbnail_b64 = base64.b64encode(buffer.tobytes()).decode("utf-8")
-
-        return CameraTestResult(
-            success=True,
-            message="Connection successful.",
-            thumbnail_base64=thumbnail_b64,
-        )
-
+        return True, thumbnail_b64, "Connection successful."
     except Exception as e:
-        return CameraTestResult(success=False, message=f"Connection error: {str(e)}")
+        return False, None, f"Connection error: {str(e)}"
+    finally:
+        try:
+            cap.release()
+        except Exception:
+            pass
+
+
+async def _test_rtsp_connection(rtsp_url: str) -> CameraTestResult:
+    """Test an RTSP connection and capture a thumbnail without blocking event loop or other streams."""
+    loop = asyncio.get_running_loop()
+    success, thumb, msg = await loop.run_in_executor(test_executor, _open_and_read_test, rtsp_url)
+    return CameraTestResult(
+        success=success,
+        message=msg,
+        thumbnail_base64=thumb,
+    )
 
 
 @router.get("/{camera_id}/snapshot")
@@ -253,11 +270,6 @@ async def get_camera_stream(camera_id: int, db: AsyncSession = Depends(get_db)):
     async def frame_generator():
         while True:
             jpeg_bytes = stream_processor.get_latest_frame(camera_id)
-            if not jpeg_bytes:
-                test_res = await _test_rtsp_connection(camera.rtsp_url)
-                if test_res.success and test_res.thumbnail_base64:
-                    jpeg_bytes = base64.b64decode(test_res.thumbnail_base64)
-
             if jpeg_bytes:
                 yield (
                     b"--frame\r\n"

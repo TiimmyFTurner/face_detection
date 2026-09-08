@@ -11,7 +11,9 @@ Manages per-camera processing loops that:
 """
 
 import asyncio
+import concurrent.futures
 import logging
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -68,15 +70,16 @@ ws_manager = WebSocketManager()
 
 class StreamProcessor:
     """
-    Manages per-camera RTSP processing loops as asyncio background tasks.
+    Manages per-camera RTSP processing loops with dedicated background worker threads.
 
-    Each active camera gets its own task that reads frames, detects faces,
-    matches against known persons, and logs events.
+    Each active camera gets its own thread that ingests frames independently,
+    preventing thread starvation and ensuring that slow or offline cameras
+    never block or delay other streaming cameras.
     """
 
     def __init__(self) -> None:
-        self._tasks: dict[int, asyncio.Task] = {}  # camera_id -> task
-        self._stop_flags: dict[int, asyncio.Event] = {}  # camera_id -> stop event
+        self._threads: dict[int, threading.Thread] = {}  # camera_id -> worker thread
+        self._stop_events: dict[int, threading.Event] = {}  # camera_id -> stop event
         self._cooldown_cache: dict[tuple[int, Optional[int]], float] = {}  # (camera_id, person_id) -> last_log_time
         self._known_persons_cache: list[KnownPerson] = []
         self._latest_frames: dict[int, bytes] = {}  # camera_id -> JPEG bytes
@@ -89,6 +92,14 @@ class StreamProcessor:
         self._camera_connected: dict[int, bool] = {}  # camera_id -> is stream actively open & receiving frames
         self._watchdog_task: Optional[asyncio.Task] = None
         self._cache_lock = asyncio.Lock()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._ai_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="face-ai")
+        self._processing_cameras: set[int] = set()
+
+    @property
+    def _tasks(self):
+        """Backward compatibility alias for code checking camera task counts."""
+        return self._threads
 
     def is_camera_online(self, camera_id: int) -> bool:
         """
@@ -98,11 +109,12 @@ class StreamProcessor:
         if not self._camera_connected.get(camera_id, False):
             return False
         last_time = self._camera_last_frame_time.get(camera_id, 0.0)
-        return (time.time() - last_time) <= 15.0 and camera_id in self._tasks and not self._tasks[camera_id].done()
+        is_alive = camera_id in self._threads and self._threads[camera_id].is_alive()
+        return (time.time() - last_time) <= 15.0 and is_alive
 
     def get_online_cameras_count(self) -> int:
         """Count number of cameras that are actively connected and delivering frames."""
-        return sum(1 for cam_id in list(self._tasks.keys()) if self.is_camera_online(cam_id))
+        return sum(1 for cam_id in list(self._threads.keys()) if self.is_camera_online(cam_id))
 
     def is_camera_in_detection_window(self, camera_id: int) -> bool:
         """
@@ -123,7 +135,7 @@ class StreamProcessor:
             return cycle_time < burst
 
         # Stagger across registered active cameras to eliminate CPU spikes
-        active_ids = sorted(list(self._tasks.keys()))
+        active_ids = sorted(list(self._threads.keys()))
         if not active_ids:
             return cycle_time < burst
 
@@ -148,6 +160,7 @@ class StreamProcessor:
 
     async def start_all(self) -> None:
         """Start processing loops for all active cameras."""
+        self._loop = asyncio.get_running_loop()
         logger.info("Starting stream processor for all active cameras...")
         await self.refresh_known_persons()
         await self.refresh_zones()
@@ -168,7 +181,7 @@ class StreamProcessor:
                 name="zone-absence-watchdog",
             )
 
-        logger.info("Started %d camera streams and absence watchdog.", len(self._tasks))
+        logger.info("Started %d camera streams and absence watchdog.", len(self._threads))
 
     async def stop_all(self) -> None:
         """Stop all camera processing loops gracefully."""
@@ -181,48 +194,50 @@ class StreamProcessor:
                 pass
             self._watchdog_task = None
 
-        camera_ids = list(self._tasks.keys())
+        camera_ids = list(self._threads.keys())
         for camera_id in camera_ids:
             await self.stop_camera(camera_id)
         logger.info("All camera streams stopped.")
 
     async def start_camera(self, camera_id: int, camera_name: str, rtsp_url: str) -> None:
-        """Start a processing loop for a specific camera."""
-        # Stop existing task if running
-        if camera_id in self._tasks:
+        """Start a processing loop for a specific camera in a dedicated thread."""
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+
+        # Stop existing thread if running
+        if camera_id in self._threads:
             await self.stop_camera(camera_id)
 
         self._camera_names[camera_id] = camera_name
-        stop_event = asyncio.Event()
-        self._stop_flags[camera_id] = stop_event
+        stop_event = threading.Event()
+        self._stop_events[camera_id] = stop_event
 
-        task = asyncio.create_task(
-            self._camera_loop(camera_id, camera_name, rtsp_url, stop_event),
-            name=f"camera-{camera_id}",
+        thread = threading.Thread(
+            target=self._camera_worker,
+            args=(camera_id, camera_name, rtsp_url, stop_event),
+            name=f"cam-thread-{camera_id}",
+            daemon=True,
         )
-        self._tasks[camera_id] = task
-        logger.info("Started stream for camera %d ('%s').", camera_id, camera_name)
+        self._threads[camera_id] = thread
+        thread.start()
+        logger.info("Started dedicated worker thread for camera %d ('%s').", camera_id, camera_name)
 
     async def stop_camera(self, camera_id: int) -> None:
         """Stop the processing loop for a specific camera."""
-        if camera_id in self._stop_flags:
-            self._stop_flags[camera_id].set()
+        if camera_id in self._stop_events:
+            self._stop_events[camera_id].set()
 
-        if camera_id in self._tasks:
-            task = self._tasks.pop(camera_id)
-            try:
-                await asyncio.wait_for(task, timeout=5.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                task.cancel()
-            except Exception as e:
-                logger.warning("Error stopping camera %d: %s", camera_id, e)
+        thread = self._threads.pop(camera_id, None)
+        if thread and thread.is_alive():
+            await asyncio.to_thread(thread.join, timeout=2.0)
 
-        self._stop_flags.pop(camera_id, None)
+        self._stop_events.pop(camera_id, None)
         self._latest_frames.pop(camera_id, None)
         self._camera_names.pop(camera_id, None)
         self._camera_connected.pop(camera_id, None)
         self._camera_last_frame_time.pop(camera_id, None)
         self._last_preview_time.pop(camera_id, None)
+        self._processing_cameras.discard(camera_id)
         logger.info("Stopped stream for camera %d.", camera_id)
 
     async def refresh_known_persons(self) -> None:
@@ -331,7 +346,7 @@ class StreamProcessor:
 
                 for camera_id, zones in zones_snapshot:
                     # Only check active streaming cameras
-                    if camera_id not in self._tasks or self._tasks[camera_id].done():
+                    if camera_id not in self._threads or not self._threads[camera_id].is_alive():
                         continue
 
                     camera_name = self._camera_names.get(camera_id, f"Camera #{camera_id}")
@@ -448,18 +463,19 @@ class StreamProcessor:
 
             await asyncio.sleep(5)  # Check every 5 seconds
 
-    async def _camera_loop(
+    def _camera_worker(
         self,
         camera_id: int,
         camera_name: str,
         rtsp_url: str,
-        stop_event: asyncio.Event,
+        stop_event: threading.Event,
     ) -> None:
         """
-        Main per-camera processing loop.
-        Runs in an asyncio task, offloading blocking OpenCV I/O to a thread executor.
+        Dedicated per-camera worker thread.
+        Performs non-blocking RTSP connection and continuous frame capture
+        isolated from Python's asyncio thread pool.
         """
-        backoff = 2  # Initial reconnect delay in seconds
+        backoff = 2
         frame_count = 0
 
         while not stop_event.is_set():
@@ -467,10 +483,18 @@ class StreamProcessor:
             try:
                 logger.info("Connecting to RTSP stream for camera %d: %s", camera_id, rtsp_url)
 
-                # Open RTSP stream in thread to avoid blocking event loop
-                cap = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: cv2.VideoCapture(rtsp_url)
-                )
+                # Open RTSP stream using cv2.CAP_FFMPEG with fast connection and read timeouts
+                try:
+                    cap = cv2.VideoCapture(
+                        rtsp_url,
+                        cv2.CAP_FFMPEG,
+                        [
+                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
+                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
+                        ],
+                    )
+                except Exception:
+                    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
 
                 if not cap.isOpened():
                     raise ConnectionError(f"Cannot open RTSP stream: {rtsp_url}")
@@ -480,10 +504,7 @@ class StreamProcessor:
                 frame_count = 0
 
                 while not stop_event.is_set():
-                    # Read frame in thread
-                    ret, frame = await asyncio.get_event_loop().run_in_executor(
-                        None, cap.read
-                    )
+                    ret, frame = cap.read()
 
                     if not ret or frame is None:
                         logger.warning("Frame read failed for camera %d. Reconnecting...", camera_id)
@@ -495,34 +516,37 @@ class StreamProcessor:
                     self._camera_connected[camera_id] = True
                     self._camera_last_frame_time[camera_id] = now
 
-                    # Throttled JPEG preview encoding (avoids hundreds of encodings/sec across 15 cameras)
+                    # Throttled JPEG preview encoding (avoids high CPU preview encoding across 70+ cameras)
                     last_preview = self._last_preview_time.get(camera_id, 0.0)
                     preview_interval = 1.0 / max(0.1, getattr(settings, "live_preview_fps", 1.0))
                     if (now - last_preview) >= preview_interval:
                         try:
-                            ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                            ret_enc, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
                             if ret_enc:
                                 self._latest_frames[camera_id] = jpeg_buf.tobytes()
                                 self._last_preview_time[camera_id] = now
                         except Exception:
                             pass
 
-                    # ── Duty Cycle Gating (e.g. 2s active detection window every 30s cycle) ──
+                    # Duty Cycle Gating: only run AI during camera's active detection window
                     if not self.is_camera_in_detection_window(camera_id):
-                        # Outside active window: sleep briefly and keep reading frames without AI overhead
-                        await asyncio.sleep(0.01)
+                        time.sleep(0.02)
                         continue
 
-                    # Frame skipping: only process every Nth frame during the active 2s burst
+                    # Frame skipping: process every Nth frame
                     if frame_count % settings.frame_skip != 0:
-                        await asyncio.sleep(0.005)
+                        time.sleep(0.005)
                         continue
 
-                    # Process frame (detection + matching + logging)
-                    await self._process_frame(frame, camera_id, camera_name)
+                    # Dispatch frame processing to asyncio loop via thread-safe call
+                    if self._loop and self._loop.is_running() and camera_id not in self._processing_cameras:
+                        self._processing_cameras.add(camera_id)
+                        asyncio.run_coroutine_threadsafe(
+                            self._safe_process_frame(frame, camera_id, camera_name),
+                            self._loop,
+                        )
 
-                    # Yield control to event loop
-                    await asyncio.sleep(0.01)
+                    time.sleep(0.01)
 
             except Exception as e:
                 self._camera_connected[camera_id] = False
@@ -534,12 +558,29 @@ class StreamProcessor:
             finally:
                 self._camera_connected[camera_id] = False
                 if cap is not None:
-                    await asyncio.get_event_loop().run_in_executor(None, cap.release)
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
 
-            # Exponential backoff before reconnecting
+            # Interruptible backoff delay
             if not stop_event.is_set():
-                await asyncio.sleep(backoff)
+                stop_event.wait(timeout=backoff)
                 backoff = min(backoff * 2, settings.max_reconnect_backoff)
+
+    async def _safe_process_frame(
+        self,
+        frame: np.ndarray,
+        camera_id: int,
+        camera_name: str,
+    ) -> None:
+        """Helper to run frame processing on asyncio loop and ensure processing lock is released."""
+        try:
+            await self._process_frame(frame, camera_id, camera_name)
+        except Exception as e:
+            logger.error("Error processing frame for camera %d: %s", camera_id, e)
+        finally:
+            self._processing_cameras.discard(camera_id)
 
     async def _process_frame(
         self,
@@ -597,9 +638,9 @@ class StreamProcessor:
         else:
             small = input_frame
 
-        # Detect faces (blocking call offloaded to thread)
+        # Detect faces (blocking call offloaded to dedicated AI thread pool)
         faces: list[DetectedFace] = await asyncio.get_event_loop().run_in_executor(
-            None, face_engine.detect_and_embed, small
+            self._ai_executor, face_engine.detect_and_embed, small
         )
 
         if not faces:

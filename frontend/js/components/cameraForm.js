@@ -7,6 +7,7 @@
  */
 const CameraForm = {
     _activeTab: 'direct', // 'direct' | 'builder' | 'batch'
+    _batchInputMode: 'paste', // 'paste' | 'range'
     _editCamera: null,
     _parsedBatchCameras: [],
 
@@ -513,13 +514,167 @@ const CameraForm = {
 
     renderBatchForm() {
         const defaultPrefix = I18n.locale === 'fa' ? 'دوربین' : 'Camera';
+        const isRange = CameraForm._batchInputMode === 'range';
         return `
             <div class="batch-form-container">
-                <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5;">
+                <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.5;">
                     ${I18n.t('batch_import_desc')}
                 </p>
 
-                <div class="builder-row" style="margin-bottom: 0.75rem;">
+                <!-- Sub-nav: Paste / TXT vs IP Range -->
+                <div class="batch-subnav" role="tablist">
+                    <button 
+                        type="button" 
+                        class="batch-subnav-btn ${!isRange ? 'active' : ''}" 
+                        id="batch-subnav-paste"
+                        onclick="CameraForm.switchBatchMode('paste')"
+                    >
+                        ${I18n.t('batch_subtab_paste')}
+                    </button>
+                    <button 
+                        type="button" 
+                        class="batch-subnav-btn ${isRange ? 'active' : ''}" 
+                        id="batch-subnav-range"
+                        onclick="CameraForm.switchBatchMode('range')"
+                    >
+                        ${I18n.t('batch_subtab_ip_range')}
+                    </button>
+                </div>
+
+                <!-- Mode 1: Paste / TXT File -->
+                <div id="batch-paste-mode-container" style="display: ${!isRange ? 'block' : 'none'};">
+                    <div class="batch-toolbar">
+                        <label class="form-label" style="margin-bottom: 0;" for="batch-textarea">
+                            ${I18n.t('batch_paste_label')}
+                        </label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input 
+                                type="file" 
+                                id="batch-file-input" 
+                                accept=".txt" 
+                                style="display: none;" 
+                                onchange="CameraForm.handleFileUpload(event)"
+                            />
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="CameraForm.triggerFileUpload()">
+                                ${I18n.t('batch_upload_btn')}
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="CameraForm.clearBatch()">
+                                ${I18n.t('batch_clear_btn')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <textarea
+                        id="batch-textarea"
+                        class="form-input batch-textarea"
+                        placeholder="${CameraForm.escapeAttr(I18n.t('batch_paste_placeholder'))}"
+                        oninput="CameraForm.parseBatchUrls()"
+                    ></textarea>
+                </div>
+
+                <!-- Mode 2: IP Range Generator -->
+                <div id="batch-range-mode-container" style="display: ${isRange ? 'block' : 'none'};">
+                    <div class="batch-range-box">
+                        <div class="range-ip-row">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-start-ip">${I18n.t('range_start_ip')}</label>
+                                <input
+                                    class="form-input"
+                                    type="text"
+                                    id="range-start-ip"
+                                    placeholder="${CameraForm.escapeAttr(I18n.t('range_start_ip_placeholder'))}"
+                                    dir="ltr"
+                                    style="text-align: left;"
+                                    oninput="CameraForm.updateRangeCountPreview()"
+                                />
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-end-ip">${I18n.t('range_end_ip')}</label>
+                                <input
+                                    class="form-input"
+                                    type="text"
+                                    id="range-end-ip"
+                                    placeholder="${CameraForm.escapeAttr(I18n.t('range_end_ip_placeholder'))}"
+                                    dir="ltr"
+                                    style="text-align: left;"
+                                    oninput="CameraForm.updateRangeCountPreview()"
+                                />
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-port">${I18n.t('builder_port')}</label>
+                                <input
+                                    class="form-input"
+                                    type="number"
+                                    id="range-port"
+                                    value="554"
+                                    placeholder="554"
+                                    dir="ltr"
+                                    style="text-align: left;"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="builder-credentials-row">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-username">${I18n.t('builder_username')}</label>
+                                <input
+                                    class="form-input"
+                                    type="text"
+                                    id="range-username"
+                                    placeholder="${CameraForm.escapeAttr(I18n.t('builder_username_placeholder'))}"
+                                    dir="ltr"
+                                    style="text-align: left;"
+                                />
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-password">${I18n.t('builder_password')}</label>
+                                <input
+                                    class="form-input"
+                                    type="password"
+                                    id="range-password"
+                                    placeholder="${CameraForm.escapeAttr(I18n.t('builder_password_placeholder'))}"
+                                    dir="ltr"
+                                    style="text-align: left;"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="builder-row">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-preset">${I18n.t('builder_preset')}</label>
+                                <select class="form-input" id="range-preset" onchange="CameraForm.onRangePresetChange(this)">
+                                    <option value="/h264Preview_01_main">${I18n.t('preset_generic')}</option>
+                                    <option value="/Streaming/Channels/101">${I18n.t('preset_hikvision_main')}</option>
+                                    <option value="/Streaming/Channels/102">${I18n.t('preset_hikvision_sub')}</option>
+                                    <option value="/cam/realmonitor?channel=1&subtype=0">${I18n.t('preset_dahua_main')}</option>
+                                    <option value="/cam/realmonitor?channel=1&subtype=1">${I18n.t('preset_dahua_sub')}</option>
+                                    <option value="/media/video1">${I18n.t('preset_uniview')}</option>
+                                    <option value="custom">${I18n.t('preset_custom')}</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="range-path">${I18n.t('builder_path')}</label>
+                                <input
+                                    class="form-input"
+                                    type="text"
+                                    id="range-path"
+                                    value="/h264Preview_01_main"
+                                    placeholder="${CameraForm.escapeAttr(I18n.t('builder_path_placeholder'))}"
+                                    dir="ltr"
+                                    style="text-align: left;"
+                                />
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn-generate-range" id="btn-generate-range" onclick="CameraForm.generateFromIpRange()">
+                            <span>⚡</span>
+                            <span id="range-generate-btn-text">${I18n.t('range_generate_btn', { count: 0 })}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Shared Settings: Prefix & Location -->
+                <div class="builder-row" style="margin-top: 1rem; margin-bottom: 0.75rem;">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label" for="batch-prefix">${I18n.t('batch_name_prefix')}</label>
                         <input
@@ -542,34 +697,6 @@ const CameraForm = {
                         />
                     </div>
                 </div>
-
-                <div class="batch-toolbar" style="margin-top: 1rem;">
-                    <label class="form-label" style="margin-bottom: 0;" for="batch-textarea">
-                        ${I18n.t('batch_paste_label')}
-                    </label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input 
-                            type="file" 
-                            id="batch-file-input" 
-                            accept=".txt" 
-                            style="display: none;" 
-                            onchange="CameraForm.handleFileUpload(event)"
-                        />
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="CameraForm.triggerFileUpload()">
-                            ${I18n.t('batch_upload_btn')}
-                        </button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="CameraForm.clearBatch()">
-                            ${I18n.t('batch_clear_btn')}
-                        </button>
-                    </div>
-                </div>
-
-                <textarea
-                    id="batch-textarea"
-                    class="form-input batch-textarea"
-                    placeholder="${CameraForm.escapeAttr(I18n.t('batch_paste_placeholder'))}"
-                    oninput="CameraForm.parseBatchUrls()"
-                ></textarea>
 
                 <!-- Parsed Live Preview Table -->
                 <div class="batch-preview-wrapper" id="batch-preview-container">
@@ -610,6 +737,146 @@ const CameraForm = {
                 </div>
             </div>
         `;
+    },
+
+    switchBatchMode(mode) {
+        CameraForm._batchInputMode = mode;
+        const pasteBox = document.getElementById('batch-paste-mode-container');
+        const rangeBox = document.getElementById('batch-range-mode-container');
+        const pasteBtn = document.getElementById('batch-subnav-paste');
+        const rangeBtn = document.getElementById('batch-subnav-range');
+
+        if (pasteBtn) pasteBtn.classList.toggle('active', mode === 'paste');
+        if (rangeBtn) rangeBtn.classList.toggle('active', mode === 'range');
+
+        if (pasteBox) pasteBox.style.display = mode === 'paste' ? 'block' : 'none';
+        if (rangeBox) rangeBox.style.display = mode === 'range' ? 'block' : 'none';
+
+        if (mode === 'range') {
+            CameraForm.updateRangeCountPreview();
+        }
+    },
+
+    onRangePresetChange(select) {
+        const pathInput = document.getElementById('range-path');
+        if (!pathInput) return;
+
+        if (select.value !== 'custom') {
+            pathInput.value = select.value;
+        } else {
+            pathInput.value = '';
+            pathInput.focus();
+        }
+    },
+
+    parseIpToLong(ipStr) {
+        if (!ipStr || typeof ipStr !== 'string') return null;
+        const parts = ipStr.trim().split('.');
+        if (parts.length !== 4) return null;
+        let num = 0;
+        for (let i = 0; i < 4; i++) {
+            const p = parseInt(parts[i], 10);
+            if (isNaN(p) || p < 0 || p > 255) return null;
+            num = (num << 8) + p;
+        }
+        return (num >>> 0);
+    },
+
+    longToIp(num) {
+        return [
+            (num >>> 24) & 255,
+            (num >>> 16) & 255,
+            (num >>> 8) & 255,
+            num & 255
+        ].join('.');
+    },
+
+    resolveRangeBounds() {
+        const startStr = (document.getElementById('range-start-ip')?.value || '').trim();
+        let endStr = (document.getElementById('range-end-ip')?.value || '').trim();
+
+        if (!startStr) return null;
+
+        const startLong = CameraForm.parseIpToLong(startStr);
+        if (startLong === null) return null;
+
+        if (endStr && !endStr.includes('.')) {
+            // Short notation: only last octet specified (e.g. "20")
+            const lastOctet = parseInt(endStr, 10);
+            if (!isNaN(lastOctet) && lastOctet >= 0 && lastOctet <= 255) {
+                const parts = startStr.split('.');
+                endStr = `${parts[0]}.${parts[1]}.${parts[2]}.${lastOctet}`;
+            }
+        }
+
+        const endLong = CameraForm.parseIpToLong(endStr);
+        if (endLong === null) return null;
+
+        return { 
+            startLong, 
+            endLong, 
+            count: (endLong >= startLong ? (endLong - startLong + 1) : 0) 
+        };
+    },
+
+    updateRangeCountPreview() {
+        const bounds = CameraForm.resolveRangeBounds();
+        const btnText = document.getElementById('range-generate-btn-text');
+        const count = bounds && bounds.count > 0 ? bounds.count : 0;
+        if (btnText) {
+            btnText.textContent = I18n.t('range_generate_btn', { count });
+        }
+    },
+
+    generateFromIpRange() {
+        const bounds = CameraForm.resolveRangeBounds();
+        if (!bounds) {
+            App.toast(I18n.t('range_invalid_ips'), 'error');
+            return;
+        }
+
+        if (bounds.endLong < bounds.startLong) {
+            App.toast(I18n.t('range_end_smaller'), 'error');
+            return;
+        }
+
+        if (bounds.count > 256) {
+            App.toast(I18n.t('range_too_large'), 'warning');
+            return;
+        }
+
+        const port = (document.getElementById('range-port')?.value || '554').trim() || '554';
+        const username = (document.getElementById('range-username')?.value || '').trim();
+        const password = (document.getElementById('range-password')?.value || '').trim();
+        let path = (document.getElementById('range-path')?.value || '').trim();
+
+        if (path && !path.startsWith('/') && !path.startsWith('?')) {
+            path = '/' + path;
+        }
+
+        let creds = '';
+        if (username && password) {
+            creds = `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
+        } else if (username) {
+            creds = `${encodeURIComponent(username)}@`;
+        }
+
+        const portPart = port ? `:${port}` : ':554';
+
+        const generatedUrls = [];
+        for (let num = bounds.startLong; num <= bounds.endLong; num++) {
+            const ip = CameraForm.longToIp(num);
+            generatedUrls.push(`rtsp://${creds}${ip}${portPart}${path}`);
+        }
+
+        // Sync with textarea as well
+        const textarea = document.getElementById('batch-textarea');
+        if (textarea) {
+            textarea.value = generatedUrls.join('\n');
+        }
+
+        CameraForm.parseBatchUrls();
+        App.toast(I18n.t('range_generated_toast', { count: generatedUrls.length }), 'success');
     },
 
     triggerFileUpload() {

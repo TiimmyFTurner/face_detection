@@ -195,6 +195,19 @@ const I18n = {
             batch_importing: 'در حال ذخیره‌سازی و راه‌اندازی دوربین‌ها...',
             batch_err_no_cameras: 'حداقل یک آدرس RTSP معتبر باید وارد شود.',
 
+            // Batch IP Range Generator
+            batch_subtab_paste: '📋 چسباندن متن / فایل متنی',
+            batch_subtab_ip_range: '🌐 بر اساس رنج آی‌پی (IP Range)',
+            range_start_ip: 'آدرس IP شروع',
+            range_start_ip_placeholder: 'مثلاً 192.168.0.10',
+            range_end_ip: 'آدرس IP پایان',
+            range_end_ip_placeholder: 'مثلاً 192.168.0.20 یا 20',
+            range_generate_btn: '⚡ تولید و افزودن به لیست ({count} دوربین)',
+            range_invalid_ips: 'لطفاً آدرس IP شروع و پایان معتبر وارد کنید.',
+            range_end_smaller: 'آدرس IP پایان باید بزرگتر یا مساوی IP شروع باشد.',
+            range_too_large: 'حداکثر ۲۵۶ دوربین در هر بار رنج IP قابل تولید است.',
+            range_generated_toast: '{count} آدرس دوربین از رنج IP با موفقیت به لیست افزوده شد.',
+
             // Identities (Persons) Page
             persons_title: 'مدیریت هویت‌ها و پرسنل',
             add_person_btn: '＋ ثبت هویت جدید',
@@ -630,6 +643,19 @@ const I18n = {
             batch_import_success: '{count} cameras imported successfully!',
             batch_importing: 'Saving and starting cameras...',
             batch_err_no_cameras: 'Please provide at least one valid RTSP link.',
+
+            // Batch IP Range Generator
+            batch_subtab_paste: '📋 Paste / .TXT File',
+            batch_subtab_ip_range: '🌐 IP Range Generator',
+            range_start_ip: 'Start IP Address',
+            range_start_ip_placeholder: 'e.g., 192.168.0.10',
+            range_end_ip: 'End IP Address',
+            range_end_ip_placeholder: 'e.g., 192.168.0.20 or 20',
+            range_generate_btn: '⚡ Generate & Add to List ({count} Cameras)',
+            range_invalid_ips: 'Please enter valid Start and End IP addresses.',
+            range_end_smaller: 'End IP must be greater than or equal to Start IP.',
+            range_too_large: 'Maximum 256 cameras can be generated per IP range.',
+            range_generated_toast: '{count} camera URLs generated from IP range successfully!',
 
             // Identities (Persons) Page
             persons_title: 'Identity Management',

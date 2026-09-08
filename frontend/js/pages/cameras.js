@@ -310,6 +310,7 @@ const CamerasPage = {
      */
     showAddModal() {
         CameraForm._activeTab = 'direct';
+        CameraForm._batchInputMode = 'paste';
         CameraForm._parsedBatchCameras = [];
         App.openModal(CameraForm.renderModal(), 'modal-md');
     },

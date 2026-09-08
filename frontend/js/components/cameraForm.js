@@ -434,9 +434,9 @@ const CameraForm = {
 
         let creds = '';
         if (username && password) {
-            creds = `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
+            creds = `${username}:${password}@`;
         } else if (username) {
-            creds = `${encodeURIComponent(username)}@`;
+            creds = `${username}@`;
         }
 
         const portPart = port ? `:${port}` : ':554';
@@ -856,9 +856,9 @@ const CameraForm = {
 
         let creds = '';
         if (username && password) {
-            creds = `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
+            creds = `${username}:${password}@`;
         } else if (username) {
-            creds = `${encodeURIComponent(username)}@`;
+            creds = `${username}@`;
         }
 
         const portPart = port ? `:${port}` : ':554';

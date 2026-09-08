@@ -72,20 +72,74 @@ class FaceEngine:
             return
 
         try:
+            # On Windows, register CUDA Toolkit & nvidia pip package DLL directories
+            import os
+            import sys
+            if os.name == "nt":
+                # Check standard CUDA Toolkit paths
+                cuda_paths = [
+                    os.environ.get("CUDA_PATH", ""),
+                    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin",
+                    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5\bin",
+                    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\bin",
+                    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\bin",
+                    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin",
+                ]
+                for cp in cuda_paths:
+                    if cp and os.path.isdir(cp):
+                        try:
+                            os.add_dll_directory(cp)
+                            logger.info("Added CUDA DLL directory: %s", cp)
+                        except Exception:
+                            pass
+
+                # Check pip-installed nvidia packages in virtualenv site-packages
+                try:
+                    import site
+                    search_bases = list(site.getsitepackages()) if hasattr(site, "getsitepackages") else []
+                    search_bases.append(sys.prefix)
+                    for base in search_bases:
+                        nv_root = os.path.join(base, "Lib", "site-packages", "nvidia") if not os.path.isdir(os.path.join(base, "nvidia")) else os.path.join(base, "nvidia")
+                        if os.path.isdir(nv_root):
+                            for sub in os.listdir(nv_root):
+                                bdir = os.path.join(nv_root, sub, "bin")
+                                if os.path.isdir(bdir):
+                                    try:
+                                        os.add_dll_directory(bdir)
+                                    except Exception:
+                                        pass
+                except Exception:
+                    pass
+
+            import onnxruntime as ort
+            available = ort.get_available_providers()
+            logger.info("Available ONNX Runtime execution providers: %s", available)
+
+            if "CUDAExecutionProvider" in available:
+                logger.info("✅ CUDAExecutionProvider detected! GPU acceleration (NVIDIA CUDA) is ACTIVE.")
+                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                ctx_id = 0
+            else:
+                logger.warning(
+                    "⚠️ CUDAExecutionProvider NOT found in onnxruntime! Running on CPU. "
+                    "To enable GPU, run: pip uninstall -y onnxruntime onnxruntime-gpu && pip install onnxruntime-gpu"
+                )
+                providers = ["CPUExecutionProvider"]
+                ctx_id = -1
+
             from insightface.app import FaceAnalysis
 
             logger.info(
-                "Initializing InsightFace with model='%s'...",
+                "Initializing InsightFace with model='%s' on providers=%s...",
                 settings.insightface_model,
+                providers,
             )
 
-            # Try GPU first, fall back to CPU
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
             self._app = FaceAnalysis(
                 name=settings.insightface_model,
                 providers=providers,
             )
-            self._app.prepare(ctx_id=0, det_size=(640, 640))
+            self._app.prepare(ctx_id=ctx_id, det_size=(640, 640))
 
             self._initialized = True
             logger.info("FaceEngine initialized successfully.")

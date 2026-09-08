@@ -251,6 +251,13 @@ const I18n = {
             photos_added_success: 'عکس‌های جدید با موفقیت اضافه شدند!',
             err_enter_name: 'لطفاً نام را وارد نمایید.',
             err_select_photo: 'لطفاً حداقل یک عکس چهره انتخاب کنید.',
+            existing_photos_title: 'عکس‌های مرجع ذخیره‌شده ({count})',
+            no_existing_photos: 'هنوز هیچ عکس مرجعی برای این شخص ذخیره نشده است.',
+            delete_photo_confirm: 'آیا از حذف این عکس مرجع مطمئن هستید؟ الگوی شناسایی این عکس نیز حذف خواهد شد.',
+            photo_deleted_success: 'عکس مرجع با موفقیت حذف شد.',
+            btn_delete_photo: 'حذف این عکس',
+            photos_remaining_count: '{count} عکس ثبت‌شده',
+            add_more_photos_section: 'افزودن عکس‌های مرجع جدید',
 
             // Zone Monitoring & Shifts Page
             zones_title: '🎯 پایش منطقه‌ها و زمان‌بندی شیفت‌ها',
@@ -629,6 +636,13 @@ const I18n = {
             photos_added_success: 'Photos added successfully!',
             err_enter_name: 'Please enter a name.',
             err_select_photo: 'Please upload at least one reference photo.',
+            existing_photos_title: 'Saved Reference Photos ({count})',
+            no_existing_photos: 'No reference photos saved for this person yet.',
+            delete_photo_confirm: 'Are you sure you want to delete this reference photo? Its face embedding will also be removed.',
+            photo_deleted_success: 'Reference photo removed successfully.',
+            btn_delete_photo: 'Delete this photo',
+            photos_remaining_count: '{count} saved photo(s)',
+            add_more_photos_section: 'Add New Reference Photos',
 
             // Zone Monitoring & Shifts Page
             zones_title: '🎯 Zone Monitoring & Shift Schedules',

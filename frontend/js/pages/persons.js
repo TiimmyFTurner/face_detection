@@ -256,7 +256,8 @@ const PersonsPage = {
      */
     showAddPhotosModal(personId, personName) {
         PersonForm.reset();
-        App.openModal(PersonForm.renderAddPhotosModal(personId, personName));
+        App.openModal(PersonForm.renderAddPhotosModal(personId, personName), 'modal-lg');
+        PersonForm.loadExistingPhotos(personId);
     },
 
     /**

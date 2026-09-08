@@ -28,6 +28,7 @@ from backend.face_engine import face_engine
 from backend.models import Person, PersonEmbedding, Event, Camera, CameraZone
 from backend.schemas import (
     PersonResponse,
+    PersonPhotoItem,
     PersonUpdate,
     PersonAnalyticsResponse,
     PersonSummaryStats,
@@ -74,15 +75,21 @@ def _build_person_response(
     summary: PersonSummaryStats | None = None,
 ) -> dict:
     """Build a PersonResponse dict from ORM objects."""
+    photo_items = [
+        {
+            "id": e.id,
+            "url": f"/api/snapshots/ref_{Path(e.reference_photo_path).name}",
+            "created_at": e.created_at,
+        }
+        for e in embeddings
+    ]
     return {
         "id": person.id,
         "name": person.name,
         "role": person.role,
         "embedding_count": len(embeddings),
-        "reference_photos": [
-            f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
-            for e in embeddings
-        ],
+        "reference_photos": [p["url"] for p in photo_items],
+        "photos": photo_items,
         "created_at": person.created_at,
         "summary": summary,
     }
@@ -419,6 +426,81 @@ async def add_photos(
     embeddings = emb_result.scalars().all()
 
     return _build_person_response(person, embeddings)
+
+
+@router.get("/{person_id}/photos", response_model=list[PersonPhotoItem])
+async def get_person_photos(person_id: int, db: AsyncSession = Depends(get_db)):
+    """Get all reference photos and embedding IDs for a person."""
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    emb_result = await db.execute(
+        select(PersonEmbedding)
+        .where(PersonEmbedding.person_id == person.id)
+        .order_by(PersonEmbedding.id.asc())
+    )
+    embeddings = emb_result.scalars().all()
+    return [
+        PersonPhotoItem(
+            id=e.id,
+            url=f"/api/snapshots/ref_{Path(e.reference_photo_path).name}",
+            created_at=e.created_at,
+        )
+        for e in embeddings
+    ]
+
+
+@router.delete("/{person_id}/photos/{photo_id}")
+async def delete_person_photo(
+    person_id: int,
+    photo_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a specific reference photo and its face embedding."""
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    emb_result = await db.execute(
+        select(PersonEmbedding).where(
+            and_(PersonEmbedding.id == photo_id, PersonEmbedding.person_id == person.id)
+        )
+    )
+    embedding = emb_result.scalar_one_or_none()
+    if not embedding:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    # Delete physical reference photo file
+    try:
+        Path(embedding.reference_photo_path).unlink(missing_ok=True)
+    except Exception as e:
+        logger.warning("Failed to delete reference photo file: %s", e)
+
+    await db.delete(embedding)
+    await db.commit()
+
+    # Refresh the known persons cache in stream processor
+    await stream_processor.refresh_known_persons()
+
+    # Query remaining count
+    count_res = await db.execute(
+        select(func.count(PersonEmbedding.id)).where(PersonEmbedding.person_id == person.id)
+    )
+    remaining_count = count_res.scalar() or 0
+
+    logger.info(
+        "Deleted photo id=%d for person id=%d (remaining: %d)",
+        photo_id,
+        person_id,
+        remaining_count,
+    )
+
+    return {
+        "success": True,
+        "deleted_photo_id": photo_id,
+        "remaining_count": remaining_count,
+    }
 
 
 @router.get("/{person_id}/analytics", response_model=PersonAnalyticsResponse)

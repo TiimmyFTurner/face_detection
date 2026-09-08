@@ -2168,6 +2168,26 @@ html[dir="rtl"] textarea {
     }
 }
 
+/* ── Existing Reference Photo Cards ─────────────────────── */
+.existing-photo-card {
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.existing-photo-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent-blue) !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.existing-photo-card .btn-delete-photo {
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.existing-photo-card .btn-delete-photo:hover {
+    transform: scale(1.12);
+    background-color: #f43f5e !important;
+}
+
 /* ── Print Styles ────────────────────────────────────────── */
 @media print {
     body {

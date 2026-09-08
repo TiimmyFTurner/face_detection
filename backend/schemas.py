@@ -184,6 +184,15 @@ class PersonSummaryStats(BaseModel):
 
 
 
+class PersonPhotoItem(BaseModel):
+    """A reference photo item with its embedding ID and URL."""
+    id: int
+    url: str
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
 class PersonResponse(BaseModel):
     """Schema for person API responses."""
     id: int
@@ -191,6 +200,7 @@ class PersonResponse(BaseModel):
     role: str
     embedding_count: int = 0
     reference_photos: list[str] = []
+    photos: list[PersonPhotoItem] = []
     created_at: datetime
     summary: Optional[PersonSummaryStats] = None
 

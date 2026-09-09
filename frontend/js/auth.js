@@ -17,6 +17,9 @@ const Auth = {
             return false;
         }
 
+        // Keep cookie in sync for <img> tags and media streams
+        document.cookie = `access_token=${this._token}; path=/; max-age=604800; SameSite=Lax`;
+
         try {
             // Validate token and fetch current user profile + effective permissions
             const user = await App.api('/api/auth/me');
@@ -80,6 +83,7 @@ const Auth = {
         this._token = res.access_token;
         this._user = res.user;
         localStorage.setItem(this._tokenKey, this._token);
+        document.cookie = `access_token=${this._token}; path=/; max-age=604800; SameSite=Lax`;
         this._triggerAuthChange();
         this.updateUserBadge();
         App.closeModal();
@@ -98,6 +102,7 @@ const Auth = {
         this._token = null;
         this._user = null;
         localStorage.removeItem(this._tokenKey);
+        document.cookie = 'access_token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         this._triggerAuthChange();
         this.updateUserBadge();
         this.showLoginModal();

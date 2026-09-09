@@ -19,7 +19,7 @@ from typing import Any
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from sqlalchemy import select, func, and_, desc
+from sqlalchemy import select, func, and_, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission
@@ -604,10 +604,16 @@ async def get_person_analytics(
 
     has_assigned_shift = len(shifts_info) > 0
 
-    # Fetch all events for this person
+    # Fetch all actual face detection events for this person (exclude alerts)
     events_res = await db.execute(
         select(Event)
-        .where(Event.person_id == person_id)
+        .where(
+            Event.person_id == person_id,
+            or_(
+                Event.alert_type.is_(None),
+                Event.alert_type.notin_(["absence_timeout", "camera_disconnected"]),
+            )
+        )
         .order_by(Event.timestamp.desc())
     )
     events = events_res.scalars().all()
@@ -798,7 +804,11 @@ async def get_person_analytics(
                     shift_dur_mins = 480
 
                 pres_mins = min(shift_dur_mins, max(0, dur_secs // 60))
-                day_absence_mins = max(0, shift_dur_mins - pres_mins)
+                is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
+                if i == 0 and is_cam_offline:
+                    day_absence_mins = 0
+                else:
+                    day_absence_mins = max(0, shift_dur_mins - pres_mins)
                 day_absence_str = _format_duration(day_absence_mins * 60)
 
             daily_activity.append(
@@ -830,7 +840,7 @@ async def get_person_analytics(
             shift_dur_mins = 0
             if is_sched_day and matching_shift:
                 is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
-                if day_offset == 0 and is_cam_offline:
+                if i == 0 and is_cam_offline:
                     arr_stat = "camera_offline"
                     day_absence_mins = 0
                     day_absence_str = "0m"

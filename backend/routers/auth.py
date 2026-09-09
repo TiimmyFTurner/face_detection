@@ -5,12 +5,13 @@ Authentication Router — Login, Logout, Session Info, and Password Change.
 from datetime import datetime, timezone
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.auth import (
+    TOKEN_EXPIRE_SECONDS,
     create_access_token,
     get_current_user,
     get_user_permissions,
@@ -54,7 +55,7 @@ def _build_user_response(user: User) -> UserResponse:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(data: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
     """Authenticate user with username and password, returning signed Bearer token."""
     username = data.username.strip()
     stmt = select(User).options(selectinload(User.role)).where(User.username == username)
@@ -83,6 +84,16 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     token = create_access_token(user.id, user.username)
     logger.info("User '%s' logged in successfully.", user.username)
 
+    # Set cookie for browser resources like <img> tags and MJPEG streams
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        max_age=TOKEN_EXPIRE_SECONDS,
+        httponly=False,
+        samesite="lax",
+        path="/",
+    )
+
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -91,9 +102,10 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
+async def logout(response: Response, current_user: User = Depends(get_current_user)):
     """Client logout acknowledgment."""
     logger.info("User '%s' logged out.", current_user.username)
+    response.delete_cookie(key="access_token", path="/")
     return {"success": True, "message": "Logged out successfully"}
 
 

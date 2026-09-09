@@ -225,8 +225,9 @@ const CamerasPage = {
         const camera = CamerasPage._cameras.find(c => c.id === cameraId);
         if (!camera) return;
 
-        const streamUrl = `/api/cameras/${camera.id}/stream?t=${Date.now()}`;
-        const snapshotUrl = `/api/cameras/${camera.id}/snapshot?t=${Date.now()}`;
+        const tokenParam = (typeof Auth !== 'undefined' && Auth.getToken()) ? `&token=${encodeURIComponent(Auth.getToken())}` : '';
+        const streamUrl = `/api/cameras/${camera.id}/stream?t=${Date.now()}${tokenParam}`;
+        const snapshotUrl = `/api/cameras/${camera.id}/snapshot?t=${Date.now()}${tokenParam}`;
         let liveStatusText = I18n.t('inactive');
         let liveStatusClass = 'inactive';
         if (camera.is_active) {
@@ -238,6 +239,8 @@ const CamerasPage = {
                 liveStatusClass = 'disconnected';
             }
         }
+
+        const isOffline = camera.is_active && !camera.is_online;
 
         const content = `
             <div class="modal-header">
@@ -252,6 +255,18 @@ const CamerasPage = {
             </div>
 
             <div class="modal-body" style="padding: 1.25rem;">
+                ${isOffline ? `
+                    <div style="background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 8px; padding: 0.6rem 0.9rem; margin-bottom: 0.75rem; font-size: 0.82rem; color: #facc15; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span>⚠️</span>
+                            <span>${I18n.isRTL() ? 'ارتباط با دوربین قطع است یا دوربین در دسترس نیست. سیستم در حال تلاش برای اتصال خودکار می‌باشد.' : 'Camera is currently offline or unreachable. System is trying to reconnect automatically.'}</span>
+                        </div>
+                        <button id="btn-test-live-modal" class="btn btn-secondary btn-sm" onclick="CamerasPage.testFromLiveModal(${camera.id})" style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">
+                            🔍 ${I18n.isRTL() ? 'بررسی اتصال RTSP' : 'Check RTSP Connection'}
+                        </button>
+                    </div>
+                ` : ''}
+
                 ${camera.location ? `
                     <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
                         <span>📍</span>
@@ -285,12 +300,35 @@ const CamerasPage = {
     },
 
     /**
+     * Test connection from inside live modal.
+     */
+    async testFromLiveModal(cameraId) {
+        const btn = document.getElementById('btn-test-live-modal');
+        if (btn) btn.disabled = true;
+        try {
+            App.showToast(I18n.isRTL() ? 'در حال بررسی اتصال به دوربین...' : 'Testing camera stream...', 'info');
+            const res = await App.api(`/api/cameras/${cameraId}/test`, 'POST');
+            if (res.success) {
+                App.showToast(I18n.isRTL() ? 'اتصال برقرار شد!' : 'Connected successfully!', 'success');
+                CamerasPage.refreshLiveFeed(cameraId);
+            } else {
+                App.showToast(res.message || (I18n.isRTL() ? 'دوربین در دسترس نیست.' : 'Camera is unreachable.'), 'error');
+            }
+        } catch (err) {
+            App.showToast(err.message || 'Connection error', 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    /**
      * Refresh snapshot image in live modal.
      */
     refreshLiveFeed(cameraId) {
         const img = document.getElementById('camera-live-img');
         if (img) {
-            img.src = `/api/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+            const tokenParam = (typeof Auth !== 'undefined' && Auth.getToken()) ? `&token=${encodeURIComponent(Auth.getToken())}` : '';
+            img.src = `/api/cameras/${cameraId}/snapshot?t=${Date.now()}${tokenParam}`;
         }
     },
 
@@ -301,7 +339,8 @@ const CamerasPage = {
         const img = document.getElementById('camera-live-img');
         if (img) {
             console.warn(`Stream error for camera ${cameraId}, falling back to snapshot.`);
-            img.src = `/api/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+            const tokenParam = (typeof Auth !== 'undefined' && Auth.getToken()) ? `&token=${encodeURIComponent(Auth.getToken())}` : '';
+            img.src = `/api/cameras/${cameraId}/snapshot?t=${Date.now()}${tokenParam}`;
         }
     },
 

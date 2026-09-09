@@ -253,6 +253,20 @@ async def _test_rtsp_connection(rtsp_url: str) -> CameraTestResult:
     )
 
 
+def _generate_offline_frame(camera_name: str, message: str = "Camera Offline / Reconnecting...") -> bytes:
+    """Generate a clean dark placeholder frame with status for offline cameras."""
+    img = np.full((360, 640, 3), (26, 17, 15), dtype=np.uint8)  # Slate dark bg (BGR: #0f111a)
+    cv2.rectangle(img, (15, 15), (625, 345), (45, 33, 24), 2)
+    cv2.putText(img, "[ CAMERA OFFLINE ]", (185, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2, cv2.LINE_AA)
+    safe_name = str(camera_name)[:28]
+    cv2.putText(img, safe_name, (180, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (240, 240, 240), 2, cv2.LINE_AA)
+    safe_msg = str(message)[:38]
+    cv2.putText(img, safe_msg, (120, 225), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (160, 160, 160), 1, cv2.LINE_AA)
+    cv2.putText(img, "Waiting for stream connection...", (185, 265), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 116, 139), 1, cv2.LINE_AA)
+    _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    return buf.tobytes()
+
+
 @router.get("/{camera_id}/snapshot")
 async def get_camera_snapshot(
     camera_id: int,
@@ -283,7 +297,13 @@ async def get_camera_snapshot(
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
 
-    raise HTTPException(status_code=503, detail=f"Camera feed unavailable: {test_res.message}")
+    # Return clean placeholder frame instead of 503 so browser img tag does not break
+    offline_frame = _generate_offline_frame(camera.name, test_res.message or "Camera offline")
+    return Response(
+        content=offline_frame,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @router.get("/{camera_id}/stream")
@@ -298,14 +318,27 @@ async def get_camera_stream(
         raise HTTPException(status_code=404, detail="Camera not found")
 
     async def frame_generator():
+        last_online = False
+        offline_frame_bytes = None
         while True:
             jpeg_bytes = stream_processor.get_latest_frame(camera_id)
             if jpeg_bytes:
+                last_online = True
                 yield (
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n" + jpeg_bytes + b"\r\n"
                 )
-            await asyncio.sleep(0.1)  # ~10 FPS
+                await asyncio.sleep(0.1)  # ~10 FPS
+            else:
+                # Camera is offline / reconnecting: yield standby placeholder frame
+                if offline_frame_bytes is None or last_online:
+                    offline_frame_bytes = _generate_offline_frame(camera.name, "Camera Offline / Reconnecting...")
+                    last_online = False
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + offline_frame_bytes + b"\r\n"
+                )
+                await asyncio.sleep(1.0)  # 1 FPS standby
 
     return StreamingResponse(
         frame_generator(),

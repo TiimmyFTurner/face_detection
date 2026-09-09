@@ -16,8 +16,8 @@ numpy>=1.26
 pillow>=10.0
 
 # ── ONNX Runtime (install onnxruntime-gpu for GPU support) ─
-# onnxruntime-gpu>=1.18
-onnxruntime>=1.18
+onnxruntime-gpu>=1.18
+# onnxruntime>=1.18
 
 # ── Matching & Math ──────────────────────────────────────
 scikit-learn>=1.5

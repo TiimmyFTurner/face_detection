@@ -10,7 +10,10 @@ A production-ready, self-hosted platform for real-time face detection, recogniti
 - [Overview & Architecture](#-overview--architecture)
 - [Key Features](#-key-features)
 - [Localization & Persian Support (بومی‌سازی و زبان فارسی)](#-localization--persian-support)
-- [Zone Monitoring & Shift Schedules](#-zone-monitoring--shift-schedules)
+- [Live Duty & Shift Roster Monitoring (پایش زنده پرسنل در شیفت)](#-live-duty--shift-roster-monitoring)
+- [Zone Monitoring & Security Schedules](#-zone-monitoring--security-schedules)
+- [Identity & Comprehensive Person Analytics](#-identity--comprehensive-person-analytics)
+- [User Management & Access Control (کاربران و دسترسی‌ها)](#-user-management--access-control)
 - [Prerequisites](#-prerequisites)
 - [Quick Start](#-quick-start)
   - [Option A: Docker Compose (Recommended)](#option-a-docker-compose-recommended)
@@ -47,7 +50,9 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 │   │                         Stream Processor Worker                          │    │
 │   │  • Frame Skipping & Downscaling (CPU optimization)                       │    │
 │   │  • Zone Spatial Containment Check & Timetable Validator                  │    │
-│   │  • Absence & Unauthorized Entry Watchdog Loops                           │    │
+│   │  • Real-Time Absence & Unauthorized Entry Watchdog Loops                 │    │
+│   │  • Absence Time Windows (Intervals) & Incident Count Tracking            │    │
+│   │  • Camera Offline State Isolation (Never Counted as Absence)             │    │
 │   │  • Auto-reconnect with exponential backoff on stream drops               │    │
 │   └──────────────────────────────────┬───────────────────────────────────────┘    │
 │                                      │ Frame Data                                 │
@@ -73,7 +78,8 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
                                               │  (HTML5 / CSS / Vanilla)  │
                                               │  • Persian / English UI   │
                                               │  • RTL & Jalali Timestamps│
-                                              │  • Live Presence Board    │
+                                              │  • Live Duty Roster Board │
+                                              │  • Person Analytics Modal │
                                               └───────────────────────────┘
 ```
 
@@ -83,13 +89,20 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 
 - **Multi-Camera Processing:** Concurrently ingests and analyzes multiple RTSP camera streams in isolated asynchronous worker loops.
 - **State-of-the-Art Recognition:** Leverages **InsightFace (ArcFace `buffalo_l` model)** to extract 512-d face feature vectors.
+- **Live Duty & Shift Attendance Tracking:** Real-time roster of personnel currently on duty with live station presence, current absence duration, and compliance percentages.
+- **Absence Time Windows & Incident Counts:**
+  - Tracks detailed absence intervals (e.g. `10:30 - 11:15 (45m)`) categorized into *late arrival*, *intermediate gaps*, and *current missing status*.
+  - Counts total absence incidents during the shift (`X بار غیبت در این شیفت`) and displays a roster-wide KPI.
+  - Interactive expandable time windows drawer in both Grid and List views with auto-refresh state preservation.
+- **Camera Offline Safeguard:** Decouples camera disconnects from absence times; offline camera periods are displayed with a distinct yellow status (`دوربین قطع است`) and are strictly excluded from absence durations and counts.
 - **Spatial Zone Monitoring:** Draw designated areas directly on camera snapshots and attach staff members.
 - **Shift Timetable Schedules:** Define active monitoring hours and active weekdays with automated absence timeout detection.
+- **Identity & Comprehensive Person Analytics:** Deep audit modal with 6 specialized tabs (Overview, Shifts, 24-Hour Timeline, 14-Day Attendance Log, Cameras, and Recent Sightings).
+- **User Management & RBAC:** Secure JWT authentication, password hashing, and role-based permissions (`admin`, `operator`, `viewer`).
 - **Security & Absence Alerts:** Real-time audio alerts and toast notifications for missing staff, unauthorized entries, and out-of-zone events.
 - **Full Dual-Language Localization:** Persian (`fa`) as default with full RTL layout, Vazirmatn typography, Solar Hijri (Jalali) timestamps, and instant English (`en`) switching.
 - **Low Overhead & Frame Skipping:** Configurable frame skipping and downscaling to minimize CPU utilization.
 - **Resilient Connection Handling:** Automatic RTSP reconnection with exponential backoff if camera streams drop.
-- **Anti-Spam Cooldown:** Configurable per-person cooldown timer to prevent duplicate log spamming.
 - **Hardware Acceleration:** Out-of-the-box support for CUDA / GPU acceleration via ONNX Runtime, with automatic CPU fallback.
 
 ---
@@ -106,21 +119,73 @@ FaceTrack features a built-in internationalization engine (`frontend/js/i18n.js`
 
 ---
 
-## 🎯 Zone Monitoring & Shift Schedules
+## ⏱️ Live Duty & Shift Roster Monitoring (پایش زنده پرسنل در شیفت)
 
-Manage critical work areas, counters, and security perimeters:
+FaceTrack provides a dedicated real-time shift operations command center (`/#duty`):
 
-1. **Visual Area Drawer:** Open any camera and drag rectangular bounding boxes directly over the live snapshot.
+1. **Roster Status Cards & Visual Indication:**
+   - 🟢 **حاضر در محل (On Station):** Staff actively detected in their designated camera zone within the last 60 seconds.
+   - 🔴 **غایب از منطقه (Absent from Zone):** Staff absent during scheduled working hours, displaying active elapsed absence in minutes.
+   - 🟡 **دوربین قطع است (Camera Disconnected):** Camera signal lost or offline; clearly separated so staff are not unfairly penalized.
+   - ⚪ **خارج از شیفت (Off Duty):** Outside active timetable hours.
+
+2. **Absence Time Windows (بازه‌های زمانی عدم حضور):**
+   - Automatically detects and categorizes non-contiguous absence intervals:
+     - **تاخیر در ورود (Late Arrival):** Delay between shift start time and first confirmed sighting.
+     - **خروج از منطقه (Detection Gap):** Periods during the shift exceeding 3 minutes where the person was absent from the station.
+     - **غیبت جاری (Current Missing):** Trailing absence from the last confirmed sighting up to `هم‌اکنون` (Now).
+   - Interactive toggle drawer (`🕒 مشاهده بازه‌ها`) shows exact start time $\rightarrow$ end time and duration badge (`۳۵m`).
+   - Drawer toggle state is preserved across background 10-second auto-refresh cycles.
+
+3. **Shift Absence Incident Count (تعداد دفعات خروج):**
+   - Tracks how many times an individual vacated their post during the current shift (`X بار غیبت در این شیفت`).
+   - Roster-wide KPI card summarizes total shift absence incidents across the facility.
+
+4. **Camera Disconnected Safeguard:**
+   - Camera downtime duration is **never** added to absence durations or absence counts (`زمان قطعی جزو غیبت محاسبه نمی‌شود`).
+
+5. **Grid & List Views:** Instant switching between high-density cards and compact table rows with persisted preferences.
+
+---
+
+## 🎯 Zone Monitoring & Security Schedules
+
+Manage critical work areas, counters, and security perimeters (`/#zones`):
+
+1. **Visual Area Drawer:** Drag rectangular polygons directly over high-res camera snapshots.
 2. **Staff Assignment:** Link enrolled identities to specific workstations.
 3. **Shift Hours & Active Days:** Set start/end times (e.g. `08:00 - 17:00`) and active working days (Saturday to Friday / Monday to Sunday).
 4. **Custom Alert Policies:**
-   - 🔔 **Absence Watchdog:** Triggers an alert if assigned staff is missing during active shift hours for more than 60 seconds.
+   - 🔔 **Absence Watchdog:** Triggers audio alerts and toast notifications if assigned staff is missing during active shift hours.
    - 🚨 **Unauthorized Entry:** Alerts if unregistered or unauthorized persons step into restricted areas.
    - ⚠️ **Combined Policy:** Full security surveillance (Absence + Unauthorized entry).
-5. **Live Presence Board:** Color-coded status cards:
-   - 🟢 **حاضر در محل (On Station):** Staff detected in designated zone.
-   - 🔴 **غایب / عدم حضور (Absent / Missing):** Staff not detected during active shift.
-   - ⚪ **خارج از شیفت (Off Duty):** Outside configured shift schedule.
+
+---
+
+## 📊 Identity & Comprehensive Person Analytics
+
+Click on any person card to launch the **Person Analytics Modal** (`PersonAnalyticsModal`), providing an enterprise audit trail:
+
+- **1. پیشخوان و خلاصه (Overview):** Identity card, assigned shift badge, active status, today/week/month absence breakdown, punctuality statistics (on-time arrivals, late arrivals, early departures), and most frequented camera.
+- **2. انضباط و شیفت‌ها (Shifts & Compliance):** Shift timetable cards, today's detailed absence time windows panel, in-shift vs. out-of-shift detection counts, and overall compliance score.
+- **3. الگوهای ۲۴ ساعته (24-Hour Timeline):** 24-hour hourly detection histogram with automatic peak traffic hour highlight.
+- **4. سوابق حضور ۱۴ روزه (14-Day Attendance Log):** Historical tabular log with first arrival, last departure, presence span, punctuality status badges, and absence incident counts with window tooltips.
+- **5. توزیع دوربین‌ها (Cameras):** Percentage distribution across all facility camera feeds.
+- **6. آخرین ترددها (Recent Sightings):** Gallery of cropped high-res face snapshots with confidence scores and timestamps.
+- **7. خروجی چاپی (Print Summary):** Clean, print-optimized report for administrative and HR records.
+
+---
+
+## 👥 User Management & Access Control (کاربران و دسترسی‌ها)
+
+Manage administrative users and role-based permissions (`/#users`):
+
+- **JWT Authentication:** Secure token-based API authentication with encrypted passwords (`bcrypt`).
+- **Role-Based Access Control (RBAC):**
+  - 👑 **مدیر سیستم (Admin):** Full privileges (camera configuration, zone creation, user management, identity enrollment).
+  - 🛡️ **اپراتور (Operator):** Operational monitoring, event review, and live duty tracking.
+  - 👁️ **بیننده (Viewer):** Read-only access to live streams and dashboards.
+- **Self-Service Password Changes:** Change passwords securely from the header modal with real-time feedback.
 
 ---
 
@@ -287,19 +352,32 @@ Access the web dashboard by opening `http://localhost:8000` in your web browser.
 - **Filter Tabs:** Toggle between All Events, Known, or Unknown faces.
 - **Dynamic Stats:** Live counters tracking Total Events Today, Known Faces, Unknown Faces, and Active Cameras.
 
-### 2. Zone Monitoring & Shift Schedules (`/#zones` / پایش منطقه‌ها و شیفت‌ها)
-- **Live Presence Board:** Instant overview of all active zones and staff station presence status.
-- **Zone Assignments & Shifts:** Overview of cameras and designated areas with quick management access.
+### 2. Live Duty Roster (`/#duty` / پایش زنده پرسنل در شیفت)
+- **Active Shift Command Center:** Real-time visibility into who is currently scheduled to work and their current station presence.
+- **Top KPI Deck:** Total on duty, present on station, absent from zone, camera offline count, sum of shift absence duration, and average compliance rate.
+- **Absence Time Windows Drawer:** Expandable drawer displaying non-contiguous absence intervals (late arrival, detection gaps, current missing) with exact timestamps and durations.
+- **Absence Count Tracking:** Distinct tracking of shift absence incidents (`X بار غیبت در این شیفت`).
+- **Camera Offline Isolation:** Disconnected camera status shown in yellow (`دوربین قطع است`), cleanly excluded from absence counts.
+- **Grid & List Views:** Instant toggle between visual card grid and compact administrative table list.
+
+### 3. Zone Monitoring & Shift Schedules (`/#zones` / پایش منطقه‌ها و شیفت‌ها)
+- **Live Presence Board:** Overview of all configured zones across cameras and staff station presence status.
+- **Zone Assignments & Shifts:** Configure designated work areas, active weekdays, and schedule hours.
 - **Security & Absence Logs:** Filterable table of past absence timeouts, unauthorized entries, and out-of-zone violations.
 
-### 3. Camera Management (`/#cameras` / مدیریت دوربین‌ها)
-- **Add / Edit Cameras:** Register new cameras with RTSP credentials and custom location tags.
+### 4. Camera Management (`/#cameras` / مدیریت دوربین‌ها)
+- **Add / Edit Cameras:** Register new cameras with RTSP credentials, port, and custom location tags.
 - **Live Stream Viewer:** View low-latency MJPEG live streams or high-res snapshots directly in a modal.
-- **Quick Zones Launcher:** Open the interactive visual drawer directly from any camera card.
+- **Interactive Zone Drawer:** Draw and adjust spatial zones directly on camera snapshots.
 
-### 4. Identity Management (`/#persons` / مدیریت هویت‌ها و پرسنل)
-- **Enroll Identities:** Upload reference face photos (single or multiple angles/lighting).
-- **Photo Gallery:** Manage enrolled individuals and add supplemental training photos.
+### 5. Identity Management & Analytics (`/#persons` / مدیریت هویت‌ها و پرسنل)
+- **Enroll Identities:** Upload single or multiple reference photos per individual.
+- **Photo Gallery:** Manage enrolled staff, update roles, and review biometric embeddings.
+- **Comprehensive Analytics Modal:** Click any staff member to view full 6-tab analytics audit (Overview, Shifts & Absence Windows, 24-Hour Timeline, 14-Day Attendance Log, Cameras, and Recent Sightings).
+
+### 6. Users & Access Control (`/#users` / کاربران و دسترسی‌ها)
+- **Role-Based Accounts:** Administer user accounts with granular permissions (`admin`, `operator`, `viewer`).
+- **Security Controls:** Password updates, credential resets, and session management.
 
 ---
 
@@ -311,6 +389,13 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 
 | Method | Route | Description |
 |--------|-------|-------------|
+| `POST` | `/api/auth/login` | Authenticate user and receive JWT access token |
+| `GET` | `/api/auth/me` | Retrieve profile of the currently authenticated user |
+| `POST` | `/api/auth/change-password` | Update current user password |
+| `GET` | `/api/users` | List all system user accounts *(Admin only)* |
+| `POST` | `/api/users` | Create a new user account *(Admin only)* |
+| `PUT` | `/api/users/{id}` | Update user information or role *(Admin only)* |
+| `DELETE` | `/api/users/{id}` | Delete a user account *(Admin only)* |
 | `GET` | `/api/health` | Service health status and AI engine readiness |
 | `GET` | `/api/cameras` | List all configured cameras |
 | `POST` | `/api/cameras` | Register a new camera stream |
@@ -325,11 +410,13 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `GET` | `/api/zones` | List all spatial zones across cameras |
 | `DELETE` | `/api/zones/{id}` | Delete a spatial zone |
 | `GET` | `/api/zones/status` | Live presence status for all zones & attached staff |
+| `GET` | `/api/zones/duty-roster` | **Live shift roster** with absence time windows, counts & camera status |
 | `GET` | `/api/zones/logs` | Security and absence violation log records |
 | `GET` | `/api/persons` | List all registered known individuals |
 | `POST` | `/api/persons` | Enroll a person with reference photo upload |
 | `DELETE` | `/api/persons/{id}` | Remove registered individual and associated embeddings |
 | `POST` | `/api/persons/{id}/photos` | Upload additional reference photos for an individual |
+| `GET` | `/api/persons/{id}/analytics` | **Comprehensive person analytics**, punctuality & 14-day history |
 | `GET` | `/api/events` | Query detection event logs with pagination and filters |
 | `GET` | `/api/events/stats` | Retrieve daily event metrics summary |
 | `GET` | `/api/events/grouped` | Retrieve detection events grouped by person identity |
@@ -419,15 +506,17 @@ face_detection/
 │   ├── main.py               # Application entry point & lifespan
 │   ├── config.py             # Pydantic environment configuration
 │   ├── database.py           # Async SQLAlchemy database initialization
-│   ├── models.py             # Database ORM models (Camera, Person, Event, CameraZone, ZoneViolationLog)
+│   ├── models.py             # Database ORM models (Camera, Person, Event, CameraZone, ZoneViolationLog, User)
 │   ├── schemas.py            # Pydantic validation schemas
 │   ├── face_engine.py        # InsightFace detector & vector matcher
 │   ├── stream_processor.py   # Async RTSP ingestion, zone watchdog & WebSocket manager
 │   └── routers/
 │       ├── __init__.py
+│       ├── auth.py           # JWT login, token verification & password change
+│       ├── users.py          # User management & RBAC endpoints
 │       ├── cameras.py        # Camera API & live stream endpoints
-│       ├── zones.py          # Spatial zone management & live status
-│       ├── persons.py        # Person & photo enrollment endpoints
+│       ├── zones.py          # Spatial zones, duty roster & absence windows
+│       ├── persons.py        # Person enrollment & comprehensive analytics
 │       ├── events.py         # Event logs & metrics endpoints
 │       └── snapshots.py      # Image serving endpoint
 │
@@ -437,16 +526,20 @@ face_detection/
 │   │   └── style.css         # Glassmorphism dark-theme & RTL typography
 │   └── js/
 │       ├── app.js            # App core, router & WebSocket client
+│       ├── auth.js           # JWT authentication manager & permission checks
 │       ├── i18n.js           # Internationalization engine, dictionaries & Jalali formatter
 │       ├── components/
 │       │   ├── cameraForm.js # Camera modal component
 │       │   ├── eventCard.js  # Live event card & detail modal
 │       │   ├── personForm.js # Person upload & photo dropzone modal
+│       │   ├── personAnalyticsModal.js # 6-tab comprehensive person analytics modal
 │       │   └── zoneModal.js  # Interactive canvas zone drawer & shift modal
 │       └── pages/
 │           ├── cameras.js    # Camera management page view
 │           ├── dashboard.js  # Live monitoring dashboard view
+│           ├── dutyPage.js   # Live shift roster, absence windows & KPI command center
 │           ├── persons.js    # Identity enrollment page view
+│           ├── usersPage.js  # User administration & role management view
 │           └── zonesPage.js  # Live Presence Board, shifts & security logs view
 │
 ├── data/                     # Persistent Data Directory (Excluded from git)

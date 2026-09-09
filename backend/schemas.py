@@ -84,6 +84,15 @@ class PersonShiftInfo(BaseModel):
     shift_duration_hours: float = 0.0
 
 
+class AbsenceInterval(BaseModel):
+    """An absence time window during a scheduled shift."""
+    start_time: str          # e.g., "10:30"
+    end_time: str            # e.g., "11:00" or "now"
+    duration_minutes: int    # e.g., 30
+    duration_str: str        # e.g., "30m"
+    interval_type: str = "gap"  # "late_arrival", "gap", "current", "unseen"
+
+
 class PersonShiftCompliance(BaseModel):
     """Punctuality and attendance metrics calculated against scheduled shifts."""
     has_assigned_shift: bool = False
@@ -91,6 +100,8 @@ class PersonShiftCompliance(BaseModel):
     current_absence_minutes: Optional[int] = None
     today_absence_minutes: int = 0
     today_absence_hours_str: str = "0h"
+    absence_count_today: int = 0
+    today_absence_intervals: list[AbsenceInterval] = []
     week_absence_minutes: int = 0
     week_absence_hours_str: str = "0h"
     month_absence_minutes: int = 0
@@ -121,6 +132,8 @@ class PersonDailyActivity(BaseModel):
     shift_duration_minutes: int = 0
     absence_from_shift_minutes: int = 0
     absence_from_shift_str: Optional[str] = None
+    absence_count: int = 0
+    absence_intervals: list[AbsenceInterval] = []
     detections_count: int = 0
     in_shift_detections: int = 0
     first_seen_time: Optional[str] = None  # HH:MM:SS
@@ -390,6 +403,8 @@ class PersonDutyStatus(BaseModel):
     shift_absence_minutes: int = 0
     shift_absence_str: str = "0m"
     shift_compliance_pct: float = 100.0
+    absence_count: int = 0
+    absence_intervals: list[AbsenceInterval] = []
 
 
 class DutyRosterResponse(BaseModel):
@@ -399,6 +414,7 @@ class DutyRosterResponse(BaseModel):
     present_count: int
     absent_count: int
     camera_offline_count: int = 0
+    total_absence_incidents: int = 0
     total_shift_absence_minutes: int
     total_shift_absence_str: str
     avg_compliance_pct: float

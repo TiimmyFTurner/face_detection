@@ -33,6 +33,7 @@ from backend.schemas import (
     ZoneStatusResponse,
     ZonePersonStatus,
     PersonDutyStatus,
+    AbsenceInterval,
     DutyRosterResponse,
     EventResponse,
     EventListResponse,
@@ -407,6 +408,8 @@ async def get_duty_roster(
                         if (ev_mins >= start_mins or ev_mins <= end_mins) and ev_mins <= current_hm_mins:
                             shift_events.append(ev)
 
+            absence_intervals: list[AbsenceInterval] = []
+
             if in_schedule and elapsed_shift_mins > 0:
                 if not shift_events:
                     # No actual face sightings today
@@ -420,12 +423,34 @@ async def get_duty_roster(
                         shift_absence_mins = elapsed_shift_mins
                         shift_presence_mins = 0
                         compliance = 0.0
+                        if elapsed_shift_mins >= 3:
+                            curr_t_str = now_local.strftime("%H:%M")
+                            absence_intervals.append(
+                                AbsenceInterval(
+                                    start_time=start_str,
+                                    end_time=curr_t_str,
+                                    duration_minutes=elapsed_shift_mins,
+                                    duration_str=_format_duration(elapsed_shift_mins * 60),
+                                    interval_type="unseen",
+                                )
+                            )
                 else:
                     first_ev_loc = _to_local_dt(shift_events[0].timestamp)
                     first_ev_mins = first_ev_loc.hour * 60 + first_ev_loc.minute
                     
-                    # If camera is currently offline, do not penalize initial delay
+                    # If camera is online and person arrived >= 3 mins late:
                     arrival_delay = max(0, first_ev_mins - start_mins) if is_cam_online else 0
+                    if is_cam_online and arrival_delay >= 3:
+                        first_t_str = first_ev_loc.strftime("%H:%M")
+                        absence_intervals.append(
+                            AbsenceInterval(
+                                start_time=start_str,
+                                end_time=first_t_str,
+                                duration_minutes=arrival_delay,
+                                duration_str=_format_duration(arrival_delay * 60),
+                                interval_type="late_arrival",
+                            )
+                        )
 
                     # Disconnect events for this camera today
                     cam_disc_events = [
@@ -439,11 +464,23 @@ async def get_duty_roster(
                         t1 = shift_events[idx].timestamp
                         t2 = shift_events[idx + 1].timestamp
                         gap_sec = (t2 - t1).total_seconds()
-                        if gap_sec > 180:
+                        if gap_sec >= 180:
                             # If camera was disconnected during this gap, DO NOT add to absence!
                             was_offline = any(t1 <= dev.timestamp <= t2 for dev in cam_disc_events)
                             if not was_offline:
-                                gaps_mins += int((gap_sec - 60) // 60)
+                                gap_m = int((gap_sec - 60) // 60)
+                                gaps_mins += gap_m
+                                t1_loc = _to_local_dt(t1).strftime("%H:%M")
+                                t2_loc = _to_local_dt(t2).strftime("%H:%M")
+                                absence_intervals.append(
+                                    AbsenceInterval(
+                                        start_time=t1_loc,
+                                        end_time=t2_loc,
+                                        duration_minutes=gap_m,
+                                        duration_str=_format_duration(gap_m * 60),
+                                        interval_type="gap",
+                                    )
+                                )
 
                     # Trailing absence from last sighting to now
                     # CRITICAL: If camera is disconnected, trailing time is camera downtime, NOT person absence!
@@ -453,6 +490,18 @@ async def get_duty_roster(
                         last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
                         last_ev_mins = last_ev_loc.hour * 60 + last_ev_loc.minute
                         trailing_absence = max(0, current_hm_mins - last_ev_mins)
+                        if trailing_absence >= 3:
+                            last_t_str = last_ev_loc.strftime("%H:%M")
+                            curr_t_str = now_local.strftime("%H:%M")
+                            absence_intervals.append(
+                                AbsenceInterval(
+                                    start_time=last_t_str,
+                                    end_time=curr_t_str,
+                                    duration_minutes=trailing_absence,
+                                    duration_str=_format_duration(trailing_absence * 60),
+                                    interval_type="current",
+                                )
+                            )
 
                     if not is_cam_online:
                         # Camera offline: only count verified gaps between actual sightings during online hours
@@ -496,6 +545,8 @@ async def get_duty_roster(
                     shift_absence_minutes=shift_absence_mins,
                     shift_absence_str=_format_duration(shift_absence_mins * 60),
                     shift_compliance_pct=compliance,
+                    absence_count=len(absence_intervals),
+                    absence_intervals=absence_intervals,
                 )
             )
 
@@ -510,6 +561,7 @@ async def get_duty_roster(
     present_count = len([r for r in roster if r.status == "present"])
     absent_count = len([r for r in roster if r.status == "absent"])
     camera_offline_count = len([r for r in roster if r.status == "camera_offline"])
+    total_absence_incidents = sum(r.absence_count for r in roster)
     total_shift_absence_minutes = sum(r.shift_absence_minutes for r in roster)
     avg_compliance = round(sum(r.shift_compliance_pct for r in roster) / len(roster), 1) if roster else 100.0
 
@@ -519,6 +571,7 @@ async def get_duty_roster(
         present_count=present_count,
         absent_count=absent_count,
         camera_offline_count=camera_offline_count,
+        total_absence_incidents=total_absence_incidents,
         total_shift_absence_minutes=total_shift_absence_minutes,
         total_shift_absence_str=_format_duration(total_shift_absence_minutes * 60),
         avg_compliance_pct=avg_compliance,

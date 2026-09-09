@@ -320,6 +320,11 @@ const PersonAnalyticsModal = {
                                 <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">${absenceTodayStr}</div>
                                 <div style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; margin-top: 0.15rem;">${I18n.t('absence_period_today')}</div>
                                 <div style="font-size: 0.65rem; color: var(--text-tertiary); margin-top: 0.1rem;">${isFa ? I18n.toPersianDigits(comp ? (comp.today_absence_minutes || 0) : 0) : (comp ? (comp.today_absence_minutes || 0) : 0)} ${isFa ? 'دقیقه' : 'mins'}</div>
+                                ${comp && comp.absence_count_today > 0 ? `
+                                    <div style="font-size: 0.65rem; color: #fbbf24; font-weight: 700; margin-top: 0.15rem;">
+                                        📍 ${I18n.t('absence_count_short', { count: isFa ? I18n.toPersianDigits(comp.absence_count_today) : comp.absence_count_today })}
+                                    </div>
+                                ` : ''}
                             </div>
                             <div style="background: var(--bg-surface); padding: 0.6rem 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                                 <div style="font-size: 1.15rem; font-weight: 800; color: var(--accent-amber);">${absenceWeekStr}</div>
@@ -478,6 +483,53 @@ const PersonAnalyticsModal = {
                             <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 0.15rem;">${isFa ? I18n.toPersianDigits(comp ? (comp.month_absence_minutes || comp.total_absence_minutes || 0) : 0) : (comp ? (comp.month_absence_minutes || comp.total_absence_minutes || 0) : 0)} ${isFa ? 'دقیقه' : 'mins'}</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Today's Absence Time Windows & Count -->
+                <div style="margin-top: 1rem; padding: 1rem; background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: var(--radius-sm);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                            <span>🕒</span>
+                            <span>${I18n.t('absence_windows_title')} (${isFa ? 'امروز' : 'Today'})</span>
+                        </div>
+                        <span class="duty-absence-count-badge">
+                            📍 ${I18n.t('absence_count_badge', { count: isFa ? I18n.toPersianDigits(comp ? (comp.absence_count_today || 0) : 0) : (comp ? (comp.absence_count_today || 0) : 0) })}
+                        </span>
+                    </div>
+
+                    ${(comp && comp.today_absence_intervals && comp.today_absence_intervals.length > 0) ? `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.5rem;">
+                            ${comp.today_absence_intervals.map(w => {
+                                const startT = isFa ? I18n.toPersianDigits(w.start_time) : w.start_time;
+                                const endT = w.interval_type === 'current'
+                                    ? I18n.t('window_now')
+                                    : (isFa ? I18n.toPersianDigits(w.end_time) : w.end_time);
+                                const durStr = isFa ? I18n.toPersianDigits(w.duration_str) : w.duration_str;
+                                const typeKey = `interval_type_${w.interval_type}`;
+                                const typeLabel = I18n.t(typeKey) || w.interval_type;
+                                const isCurrent = w.interval_type === 'current';
+                                return `
+                                    <div class="duty-window-item ${isCurrent ? 'is-current' : ''}" style="padding: 0.5rem 0.75rem;">
+                                        <div class="duty-window-type-tag ${w.interval_type}">
+                                            ${isCurrent ? '🔴' : '⏳'} ${typeLabel}
+                                        </div>
+                                        <div class="duty-window-time" dir="ltr">
+                                            <span class="win-time">${startT}</span>
+                                            <span class="win-arrow">➜</span>
+                                            <span class="win-time ${isCurrent ? 'win-current' : ''}">${endT}</span>
+                                        </div>
+                                        <div class="duty-window-dur-pill">
+                                            ${durStr}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : `
+                        <div style="text-align: center; color: var(--text-tertiary); font-size: 0.8rem; padding: 0.75rem;">
+                            ${I18n.t('no_absence_intervals')}
+                        </div>
+                    `}
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1rem;">
@@ -682,7 +734,22 @@ const PersonAnalyticsModal = {
                                 if (day.is_scheduled_shift_day) {
                                     if (day.absence_from_shift_minutes > 0) {
                                         const absStr = day.absence_from_shift_str || `${day.absence_from_shift_minutes}m`;
-                                        absencePill = `<span class="badge-status-pill" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.35); font-weight: 700;">⏱️ ${I18n.isRTL() ? I18n.toPersianDigits(absStr) : absStr}</span>`;
+                                        const countStr = isFa ? I18n.toPersianDigits(day.absence_count || 0) : (day.absence_count || 0);
+                                        const winTooltip = (day.absence_intervals && day.absence_intervals.length > 0)
+                                            ? day.absence_intervals.map(w => `${w.start_time}-${w.end_time} (${w.duration_str})`).join(' | ')
+                                            : '';
+                                        absencePill = `
+                                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                                <span class="badge-status-pill" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.35); font-weight: 700;" title="${winTooltip}">
+                                                    ⏱️ ${isFa ? I18n.toPersianDigits(absStr) : absStr}
+                                                </span>
+                                                ${day.absence_count > 0 ? `
+                                                    <span style="font-size: 0.68rem; color: #fbbf24; font-weight: 600;" title="${winTooltip}">
+                                                        📍 ${I18n.t('absence_count_short', { count: countStr })}
+                                                    </span>
+                                                ` : ''}
+                                            </div>
+                                        `;
                                     } else {
                                         absencePill = `<span class="badge-status-pill on-station" style="font-size: 0.7rem;">✓ ${I18n.t('no_absence')}</span>`;
                                     }

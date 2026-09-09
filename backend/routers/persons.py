@@ -36,6 +36,7 @@ from backend.schemas import (
     PersonShiftInfo,
     PersonShiftCompliance,
     PersonDailyActivity,
+    AbsenceInterval,
     PersonHourlyActivity,
     PersonCameraDistribution,
     PersonAlertStats,
@@ -793,6 +794,8 @@ async def get_person_analytics(
             shift_dur_mins = 0
             day_absence_mins = 0
             day_absence_str = "0m"
+            day_absence_intervals: list[AbsenceInterval] = []
+
             if is_sched_day and matching_shift:
                 try:
                     sh, sm = map(int, matching_shift.start_time.split(":"))
@@ -811,6 +814,47 @@ async def get_person_analytics(
                     day_absence_mins = max(0, shift_dur_mins - pres_mins)
                 day_absence_str = _format_duration(day_absence_mins * 60)
 
+                # Record distinct absence intervals
+                if not (i == 0 and is_cam_offline):
+                    # 1. Arrival delay
+                    if delay_mins >= 3:
+                        day_absence_intervals.append(
+                            AbsenceInterval(
+                                start_time=matching_shift.start_time,
+                                end_time=first_ldt.strftime("%H:%M"),
+                                duration_minutes=delay_mins,
+                                duration_str=_format_duration(delay_mins * 60),
+                                interval_type="late_arrival",
+                            )
+                        )
+                    # 2. Gaps between sightings
+                    for idx in range(len(day_events) - 1):
+                        gap_sec = (day_events[idx + 1].timestamp - day_events[idx].timestamp).total_seconds()
+                        if gap_sec >= 180:
+                            gap_m = int((gap_sec - 60) // 60)
+                            t1_str = _to_local_dt(day_events[idx].timestamp).strftime("%H:%M")
+                            t2_str = _to_local_dt(day_events[idx + 1].timestamp).strftime("%H:%M")
+                            day_absence_intervals.append(
+                                AbsenceInterval(
+                                    start_time=t1_str,
+                                    end_time=t2_str,
+                                    duration_minutes=gap_m,
+                                    duration_str=_format_duration(gap_m * 60),
+                                    interval_type="gap",
+                                )
+                            )
+                    # 3. Early departure
+                    if early_leave_mins >= 3:
+                        day_absence_intervals.append(
+                            AbsenceInterval(
+                                start_time=last_ldt.strftime("%H:%M"),
+                                end_time=matching_shift.end_time,
+                                duration_minutes=early_leave_mins,
+                                duration_str=_format_duration(early_leave_mins * 60),
+                                interval_type="early_leave",
+                            )
+                        )
+
             daily_activity.append(
                 PersonDailyActivity(
                     date=date_str,
@@ -821,6 +865,8 @@ async def get_person_analytics(
                     shift_duration_minutes=shift_dur_mins,
                     absence_from_shift_minutes=day_absence_mins,
                     absence_from_shift_str=day_absence_str,
+                    absence_count=len(day_absence_intervals),
+                    absence_intervals=day_absence_intervals,
                     detections_count=day_cnt,
                     in_shift_detections=day_in_shift,
                     first_seen_time=first_time_str,
@@ -838,6 +884,7 @@ async def get_person_analytics(
             )
         else:
             shift_dur_mins = 0
+            day_absence_intervals = []
             if is_sched_day and matching_shift:
                 is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
                 if i == 0 and is_cam_offline:
@@ -857,6 +904,15 @@ async def get_person_analytics(
                         shift_dur_mins = 480
                     day_absence_mins = shift_dur_mins
                     day_absence_str = _format_duration(shift_dur_mins * 60)
+                    day_absence_intervals.append(
+                        AbsenceInterval(
+                            start_time=matching_shift.start_time,
+                            end_time=matching_shift.end_time,
+                            duration_minutes=shift_dur_mins,
+                            duration_str=day_absence_str,
+                            interval_type="unseen",
+                        )
+                    )
             else:
                 arr_stat = "rest_day"
                 day_absence_mins = 0
@@ -872,6 +928,8 @@ async def get_person_analytics(
                     shift_duration_minutes=shift_dur_mins,
                     absence_from_shift_minutes=day_absence_mins,
                     absence_from_shift_str=day_absence_str,
+                    absence_count=len(day_absence_intervals),
+                    absence_intervals=day_absence_intervals,
                     detections_count=0,
                     in_shift_detections=0,
                     arrival_status=arr_stat,
@@ -924,12 +982,17 @@ async def get_person_analytics(
         else:
             current_status = "present" if seconds_since < 300 else "off_duty"
 
+    absence_count_today = daily_activity[0].absence_count if daily_activity and daily_activity[0].is_scheduled_shift_day else 0
+    today_absence_intervals = daily_activity[0].absence_intervals if daily_activity and daily_activity[0].is_scheduled_shift_day else []
+
     shift_compliance = PersonShiftCompliance(
         has_assigned_shift=has_assigned_shift,
         primary_shift_time=primary_shift_str,
         current_absence_minutes=current_absence_mins,
         today_absence_minutes=today_absence_mins,
         today_absence_hours_str=today_absence_hours_str,
+        absence_count_today=absence_count_today,
+        today_absence_intervals=today_absence_intervals,
         week_absence_minutes=week_absence_mins,
         week_absence_hours_str=week_absence_hours_str,
         month_absence_minutes=month_absence_mins,

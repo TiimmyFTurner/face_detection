@@ -4062,6 +4062,159 @@ html[dir="rtl"] textarea {
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 
+/* ── Absence Time Windows & Count Styles ─────────────────── */
+.duty-absence-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 3px 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.duty-windows-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.duty-windows-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.duty-windows-toggle-btn.active {
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.4);
+    color: #fb7185;
+}
+
+.duty-window-badge-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    background: rgba(244, 63, 94, 0.25);
+    color: #fda4af;
+}
+
+.duty-absence-windows-drawer {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.duty-windows-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.duty-windows-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.duty-window-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    transition: background 0.15s ease;
+}
+
+.duty-window-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.duty-window-item.is-current {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.4);
+}
+
+.duty-window-type-tag {
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+}
+
+.duty-window-type-tag.current {
+    color: #fb7185;
+    font-weight: 700;
+}
+
+.duty-window-time {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 700;
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--text-primary);
+}
+
+.duty-window-time .win-arrow {
+    color: var(--text-tertiary);
+    font-size: 0.7rem;
+}
+
+.duty-window-time .win-current {
+    color: #fb7185;
+    font-weight: 800;
+}
+
+.duty-window-dur-pill {
+    padding: 2px 6px;
+    background: rgba(244, 63, 94, 0.15);
+    border-radius: 4px;
+    color: #fda4af;
+    font-weight: 700;
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
 /* ── Print Styles ────────────────────────────────────────── */
 @media print {
     body {

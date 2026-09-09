@@ -14,6 +14,7 @@ const DutyPage = {
     _onlyActive: true,
     _isLoading: false,
     _viewMode: localStorage.getItem('facetrack_view_duty') || 'grid',
+    _expandedWindows: new Set(),
 
     /**
      * Set view mode ('grid' or 'list') and update UI.
@@ -177,6 +178,74 @@ const DutyPage = {
     },
 
     /**
+     * Toggle expanded state of absence time windows drawer for a person.
+     */
+    toggleAbsenceWindows(personId) {
+        if (DutyPage._expandedWindows.has(personId)) {
+            DutyPage._expandedWindows.delete(personId);
+        } else {
+            DutyPage._expandedWindows.add(personId);
+        }
+        DutyPage.renderRoster();
+    },
+
+    /**
+     * Render the expandable drawer listing detailed absence time windows.
+     */
+    renderAbsenceWindowsDrawer(person) {
+        const isRtl = I18n.isRTL();
+        const intervals = person.absence_intervals || [];
+        if (intervals.length === 0) {
+            return `
+                <div class="duty-absence-windows-drawer">
+                    <div class="duty-windows-header">
+                        <span>🕒 ${I18n.t('absence_windows_title')}</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-tertiary); text-align: center; padding: 0.4rem;">
+                        ${I18n.t('no_absence_intervals')}
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="duty-absence-windows-drawer">
+                <div class="duty-windows-header">
+                    <span>🕒 ${I18n.t('absence_windows_title')}</span>
+                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">(${isRtl ? I18n.toPersianDigits(intervals.length) : intervals.length} ${isRtl ? 'بازه' : 'intervals'})</span>
+                </div>
+                <div class="duty-windows-list">
+                    ${intervals.map(w => {
+                        const startT = isRtl ? I18n.toPersianDigits(w.start_time) : w.start_time;
+                        const endT = w.interval_type === 'current'
+                            ? I18n.t('window_now')
+                            : (isRtl ? I18n.toPersianDigits(w.end_time) : w.end_time);
+                        const durStr = isRtl ? I18n.toPersianDigits(w.duration_str) : w.duration_str;
+                        const typeKey = `interval_type_${w.interval_type}`;
+                        const typeLabel = I18n.t(typeKey) || w.interval_type;
+                        const isCurrent = w.interval_type === 'current';
+                        return `
+                            <div class="duty-window-item ${isCurrent ? 'is-current' : ''}">
+                                <div class="duty-window-type-tag ${w.interval_type}">
+                                    ${isCurrent ? '🔴' : '⏳'} ${typeLabel}
+                                </div>
+                                <div class="duty-window-time" dir="ltr">
+                                    <span class="win-time">${startT}</span>
+                                    <span class="win-arrow">➜</span>
+                                    <span class="win-time ${isCurrent ? 'win-current' : ''}">${endT}</span>
+                                </div>
+                                <div class="duty-window-dur-pill">
+                                    ${durStr}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    },
+
+    /**
      * Fetch roster from the backend.
      */
     async fetchData(showSpinner = true) {
@@ -299,10 +368,15 @@ const DutyPage = {
                 <div class="duty-kpi-body">
                     <span class="duty-kpi-value">${totalAbsenceStr}</span>
                 </div>
-                <div class="duty-kpi-footer">
+                <div class="duty-kpi-footer" style="flex-wrap: wrap; gap: 0.35rem;">
                     <span class="duty-kpi-badge amber">
                         ${I18n.t('sum_shift_absence_title')}
                     </span>
+                    ${(d.total_absence_incidents && d.total_absence_incidents > 0) ? `
+                        <span class="duty-kpi-badge amber" style="background: rgba(245, 158, 11, 0.2); font-weight: 700; color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45);">
+                            📍 ${I18n.t('kpi_total_absence_incidents', { count: isRtl ? I18n.toPersianDigits(d.total_absence_incidents) : d.total_absence_incidents })}
+                        </span>
+                    ` : ''}
                 </div>
             </div>
 
@@ -437,6 +511,10 @@ const DutyPage = {
                 ? I18n.toPersianDigits(person.shift_compliance_pct.toFixed(1))
                 : person.shift_compliance_pct.toFixed(1);
 
+            const isExpanded = DutyPage._expandedWindows.has(person.person_id);
+            const absenceCountDisp = isRtl ? I18n.toPersianDigits(person.absence_count || 0) : (person.absence_count || 0);
+            const hasIntervals = person.absence_intervals && person.absence_intervals.length > 0;
+
             if (DutyPage._viewMode === 'list') {
                 return `
                     <div class="duty-card list-item ${cardClass}">
@@ -472,6 +550,19 @@ const DutyPage = {
                                 <strong style="color: ${isAbsent ? 'var(--accent-rose)' : (isOffline ? '#facc15' : 'var(--text-primary)')};">${isOffline ? I18n.t('camera_feed_unavailable') : sumShiftAbsenceDisplay}</strong>
                             </div>
 
+                            <div class="duty-metric-pill" style="border-color: ${person.absence_count > 0 ? 'rgba(245, 158, 11, 0.35)' : 'rgba(255, 255, 255, 0.08)'}; background: ${person.absence_count > 0 ? 'rgba(245, 158, 11, 0.09)' : 'transparent'};" title="${I18n.t('absence_count_badge', { count: person.absence_count || 0 })}">
+                                <span>📍</span>
+                                <span style="color: ${person.absence_count > 0 ? '#fbbf24' : 'var(--text-secondary)'}; font-weight: ${person.absence_count > 0 ? '700' : '500'};">
+                                    ${I18n.t('absence_count_badge', { count: absenceCountDisp })}
+                                </span>
+                                ${hasIntervals ? `
+                                    <button class="duty-windows-toggle-btn ${isExpanded ? 'active' : ''}" onclick="event.stopPropagation(); DutyPage.toggleAbsenceWindows(${person.person_id})" style="padding: 1px 6px; font-size: 0.68rem; margin-inline-start: 4px;" title="${I18n.t('absence_windows_btn')}">
+                                        <span>${isExpanded ? '▲' : '🕒'}</span>
+                                        <span class="duty-window-badge-count" style="min-width: 15px; height: 15px; font-size: 0.6rem;">${isRtl ? I18n.toPersianDigits(person.absence_intervals.length) : person.absence_intervals.length}</span>
+                                    </button>
+                                ` : ''}
+                            </div>
+
                             <div class="duty-metric-pill" style="border-color: ${person.shift_compliance_pct >= 85 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}; background: ${person.shift_compliance_pct >= 85 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; color: ${person.shift_compliance_pct >= 85 ? 'var(--accent-emerald)' : 'var(--accent-amber)'}; font-weight: 700;" title="${I18n.t('kpi_shift_compliance')}">
                                 <span>🎯</span>
                                 <span>${compliancePct}%</span>
@@ -484,6 +575,8 @@ const DutyPage = {
                                 📊 <span>${I18n.t('btn_person_analytics')}</span>
                             </button>
                         </div>
+
+                        ${isExpanded ? DutyPage.renderAbsenceWindowsDrawer(person) : ''}
                     </div>
                 `;
             }
@@ -565,6 +658,28 @@ const DutyPage = {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Absence Count & Time Windows Bar -->
+                    <div class="duty-absence-count-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.65rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.07); font-size: 0.76rem;">
+                        <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
+                            <span>📍</span>
+                            <strong style="color: ${person.absence_count > 0 ? '#fbbf24' : 'var(--text-secondary)'};">
+                                ${I18n.t('absence_count_badge', { count: absenceCountDisp })}
+                            </strong>
+                        </span>
+                        ${hasIntervals ? `
+                            <button class="duty-windows-toggle-btn ${isExpanded ? 'active' : ''}" onclick="DutyPage.toggleAbsenceWindows(${person.person_id})">
+                                <span>${isExpanded ? '▲ ' + (isRtl ? 'بستن بازه‌ها' : 'Hide Windows') : '🕒 ' + I18n.t('absence_windows_btn')}</span>
+                                <span class="duty-window-badge-count">${isRtl ? I18n.toPersianDigits(person.absence_intervals.length) : person.absence_intervals.length}</span>
+                            </button>
+                        ` : `
+                            <span style="color: var(--text-tertiary); font-size: 0.7rem;">
+                                ${isOffline ? (isRtl ? 'دوربین قطع' : 'Camera offline') : (isRtl ? 'بدون خروج' : 'No absence')}
+                            </span>
+                        `}
+                    </div>
+
+                    ${isExpanded ? DutyPage.renderAbsenceWindowsDrawer(person) : ''}
 
                     <!-- Compliance Progress Bar -->
                     <div>

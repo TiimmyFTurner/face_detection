@@ -585,6 +585,8 @@ const ZonesPage = {
                                 alertBadge = `<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); font-size: 0.7rem; font-weight: 700;">${I18n.t('alert_unauthorized')}</span>`;
                             } else if (log.alert_type === 'absence_timeout') {
                                 alertBadge = `<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.7rem; font-weight: 700;">${I18n.t('alert_absence_timeout')}</span>`;
+                            } else if (log.alert_type === 'camera_disconnected') {
+                                alertBadge = `<span style="padding: 2px 8px; border-radius: var(--radius-full); background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); font-size: 0.7rem; font-weight: 700;">${I18n.t('alert_camera_disconnected')}</span>`;
                             }
 
                             const timeStr = I18n.formatFullTimestamp(log.timestamp);

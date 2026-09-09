@@ -356,12 +356,19 @@ async def get_duty_roster(
             # Check live presence via stream processor
             key = (z.id, pid)
             last_seen = stream_processor._zone_last_seen.get(key, 0)
+            is_cam_online = stream_processor.is_camera_online(z.camera_id)
 
             if not in_schedule:
                 status_str = "off_duty"
                 is_in_zone = False
                 last_seen_sec = None
                 last_seen_str = "Off Duty (Outside Shift)"
+                curr_absence_mins = 0
+            elif not is_cam_online:
+                status_str = "camera_offline"
+                is_in_zone = False
+                last_seen_sec = None
+                last_seen_str = "Camera Disconnected"
                 curr_absence_mins = 0
             elif last_seen > 0 and (now_ts - last_seen) < 120.0:
                 status_str = "present"
@@ -382,9 +389,10 @@ async def get_duty_roster(
                     last_seen_str = "Not Seen Yet"
 
             # Compute cumulative absence during this shift today
+            # Filter ONLY actual face detection sightings (NOT alert logs like absence_timeout or camera_disconnected)
             p_events = [
                 ev for ev in today_events
-                if ev.person_id == pid
+                if ev.person_id == pid and ev.alert_type not in ("absence_timeout", "camera_disconnected")
             ]
 
             shift_events = []
@@ -401,32 +409,59 @@ async def get_duty_roster(
 
             if in_schedule and elapsed_shift_mins > 0:
                 if not shift_events:
-                    shift_absence_mins = elapsed_shift_mins
-                    shift_presence_mins = 0
-                    compliance = 0.0
+                    # No actual face sightings today
+                    if not is_cam_online:
+                        # Camera is offline/disconnected — NEVER add camera disconnected time to absence!
+                        shift_absence_mins = 0
+                        shift_presence_mins = 0
+                        compliance = 100.0
+                    else:
+                        # Camera is online and operating, but person was never seen
+                        shift_absence_mins = elapsed_shift_mins
+                        shift_presence_mins = 0
+                        compliance = 0.0
                 else:
                     first_ev_loc = _to_local_dt(shift_events[0].timestamp)
                     first_ev_mins = first_ev_loc.hour * 60 + first_ev_loc.minute
-                    arrival_delay = max(0, first_ev_mins - start_mins)
+                    
+                    # If camera is currently offline, do not penalize initial delay
+                    arrival_delay = max(0, first_ev_mins - start_mins) if is_cam_online else 0
 
-                    # Gaps between detections inside shift
+                    # Disconnect events for this camera today
+                    cam_disc_events = [
+                        ev for ev in today_events
+                        if ev.camera_id == z.camera_id and ev.alert_type == "camera_disconnected"
+                    ]
+
+                    # Gaps between detections inside shift (excluding camera downtime)
                     gaps_mins = 0
                     for idx in range(len(shift_events) - 1):
-                        gap_sec = (shift_events[idx + 1].timestamp - shift_events[idx].timestamp).total_seconds()
+                        t1 = shift_events[idx].timestamp
+                        t2 = shift_events[idx + 1].timestamp
+                        gap_sec = (t2 - t1).total_seconds()
                         if gap_sec > 180:
-                            gaps_mins += int((gap_sec - 60) // 60)
+                            # If camera was disconnected during this gap, DO NOT add to absence!
+                            was_offline = any(t1 <= dev.timestamp <= t2 for dev in cam_disc_events)
+                            if not was_offline:
+                                gaps_mins += int((gap_sec - 60) // 60)
 
                     # Trailing absence from last sighting to now
-                    if is_in_zone:
+                    # CRITICAL: If camera is disconnected, trailing time is camera downtime, NOT person absence!
+                    if is_in_zone or not is_cam_online:
                         trailing_absence = 0
                     else:
                         last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
                         last_ev_mins = last_ev_loc.hour * 60 + last_ev_loc.minute
                         trailing_absence = max(0, current_hm_mins - last_ev_mins)
 
-                    shift_absence_mins = min(elapsed_shift_mins, arrival_delay + gaps_mins + trailing_absence)
+                    if not is_cam_online:
+                        # Camera offline: only count verified gaps between actual sightings during online hours
+                        shift_absence_mins = min(elapsed_shift_mins, gaps_mins)
+                    else:
+                        shift_absence_mins = min(elapsed_shift_mins, arrival_delay + gaps_mins + trailing_absence)
+
                     shift_presence_mins = max(0, elapsed_shift_mins - shift_absence_mins)
-                    compliance = round((shift_presence_mins / elapsed_shift_mins) * 100, 1)
+                    compliance = round((shift_presence_mins / elapsed_shift_mins) * 100, 1) if elapsed_shift_mins > 0 else 100.0
             else:
                 shift_absence_mins = 0
                 shift_presence_mins = 0
@@ -449,6 +484,7 @@ async def get_duty_roster(
                     active_days=active_days,
                     is_in_duty_hours=in_schedule,
                     status=status_str,
+                    camera_online=is_cam_online,
                     is_in_zone=is_in_zone,
                     last_seen_seconds_ago=last_seen_sec,
                     last_seen_str=last_seen_str,
@@ -463,12 +499,17 @@ async def get_duty_roster(
                 )
             )
 
-    # Sort: absent first, then by current absence minutes desc, then by name
-    roster.sort(key=lambda r: (0 if r.status == "absent" else 1, -r.current_absence_minutes, r.person_name))
+    # Sort: absent first, then camera_offline, then present, then by current absence minutes desc, then by name
+    roster.sort(key=lambda r: (
+        0 if r.status == "absent" else (1 if r.status == "camera_offline" else (2 if r.status == "present" else 3)),
+        -r.current_absence_minutes,
+        r.person_name,
+    ))
 
     total_on_duty = len([r for r in roster if r.is_in_duty_hours])
     present_count = len([r for r in roster if r.status == "present"])
     absent_count = len([r for r in roster if r.status == "absent"])
+    camera_offline_count = len([r for r in roster if r.status == "camera_offline"])
     total_shift_absence_minutes = sum(r.shift_absence_minutes for r in roster)
     avg_compliance = round(sum(r.shift_compliance_pct for r in roster) / len(roster), 1) if roster else 100.0
 
@@ -477,6 +518,7 @@ async def get_duty_roster(
         total_on_duty=total_on_duty,
         present_count=present_count,
         absent_count=absent_count,
+        camera_offline_count=camera_offline_count,
         total_shift_absence_minutes=total_shift_absence_minutes,
         total_shift_absence_str=_format_duration(total_shift_absence_minutes * 60),
         avg_compliance_pct=avg_compliance,
@@ -492,7 +534,7 @@ async def get_zone_logs(
 ):
     """Get paginated zone violations, absence timeout alerts, and unauthorized entry logs."""
     where_clause = or_(
-        Event.alert_type.in_(["out_of_zone", "unauthorized_entry", "absence_timeout"]),
+        Event.alert_type.in_(["out_of_zone", "unauthorized_entry", "absence_timeout", "camera_disconnected"]),
         Event.zone_id.isnot(None),
     )
 

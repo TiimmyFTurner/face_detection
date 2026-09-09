@@ -87,6 +87,7 @@ class StreamProcessor:
         self._zones_cache: dict[int, list[dict]] = {}  # camera_id -> list of zone dicts
         self._zone_last_seen: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
         self._zone_last_absence_alert: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
+        self._camera_last_disconnect_alert: dict[int, float] = {}  # camera_id -> timestamp of last disconnect alert
         self._last_preview_time: dict[int, float] = {}  # camera_id -> timestamp of last JPEG encode
         self._camera_last_frame_time: dict[int, float] = {}  # camera_id -> timestamp of last successfully read frame
         self._camera_connected: dict[int, bool] = {}  # camera_id -> is stream actively open & receiving frames
@@ -345,10 +346,7 @@ class StreamProcessor:
                     known_persons_map = {kp.person_id: kp.person_name for kp in self._known_persons_cache}
 
                 for camera_id, zones in zones_snapshot:
-                    # Only check active streaming cameras
-                    if camera_id not in self._threads or not self._threads[camera_id].is_alive():
-                        continue
-
+                    is_cam_online = self.is_camera_online(camera_id)
                     camera_name = self._camera_names.get(camera_id, f"Camera #{camera_id}")
 
                     for zone in zones:
@@ -358,7 +356,7 @@ class StreamProcessor:
                             zone.get("end_time", "23:59"),
                             zone.get("active_days", []),
                         ):
-                            continue  # Off duty — suppress absence alerts
+                            continue  # Off duty — suppress alerts
 
                         mode = zone.get("alert_mode", "absence")
                         if mode not in ("absence", "both", "out_of_zone"):
@@ -366,6 +364,92 @@ class StreamProcessor:
 
                         assigned_ids = zone.get("assigned_person_ids", [])
                         for person_id in assigned_ids:
+                            person_name = known_persons_map.get(person_id, f"Person #{person_id}")
+
+                            # If camera is NOT online/connected:
+                            if not is_cam_online:
+                                # Log camera disconnected alert (throttled to once per 5 minutes per camera)
+                                # AND CRITICALLY: DO NOT LOG ABSENCE!
+                                last_disc = self._camera_last_disconnect_alert.get(camera_id, 0)
+                                if (now - last_disc) >= 300.0:
+                                    self._camera_last_disconnect_alert[camera_id] = now
+                                    disc_message = (
+                                        f"⚠️ Camera Disconnected: '{camera_name}' is offline. "
+                                        f"Presence monitoring suspended for {person_name} in '{zone.get('name')}'."
+                                    )
+                                    logger.warning(disc_message)
+
+                                    saved_event_id = None
+                                    saved_snapshot = ""
+                                    try:
+                                        async with async_session() as session:
+                                            pres = await session.execute(
+                                                select(PersonEmbedding)
+                                                .where(PersonEmbedding.person_id == person_id)
+                                                .order_by(PersonEmbedding.id.asc())
+                                            )
+                                            emb_obj = pres.scalars().first()
+                                            if emb_obj and emb_obj.reference_photo_path:
+                                                ref_name = Path(emb_obj.reference_photo_path).name
+                                                saved_snapshot = f"ref_{ref_name}"
+
+                                            evt = Event(
+                                                timestamp=datetime.now(timezone.utc),
+                                                camera_id=camera_id,
+                                                person_id=person_id,
+                                                person_name=person_name,
+                                                confidence_score=1.0,
+                                                snapshot_path=saved_snapshot,
+                                                is_known=True,
+                                                zone_id=zone["id"],
+                                                zone_name=zone["name"],
+                                                alert_type="camera_disconnected",
+                                                duration_seconds=0,
+                                            )
+                                            session.add(evt)
+                                            await session.commit()
+                                            await session.refresh(evt)
+                                            saved_event_id = evt.id
+                                    except Exception as db_err:
+                                        logger.error("Failed to log camera disconnected event to DB: %s", db_err)
+
+                                    await ws_manager.broadcast({
+                                        "type": "zone_alert",
+                                        "alert_type": "camera_disconnected",
+                                        "message": disc_message,
+                                        "event": {
+                                            "id": saved_event_id or int(time.time()),
+                                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                                            "camera_id": camera_id,
+                                            "camera_name": camera_name,
+                                            "person_id": person_id,
+                                            "person_name": person_name,
+                                            "confidence_score": 1.0,
+                                            "snapshot_url": f"/api/snapshots/{saved_snapshot}" if saved_snapshot else "",
+                                            "snapshot_path": saved_snapshot,
+                                            "is_known": True,
+                                            "zone_id": zone["id"],
+                                            "zone_name": zone["name"],
+                                            "alert_type": "camera_disconnected",
+                                            "duration_seconds": 0,
+                                            "duration_str": "Camera Disconnected",
+                                        },
+                                        "zone_id": zone["id"],
+                                        "zone_name": zone["name"],
+                                        "camera_id": camera_id,
+                                        "camera_name": camera_name,
+                                        "person_id": person_id,
+                                        "person_name": person_name,
+                                    })
+                                # Refresh last seen timer to now so camera offline time is NEVER counted as absence
+                                self._zone_last_seen[(zone["id"], person_id)] = now
+                                # Skip absence check when camera is offline
+                                continue
+
+                            # Camera is online — clear any offline alert throttle
+                            if camera_id in self._camera_last_disconnect_alert:
+                                self._camera_last_disconnect_alert.pop(camera_id, None)
+
                             key = (zone["id"], person_id)
                             last_seen = self._zone_last_seen.get(key, 0)
 
@@ -374,7 +458,7 @@ class StreamProcessor:
                                 self._zone_last_seen[key] = now
                                 continue
 
-                            # Check if person has been missing from zone for >= 60 seconds (1 minute)
+                            # Check if person has been missing from zone for >= 120 seconds (2 minutes)
                             if (now - last_seen) >= 120.0:
                                 last_alert = self._zone_last_absence_alert.get(key, 0)
                                 # Throttle absence alert events to at most once every 2 minutes

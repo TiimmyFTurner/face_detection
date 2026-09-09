@@ -42,6 +42,7 @@ const EventCard = {
                             ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
                             ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
                             ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}</span>` : ''}
+                            ${event.alert_type === 'camera_disconnected' ? `<span class="event-badge" style="background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">${I18n.t('alert_camera_disconnected')}</span>` : ''}
                         </div>
                     </div>
                     <div class="event-card-meta">
@@ -115,6 +116,7 @@ const EventCard = {
                             ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
                             ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
                             ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}</span>` : ''}
+                            ${event.alert_type === 'camera_disconnected' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">${I18n.t('alert_camera_disconnected')}</span>` : ''}
                         </div>
                     </div>
                 </div>

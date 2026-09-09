@@ -172,6 +172,8 @@ async def list_persons(
             seconds_since = (now - ev_ts).total_seconds() if ev_ts else 999999
 
             if person_zones:
+                pz = person_zones[0]
+                is_cam_online = stream_processor.is_camera_online(pz.camera_id)
                 in_shift = any(
                     is_time_in_timetable(
                         z.start_time or "00:00",
@@ -181,7 +183,10 @@ async def list_persons(
                     for z in person_zones
                 )
                 if in_shift:
-                    if seconds_since < 180:
+                    if not is_cam_online:
+                        current_status = "camera_offline"
+                        current_absence_mins = 0
+                    elif seconds_since < 180:
                         current_status = "present"
                     else:
                         current_status = "absent"
@@ -191,6 +196,7 @@ async def list_persons(
         today_absence_mins = 0
         if person_zones:
             pz = person_zones[0]
+            is_cam_online = stream_processor.is_camera_online(pz.camera_id)
             today_day_name = datetime.now().strftime("%a")
             active_days = _parse_list_field(pz.active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
             if today_day_name in active_days:
@@ -202,8 +208,11 @@ async def list_persons(
                     dur_m = (end_m - start_m) if end_m >= start_m else ((24 * 60 - start_m) + end_m)
                 except Exception:
                     dur_m = 480
-                if current_status == "absent":
+                # Never add camera disconnected time to absence
+                if current_status == "absent" and is_cam_online:
                     today_absence_mins = current_absence_mins or dur_m
+                else:
+                    today_absence_mins = 0
 
         summary = PersonSummaryStats(
             total_detections=total_events,
@@ -820,18 +829,24 @@ async def get_person_analytics(
         else:
             shift_dur_mins = 0
             if is_sched_day and matching_shift:
-                absent_shift_days += 1
-                arr_stat = "absent"
-                try:
-                    sh, sm = map(int, matching_shift.start_time.split(":"))
-                    eh, em = map(int, matching_shift.end_time.split(":"))
-                    start_m = sh * 60 + sm
-                    end_m = eh * 60 + em
-                    shift_dur_mins = (end_m - start_m) if end_m >= start_m else ((24 * 60 - start_m) + end_m)
-                except Exception:
-                    shift_dur_mins = 480
-                day_absence_mins = shift_dur_mins
-                day_absence_str = _format_duration(shift_dur_mins * 60)
+                is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
+                if day_offset == 0 and is_cam_offline:
+                    arr_stat = "camera_offline"
+                    day_absence_mins = 0
+                    day_absence_str = "0m"
+                else:
+                    absent_shift_days += 1
+                    arr_stat = "absent"
+                    try:
+                        sh, sm = map(int, matching_shift.start_time.split(":"))
+                        eh, em = map(int, matching_shift.end_time.split(":"))
+                        start_m = sh * 60 + sm
+                        end_m = eh * 60 + em
+                        shift_dur_mins = (end_m - start_m) if end_m >= start_m else ((24 * 60 - start_m) + end_m)
+                    except Exception:
+                        shift_dur_mins = 480
+                    day_absence_mins = shift_dur_mins
+                    day_absence_str = _format_duration(shift_dur_mins * 60)
             else:
                 arr_stat = "rest_day"
                 day_absence_mins = 0
@@ -885,7 +900,11 @@ async def get_person_analytics(
         if has_assigned_shift:
             in_shift_now = any(s.is_in_schedule_now for s in shifts_info)
             if in_shift_now:
-                if seconds_since < 180:
+                is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
+                if is_cam_offline:
+                    current_status = "camera_offline"
+                    current_absence_mins = 0
+                elif seconds_since < 180:
                     current_status = "present"
                 else:
                     current_status = "absent"

@@ -74,6 +74,9 @@ const DutyPage = {
                         <button class="btn btn-sm ${DutyPage._currentFilter === 'absent' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-absent" onclick="DutyPage.setFilter('absent')">
                             ${I18n.t('filter_absent')}
                         </button>
+                        <button class="btn btn-sm ${DutyPage._currentFilter === 'offline' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-offline" onclick="DutyPage.setFilter('offline')">
+                            🟡 ${I18n.t('filter_camera_offline')}
+                        </button>
                     </div>
 
                     <!-- Only Active Shift Toggle -->
@@ -156,7 +159,7 @@ const DutyPage = {
      */
     setFilter(filter) {
         DutyPage._currentFilter = filter;
-        ['all', 'present', 'absent'].forEach(f => {
+        ['all', 'present', 'absent', 'offline'].forEach(f => {
             const btn = document.getElementById(`filter-duty-${f}`);
             if (btn) {
                 btn.className = `btn btn-sm ${DutyPage._currentFilter === f ? 'btn-primary' : 'btn-ghost'}`;
@@ -275,10 +278,15 @@ const DutyPage = {
                 <div class="duty-kpi-body">
                     <span class="duty-kpi-value">${absentCount}</span>
                 </div>
-                <div class="duty-kpi-footer">
+                <div class="duty-kpi-footer" style="flex-wrap: wrap; gap: 0.35rem;">
                     <span class="duty-kpi-badge rose">
                         ${absentCount > 0 ? '⚠️ ' + (isRtl ? 'نیازمند پیگیری' : 'Needs attention') : '✓ ' + (isRtl ? 'همه حاضر هستند' : 'All on station')}
                     </span>
+                    ${d.camera_offline_count > 0 ? `
+                        <span class="duty-kpi-badge amber" style="background: rgba(234, 179, 8, 0.15); color: #facc15; border-color: rgba(234, 179, 8, 0.4); cursor: pointer;" onclick="DutyPage.setFilter('offline')" title="${I18n.t('filter_camera_offline')}">
+                            🟡 ${I18n.t('duty_camera_disconnected_badge', { count: isRtl ? I18n.toPersianDigits(d.camera_offline_count) : d.camera_offline_count })}
+                        </span>
+                    ` : ''}
                 </div>
             </div>
 
@@ -338,6 +346,8 @@ const DutyPage = {
             roster = roster.filter(r => r.status === 'present');
         } else if (DutyPage._currentFilter === 'absent') {
             roster = roster.filter(r => r.status === 'absent');
+        } else if (DutyPage._currentFilter === 'offline') {
+            roster = roster.filter(r => r.status === 'camera_offline');
         }
 
         if (roster.length === 0) {
@@ -363,7 +373,9 @@ const DutyPage = {
         rosterEl.innerHTML = roster.map(person => {
             const isPresent = person.status === 'present';
             const isAbsent = person.status === 'absent';
-            const borderAccent = isPresent ? 'var(--accent-emerald)' : (isAbsent ? 'var(--accent-rose)' : 'rgba(255, 255, 255, 0.2)');
+            const isOffline = person.status === 'camera_offline';
+            const borderAccent = isPresent ? 'var(--accent-emerald)' : (isAbsent ? 'var(--accent-rose)' : (isOffline ? '#facc15' : 'rgba(255, 255, 255, 0.2)'));
+            const cardClass = isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : (isOffline ? 'duty-camera-offline' : ''));
 
             // Avatar / Initial fallback
             const avatarHtml = person.avatar_url
@@ -379,6 +391,12 @@ const DutyPage = {
                 statusBadgeHtml = `
                     <span class="badge-status-pill on-station" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
                         🟢 ${isRtl ? `حاضر در منطقه (${I18n.toPersianDigits(secAgo)} ثانیه پیش)` : `In Zone (${secAgo}s ago)`}
+                    </span>
+                `;
+            } else if (isOffline) {
+                statusBadgeHtml = `
+                    <span class="badge-status-pill camera-offline" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.45);">
+                        🟡 ${isRtl ? 'دوربین قطع است' : 'Camera Disconnected'}
                     </span>
                 `;
             } else if (isAbsent) {
@@ -421,7 +439,7 @@ const DutyPage = {
 
             if (DutyPage._viewMode === 'list') {
                 return `
-                    <div class="duty-card list-item ${isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : '')}">
+                    <div class="duty-card list-item ${cardClass}">
                         <!-- Left: Staff Identity -->
                         <div class="duty-list-identity">
                             ${avatarHtml}
@@ -448,10 +466,10 @@ const DutyPage = {
                                 <span style="color: var(--text-tertiary); font-size: 0.72rem;">(${shiftDurHours} ${isRtl ? 'ساعت' : 'hrs'})</span>
                             </div>
 
-                            <div class="duty-metric-pill" style="${isAbsent ? 'border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);' : ''}" title="${I18n.t('today_absence')}">
-                                <span>⏱️</span>
-                                <span style="color: var(--text-tertiary);">${I18n.t('today_absence')}:</span>
-                                <strong style="color: ${isAbsent ? 'var(--accent-rose)' : 'var(--text-primary)'};">${sumShiftAbsenceDisplay}</strong>
+                            <div class="duty-metric-pill" style="${isAbsent ? 'border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);' : (isOffline ? 'border-color: rgba(234, 179, 8, 0.4); background: rgba(234, 179, 8, 0.1); color: #facc15;' : '')}" title="${isOffline ? I18n.t('status_camera_offline') : I18n.t('today_absence')}">
+                                <span>${isOffline ? '🟡' : '⏱️'}</span>
+                                <span style="color: var(--text-tertiary);">${isOffline ? I18n.t('status_camera_offline') : I18n.t('today_absence')}:</span>
+                                <strong style="color: ${isAbsent ? 'var(--accent-rose)' : (isOffline ? '#facc15' : 'var(--text-primary)')};">${isOffline ? I18n.t('camera_feed_unavailable') : sumShiftAbsenceDisplay}</strong>
                             </div>
 
                             <div class="duty-metric-pill" style="border-color: ${person.shift_compliance_pct >= 85 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}; background: ${person.shift_compliance_pct >= 85 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; color: ${person.shift_compliance_pct >= 85 ? 'var(--accent-emerald)' : 'var(--accent-amber)'}; font-weight: 700;" title="${I18n.t('kpi_shift_compliance')}">
@@ -471,7 +489,7 @@ const DutyPage = {
             }
 
             return `
-                <div class="duty-card ${isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : '')}">
+                <div class="duty-card ${cardClass}">
                     <!-- Top Info Row -->
                     <div style="display: flex; gap: 0.9rem; align-items: flex-start;">
                         ${avatarHtml}
@@ -501,20 +519,34 @@ const DutyPage = {
                         </span>
                     </div>
 
-                    <!-- 2 Main Absence Metrics: Current Absence & Sum of Shift Absence -->
+                    <!-- 2 Main Absence / Status Metrics -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                        <!-- Current Absence -->
-                        <div style="background: ${isPresent ? 'rgba(16, 185, 129, 0.09)' : 'rgba(244, 63, 94, 0.09)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
-                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
-                                ${I18n.t('current_absence_title')}
+                        <!-- Status / Current Absence -->
+                        ${isOffline ? `
+                            <div style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                                <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                                    ${I18n.t('status') || 'وضعیت'}
+                                </div>
+                                <div style="font-size: 1.05rem; font-weight: 800; color: #facc15;">
+                                    ${I18n.t('status_camera_offline')}
+                                </div>
+                                <div style="font-size: 0.68rem; color: #fef08a; margin-top: 0.15rem;">
+                                    ${I18n.t('camera_feed_unavailable')}
+                                </div>
                             </div>
-                            <div style="font-size: 1.2rem; font-weight: 800; color: ${isPresent ? '#34d399' : '#fb7185'};">
-                                ${currAbsenceDisplay}
+                        ` : `
+                            <div style="background: ${isPresent ? 'rgba(16, 185, 129, 0.09)' : 'rgba(244, 63, 94, 0.09)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
+                                <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                                    ${I18n.t('current_absence_title')}
+                                </div>
+                                <div style="font-size: 1.2rem; font-weight: 800; color: ${isPresent ? '#34d399' : '#fb7185'};">
+                                    ${currAbsenceDisplay}
+                                </div>
+                                <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                                    ${isPresent ? I18n.t('in_zone_present') : (person.last_seen_str || I18n.t('absent_not_seen'))}
+                                </div>
                             </div>
-                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
-                                ${isPresent ? I18n.t('in_zone_present') : (person.last_seen_str || I18n.t('absent_not_seen'))}
-                            </div>
-                        </div>
+                        `}
 
                         <!-- Sum of Current Shift Absence -->
                         <div style="background: rgba(245, 158, 11, 0.09); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
@@ -525,7 +557,11 @@ const DutyPage = {
                                 ${sumShiftAbsenceDisplay}
                             </div>
                             <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
-                                ${isRtl ? `از ${elapsedStr} دقیقه سپری شده` : `of ${elapsedStr}m elapsed`}
+                                ${isOffline
+                                    ? (person.shift_absence_minutes === 0
+                                        ? (isRtl ? 'زمان قطعی جزو غیبت محاسبه نمی‌شود' : 'Offline time not counted as absence')
+                                        : (isRtl ? `از ساعات آنلاین دوربین` : `during online camera hours`))
+                                    : (isRtl ? `از ${elapsedStr} دقیقه سپری شده` : `of ${elapsedStr}m elapsed`)}
                             </div>
                         </div>
                     </div>

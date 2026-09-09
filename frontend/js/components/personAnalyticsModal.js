@@ -82,6 +82,8 @@ const PersonAnalyticsModal = {
 
         if (p.current_status === 'present') {
             statusBadgeHtml = `<span class="badge-status-pill on-station">🟢 ${I18n.t('badge_on_station')}</span>`;
+        } else if (p.current_status === 'camera_offline') {
+            statusBadgeHtml = `<span class="badge-status-pill camera-offline" style="background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">🟡 ${I18n.t('status_camera_offline')}</span>`;
         } else if (p.current_status === 'absent') {
             const absentSuffix = absenceMin > 0 ? ` (${I18n.t('minutes_absent_now', { mins: absMinsDisp })})` : '';
             statusBadgeHtml = `<span class="badge-status-pill absent">🔴 ${I18n.t('badge_absent')}${absentSuffix}</span>`;

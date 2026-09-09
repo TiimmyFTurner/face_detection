@@ -377,7 +377,8 @@ class PersonDutyStatus(BaseModel):
     shift_duration_hours: float
     active_days: list[str] = []
     is_in_duty_hours: bool
-    status: str  # "present", "absent", "off_duty"
+    status: str  # "present", "absent", "off_duty", "camera_offline"
+    camera_online: bool = True
     is_in_zone: bool
     last_seen_seconds_ago: Optional[float] = None
     last_seen_str: str = ""
@@ -397,6 +398,7 @@ class DutyRosterResponse(BaseModel):
     total_on_duty: int
     present_count: int
     absent_count: int
+    camera_offline_count: int = 0
     total_shift_absence_minutes: int
     total_shift_absence_str: str
     avg_compliance_pct: float
@@ -421,7 +423,7 @@ class EventResponse(BaseModel):
     is_known: bool
     zone_id: Optional[int] = None
     zone_name: str = ""
-    alert_type: str = "normal"  # "normal", "out_of_zone", "unauthorized_entry", "absence_timeout"
+    alert_type: str = "normal"  # "normal", "out_of_zone", "unauthorized_entry", "absence_timeout", "camera_disconnected"
     duration_seconds: Optional[int] = None
     duration_str: Optional[str] = None
 

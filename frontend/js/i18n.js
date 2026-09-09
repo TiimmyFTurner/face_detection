@@ -107,6 +107,13 @@ const I18n = {
             alert_out_of_zone: '⚠️ خارج از منطقه مجاز',
             alert_unauthorized: '🚨 ورود غیرمجاز',
             alert_absence_timeout: '⏱️ عدم حضور بیش از حد مجاز',
+            alert_camera_disconnected: '⚠️ قطع ارتباط دوربین',
+            filter_camera_offline: 'دوربین قطع',
+            badge_camera_offline: '🟡 دوربین قطع است',
+            status_camera_offline: 'دوربین قطع است',
+            camera_feed_unavailable: 'سیگنال دوربین در دسترس نیست',
+            kpi_camera_offline_title: 'دوربین‌های قطع',
+            duty_camera_disconnected_badge: '{count} دوربین قطع',
             other_detections_for: '📸 سایر ترددهای ثبت شده برای {name} ({count})',
             click_to_view: 'برای مشاهده کلیک کنید',
             no_image: 'بدون تصویر',
@@ -405,6 +412,8 @@ const I18n = {
             // Real-time Alerts & Notifications
             notification_absence_title: '⚠️ هشدار عدم حضور در شیفت',
             notification_absence_msg: '«{person}» در محدوده کاری «{zone}» حضور ندارد (غایب به مدت {time})',
+            notification_camera_disconnected_title: '⚠️ هشدار قطعی دوربین',
+            notification_camera_disconnected_msg: 'دوربین «{camera}» قطع است. پایش حضور «{person}» متوقف شد.',
             notification_unauthorized_title: '🚨 هشدار ورود غیرمجاز',
             notification_unauthorized_msg: 'ورود غیرمجاز «{person}» به منطقه «{zone}» در دوربین «{camera}»',
             notification_out_of_zone_title: '⚠️ هشدار خروج از محدوده',
@@ -692,6 +701,13 @@ const I18n = {
             alert_out_of_zone: '⚠️ Out of Area',
             alert_unauthorized: '🚨 Unauthorized',
             alert_absence_timeout: '⏱️ Absence Timeout',
+            alert_camera_disconnected: '⚠️ Camera Disconnected',
+            filter_camera_offline: 'Camera Offline',
+            badge_camera_offline: '🟡 Camera Disconnected',
+            status_camera_offline: 'Camera Disconnected',
+            camera_feed_unavailable: 'No camera video signal',
+            kpi_camera_offline_title: 'Cameras Offline',
+            duty_camera_disconnected_badge: '{count} Cam Offline',
             other_detections_for: '📸 Other Detections for {name} ({count})',
             click_to_view: 'Click for details',
             no_image: 'No Image',
@@ -990,6 +1006,8 @@ const I18n = {
             // Real-time Alerts & Notifications
             notification_absence_title: '⚠️ Absence Alert',
             notification_absence_msg: '{person} is NOT in assigned area \'{zone}\' ({time})',
+            notification_camera_disconnected_title: '⚠️ Camera Offline Alert',
+            notification_camera_disconnected_msg: 'Camera \'{camera}\' is offline. Presence monitoring suspended for {person}.',
             notification_unauthorized_title: '🚨 Unauthorized Entry',
             notification_unauthorized_msg: '{person} in restricted area \'{zone}\' on camera \'{camera}\'',
             notification_out_of_zone_title: '⚠️ Out of Area Alert',
@@ -1390,6 +1408,13 @@ const I18n = {
         }
         if (alertType === 'out_of_zone') {
             return I18n.t('notification_out_of_zone_msg', {
+                person: personName,
+                zone: zoneName,
+                camera: cameraName
+            });
+        }
+        if (alertType === 'camera_disconnected') {
+            return I18n.t('notification_camera_disconnected_msg', {
                 person: personName,
                 zone: zoneName,
                 camera: cameraName

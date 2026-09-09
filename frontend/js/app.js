@@ -147,7 +147,7 @@ const App = {
                     const data = JSON.parse(event.data);
                     if (data.type === 'new_event') {
                         DashboardPage.addRealtimeEvent(data.event);
-                        if (data.event && (data.event.alert_type === 'out_of_zone' || data.event.alert_type === 'unauthorized_entry' || data.event.alert_type === 'absence_timeout')) {
+                        if (data.event && (data.event.alert_type === 'out_of_zone' || data.event.alert_type === 'unauthorized_entry' || data.event.alert_type === 'absence_timeout' || data.event.alert_type === 'camera_disconnected')) {
                             if (typeof ZonesPage !== 'undefined' && ZonesPage.addRealtimeLog) {
                                 ZonesPage.addRealtimeLog({ event: data.event, ...data.event });
                             }
@@ -354,7 +354,9 @@ const App = {
         const localizedMsg = (typeof I18n !== 'undefined' && I18n.formatAlertNotification)
             ? I18n.formatAlertNotification(data)
             : (data.message || '⚠️ Zone Alert');
-        App.toast(localizedMsg, 'error');
+        const alertType = data.alert_type || (data.event ? data.event.alert_type : 'error');
+        const toastType = alertType === 'camera_disconnected' ? 'warning' : 'error';
+        App.toast(localizedMsg, toastType);
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();

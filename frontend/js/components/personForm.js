@@ -348,15 +348,7 @@ const PersonForm = {
         try {
             App.toast(I18n.t('processing_photos'), 'info');
 
-            const response = await fetch('/api/persons', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Failed to create person');
-            }
+            await App.api('/api/persons', 'POST', formData);
 
             PersonForm._selectedFiles = [];
             App.closeModal();
@@ -394,15 +386,7 @@ const PersonForm = {
         try {
             App.toast(I18n.t('processing_photos'), 'info');
 
-            const response = await fetch(`/api/persons/${personId}/photos`, {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({ detail: 'Failed to upload photos' }));
-                throw new Error(err.detail || 'Failed to upload photos');
-            }
+            await App.api(`/api/persons/${personId}/photos`, 'POST', formData);
 
             PersonForm._selectedFiles = [];
             PersonForm.updatePreview();

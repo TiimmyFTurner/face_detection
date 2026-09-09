@@ -193,9 +193,8 @@ const DutyPage = {
         }
 
         try {
-            const res = await fetch(`/api/zones/duty-roster?only_active=${DutyPage._onlyActive}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            DutyPage._data = await res.json();
+            const data = await App.api(`/api/zones/duty-roster?only_active=${DutyPage._onlyActive}`);
+            DutyPage._data = data;
             DutyPage.renderKPIs();
             DutyPage.renderRoster();
         } catch (err) {

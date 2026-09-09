@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy import select, func, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth import require_permission
 from backend.config import settings
 from backend.database import get_db
 from backend.face_engine import face_engine
@@ -96,7 +97,10 @@ def _build_person_response(
 
 
 @router.get("", response_model=list[PersonResponse])
-async def list_persons(db: AsyncSession = Depends(get_db)):
+async def list_persons(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:view")),
+):
     """
     List all known persons with their embedding counts and high-level
     detection summary statistics (total detections, today's detections, last seen).
@@ -227,6 +231,7 @@ async def create_person(
     role: str = Form(default=""),
     photos: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:create")),
 ):
     """
     Create a new known person by uploading one or more reference photos.
@@ -304,7 +309,11 @@ async def create_person(
 
 
 @router.get("/{person_id}", response_model=PersonResponse)
-async def get_person(person_id: int, db: AsyncSession = Depends(get_db)):
+async def get_person(
+    person_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:view")),
+):
     """Get details for a specific person."""
     person = await db.get(Person, person_id)
     if not person:
@@ -323,6 +332,7 @@ async def update_person(
     person_id: int,
     data: PersonUpdate,
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:edit")),
 ):
     """Update a person's name or role."""
     person = await db.get(Person, person_id)
@@ -349,7 +359,11 @@ async def update_person(
 
 
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_person(person_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_person(
+    person_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:delete")),
+):
     """Delete a person and all their embeddings and reference photos."""
     person = await db.get(Person, person_id)
     if not person:
@@ -379,6 +393,7 @@ async def add_photos(
     person_id: int,
     photos: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:edit")),
 ):
     """Add additional reference photos for an existing person."""
     person = await db.get(Person, person_id)
@@ -429,7 +444,11 @@ async def add_photos(
 
 
 @router.get("/{person_id}/photos", response_model=list[PersonPhotoItem])
-async def get_person_photos(person_id: int, db: AsyncSession = Depends(get_db)):
+async def get_person_photos(
+    person_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:view")),
+):
     """Get all reference photos and embedding IDs for a person."""
     person = await db.get(Person, person_id)
     if not person:
@@ -456,6 +475,7 @@ async def delete_person_photo(
     person_id: int,
     photo_id: int,
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:edit")),
 ):
     """Delete a specific reference photo and its face embedding."""
     person = await db.get(Person, person_id)
@@ -504,7 +524,11 @@ async def delete_person_photo(
 
 
 @router.get("/{person_id}/analytics", response_model=PersonAnalyticsResponse)
-async def get_person_analytics(person_id: int, db: AsyncSession = Depends(get_db)):
+async def get_person_analytics(
+    person_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:view")),
+):
     """
     Get in-depth analytics, shift punctuality compliance, 24-hour activity
     distribution, 14-day attendance log, and camera distribution for a person.

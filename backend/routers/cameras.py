@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import Union
 
+from backend.auth import require_permission
 from backend.database import get_db
 from backend.models import Camera
 from backend.schemas import CameraCreate, CameraBatchCreate, CameraUpdate, CameraResponse, CameraTestResult
@@ -37,7 +38,10 @@ router = APIRouter(prefix="/api/cameras", tags=["cameras"])
 
 
 @router.get("", response_model=list[CameraResponse])
-async def list_cameras(db: AsyncSession = Depends(get_db)):
+async def list_cameras(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:view")),
+):
     """List all configured cameras with real-time streaming status."""
     result = await db.execute(select(Camera).order_by(Camera.created_at.desc()))
     cameras = result.scalars().all()
@@ -53,6 +57,7 @@ async def list_cameras(db: AsyncSession = Depends(get_db)):
 async def create_camera(
     data: CameraCreate,
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:create")),
 ):
     """Add a new camera and optionally start its stream."""
     camera = Camera(
@@ -77,6 +82,7 @@ async def create_camera(
 async def create_cameras_batch(
     data: Union[CameraBatchCreate, list[CameraCreate]],
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:create")),
 ):
     """Add multiple individual cameras in batch. Each camera is stored and operated independently."""
     camera_items = data.cameras if isinstance(data, CameraBatchCreate) else data
@@ -111,7 +117,11 @@ async def create_cameras_batch(
 
 
 @router.get("/{camera_id}", response_model=CameraResponse)
-async def get_camera(camera_id: int, db: AsyncSession = Depends(get_db)):
+async def get_camera(
+    camera_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:view")),
+):
     """Get details for a specific camera."""
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -124,6 +134,7 @@ async def update_camera(
     camera_id: int,
     data: CameraUpdate,
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:edit")),
 ):
     """Update camera configuration. Restarts stream if URL or active state changes."""
     camera = await db.get(Camera, camera_id)
@@ -158,7 +169,11 @@ async def update_camera(
 
 
 @router.delete("/{camera_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_camera(camera_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_camera(
+    camera_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:delete")),
+):
     """Remove a camera and stop its stream."""
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -173,7 +188,11 @@ async def delete_camera(camera_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{camera_id}/test", response_model=CameraTestResult)
-async def test_camera(camera_id: int, db: AsyncSession = Depends(get_db)):
+async def test_camera(
+    camera_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:test")),
+):
     """Test an RTSP connection and return a thumbnail if successful."""
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -183,7 +202,10 @@ async def test_camera(camera_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test-url", response_model=CameraTestResult)
-async def test_camera_url(data: CameraCreate):
+async def test_camera_url(
+    data: CameraCreate,
+    _user=Depends(require_permission("cameras:test")),
+):
     """Test an RTSP URL without saving the camera."""
     return await _test_rtsp_connection(data.rtsp_url)
 
@@ -232,7 +254,11 @@ async def _test_rtsp_connection(rtsp_url: str) -> CameraTestResult:
 
 
 @router.get("/{camera_id}/snapshot")
-async def get_camera_snapshot(camera_id: int, db: AsyncSession = Depends(get_db)):
+async def get_camera_snapshot(
+    camera_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:view")),
+):
     """Return a single JPEG snapshot of the camera's current view."""
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -261,7 +287,11 @@ async def get_camera_snapshot(camera_id: int, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/{camera_id}/stream")
-async def get_camera_stream(camera_id: int, db: AsyncSession = Depends(get_db)):
+async def get_camera_stream(
+    camera_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("cameras:view")),
+):
     """Stream live camera frames as MJPEG video."""
     camera = await db.get(Camera, camera_id)
     if not camera:

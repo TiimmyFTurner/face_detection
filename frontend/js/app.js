@@ -10,7 +10,7 @@ const App = {
     _wsReconnectDelay: 1000,
 
     // ─── Initialization ────────────────────────────────────
-    init() {
+    async init() {
         // Initialize Internationalization
         I18n.init();
         I18n.onLanguageChange(() => {
@@ -22,13 +22,19 @@ const App = {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 const page = item.dataset.page;
-                App.navigate(page);
+                if (page) {
+                    App.navigate(page);
+                }
             });
         });
 
         // Close modal on overlay click
         document.getElementById('modal-overlay').addEventListener('click', (e) => {
             if (e.target.id === 'modal-overlay') {
+                // If unauthenticated, keep login modal open
+                if (typeof Auth !== 'undefined' && !Auth.isAuthenticated()) {
+                    return;
+                }
                 App.closeModal();
             }
         });
@@ -36,6 +42,9 @@ const App = {
         // Close modal on Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                if (typeof Auth !== 'undefined' && !Auth.isAuthenticated()) {
+                    return;
+                }
                 App.closeModal();
             }
         });
@@ -43,8 +52,15 @@ const App = {
         // Connect WebSocket
         App.connectWebSocket();
 
-        // Load initial page
-        App.navigate('dashboard');
+        // Initialize Authentication before loading pages
+        if (typeof Auth !== 'undefined') {
+            await Auth.init();
+        }
+
+        // Load initial page if authenticated
+        if (typeof Auth === 'undefined' || Auth.isAuthenticated()) {
+            App.navigate('dashboard');
+        }
     },
 
     // ─── Client-Side Router ────────────────────────────────
@@ -52,6 +68,30 @@ const App = {
         // Clean up page timers if navigating away
         if (typeof DutyPage !== 'undefined' && DutyPage.cleanup) {
             DutyPage.cleanup();
+        }
+
+        // Permission check
+        if (typeof Auth !== 'undefined' && Auth.isAuthenticated()) {
+            if (page === 'users' && !Auth.hasAnyPermission(['users:view', 'users:manage'])) {
+                App.showToast(I18n.t('access_denied') || 'شما دسترسی لازم به این بخش را ندارید.', 'error');
+                return;
+            }
+            if (page === 'cameras' && !Auth.hasPermission('cameras:view')) {
+                App.showToast(I18n.t('access_denied') || 'شما دسترسی لازم به این بخش را ندارید.', 'error');
+                return;
+            }
+            if (page === 'persons' && !Auth.hasPermission('persons:view')) {
+                App.showToast(I18n.t('access_denied') || 'شما دسترسی لازم به این بخش را ندارید.', 'error');
+                return;
+            }
+            if (page === 'zones' && !Auth.hasPermission('zones:view')) {
+                App.showToast(I18n.t('access_denied') || 'شما دسترسی لازم به این بخش را ندارید.', 'error');
+                return;
+            }
+            if (page === 'duty' && !Auth.hasPermission('duty:view')) {
+                App.showToast(I18n.t('access_denied') || 'شما دسترسی لازم به این بخش را ندارید.', 'error');
+                return;
+            }
         }
 
         App._currentPage = page;
@@ -77,6 +117,11 @@ const App = {
                 break;
             case 'zones':
                 ZonesPage.load();
+                break;
+            case 'users':
+                if (typeof UsersPage !== 'undefined') {
+                    UsersPage.load();
+                }
                 break;
             default:
                 DashboardPage.load();
@@ -181,7 +226,10 @@ const App = {
         };
 
         if (reqBody && method !== 'GET') {
-            if (typeof reqBody === 'object') {
+            if (typeof FormData !== 'undefined' && reqBody instanceof FormData) {
+                // Let browser set multipart boundary automatically
+                options.body = reqBody;
+            } else if (typeof reqBody === 'object') {
                 options.headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(reqBody);
             } else {
@@ -192,10 +240,22 @@ const App = {
             }
         }
 
+        // Inject Authorization header if authenticated
+        if (typeof Auth !== 'undefined' && Auth.getToken() && !options.headers['Authorization']) {
+            options.headers['Authorization'] = `Bearer ${Auth.getToken()}`;
+        }
+
         const response = await fetch(url, options);
 
         if (response.status === 204) {
             return null; // No content
+        }
+
+        if (response.status === 401 && url !== '/api/auth/login') {
+            if (typeof Auth !== 'undefined') {
+                Auth.logout();
+            }
+            throw new Error(I18n.t('session_expired') || 'نشست کاربری شما منقضی شده است. لطفاً مجدداً وارد شوید.');
         }
 
         if (!response.ok) {
@@ -274,6 +334,10 @@ const App = {
 
         // Auto-dismiss after 4 seconds
         setTimeout(() => App.dismissToast(id), 4000);
+    },
+
+    showToast(message, type = 'info') {
+        return this.toast(message, type);
     },
 
     dismissToast(id) {

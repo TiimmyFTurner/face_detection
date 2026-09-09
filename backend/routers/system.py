@@ -7,7 +7,8 @@ Endpoints:
 """
 
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from backend.auth import require_permission
 from backend.config import settings
 from backend.schemas import SystemSettingsResponse, SystemSettingsUpdate
 
@@ -17,7 +18,9 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
 @router.get("", response_model=SystemSettingsResponse)
-async def get_settings() -> SystemSettingsResponse:
+async def get_settings(
+    _user=Depends(require_permission("settings:view")),
+) -> SystemSettingsResponse:
     """Retrieve current system configuration and snapshot saving status."""
     return SystemSettingsResponse(
         save_snapshots=bool(settings.save_snapshots),
@@ -30,7 +33,10 @@ async def get_settings() -> SystemSettingsResponse:
 
 
 @router.patch("", response_model=SystemSettingsResponse)
-async def update_settings(update_data: SystemSettingsUpdate) -> SystemSettingsResponse:
+async def update_settings(
+    update_data: SystemSettingsUpdate,
+    _user=Depends(require_permission("settings:edit")),
+) -> SystemSettingsResponse:
     """
     Update runtime system configuration on the fly without restarting the server.
     """

@@ -20,7 +20,7 @@ from backend.config import settings
 from backend.database import init_db
 from backend.face_engine import face_engine
 from backend.stream_processor import stream_processor, ws_manager
-from backend.routers import cameras, persons, events, snapshots, zones, system
+from backend.routers import auth, cameras, events, persons, roles, snapshots, system, users, zones
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(
@@ -93,6 +93,9 @@ app.add_middleware(
 
 
 # ── API Routers ──────────────────────────────────────────
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(roles.router)
 app.include_router(cameras.router)
 app.include_router(persons.router)
 app.include_router(events.router)

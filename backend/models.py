@@ -140,3 +140,49 @@ class Event(Base):
             f"<Event id={self.id} person='{self.person_name}' "
             f"confidence={self.confidence_score:.2f} known={self.is_known} alert={self.alert_type}>"
         )
+
+
+class Role(Base):
+    """A role defining a collection of granular permissions."""
+
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, index=True, nullable=False)  # slug, e.g. "admin", "supervisor"
+    display_name = Column(String(255), nullable=False)                  # localized name, e.g. "مدیر سیستم"
+    description = Column(Text, default="")
+    permissions = Column(JSON, default=list)                            # list of permission strings
+    is_system = Column(Boolean, default=False)                          # system roles cannot be deleted
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    # Relationships
+    users = relationship("User", back_populates="role")
+
+    def __repr__(self) -> str:
+        return f"<Role id={self.id} name='{self.name}' display='{self.display_name}'>"
+
+
+class User(Base):
+    """An authorized user account with role and optional granular permission overrides."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    full_name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    salt = Column(String(64), nullable=False)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
+    custom_permissions = Column(JSON, default=list)                     # extra permissions specific to this user
+    is_active = Column(Boolean, default=True)
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    # Relationships
+    role = relationship("Role", back_populates="users")
+
+    def __repr__(self) -> str:
+        return f"<User id={self.id} username='{self.username}' active={self.is_active}>"
+

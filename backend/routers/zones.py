@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, desc, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth import require_permission
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding
 from backend.schemas import (
@@ -105,7 +106,11 @@ def is_time_in_timetable(start_time: Any, end_time: Any, active_days: Any) -> bo
 # ── Camera-Scoped Endpoints ──────────────────────────────
 
 @router.get("/api/cameras/{camera_id}/zones", response_model=list[CameraZoneResponse])
-async def list_camera_zones(camera_id: int, db: AsyncSession = Depends(get_db)):
+async def list_camera_zones(
+    camera_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:view")),
+):
     """List all important areas/zones defined on a specific camera."""
     camera = await db.get(Camera, camera_id)
     if not camera:
@@ -124,6 +129,7 @@ async def create_camera_zone(
     camera_id: int,
     data: CameraZoneCreate,
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:create")),
 ):
     """Create a new important area/zone on a camera with timetable and assigned persons."""
     camera = await db.get(Camera, camera_id)
@@ -158,7 +164,10 @@ async def create_camera_zone(
 # ── Live Status & Audit Logs ─────────────────────────────
 
 @router.get("/api/zones/status", response_model=list[ZoneStatusResponse])
-async def get_zones_status(db: AsyncSession = Depends(get_db)):
+async def get_zones_status(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:view")),
+):
     """
     Get the real-time presence status board for all configured camera zones.
     Shows whether assigned persons are currently in their zones, absent, or off-duty.
@@ -250,6 +259,7 @@ async def get_zones_status(db: AsyncSession = Depends(get_db)):
 async def get_duty_roster(
     only_active: bool = Query(True, description="Filter only persons currently in their active duty hours"),
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("duty:view")),
 ):
     """
     Real-time duty roster monitoring:
@@ -542,14 +552,21 @@ async def get_zone_logs(
 # ── Direct Zone Endpoints ────────────────────────────────
 
 @router.get("/api/zones", response_model=list[CameraZoneResponse])
-async def list_all_zones(db: AsyncSession = Depends(get_db)):
+async def list_all_zones(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:view")),
+):
     """List all defined camera zones across the system."""
     result = await db.execute(select(CameraZone).order_by(CameraZone.created_at.desc()))
     return result.scalars().all()
 
 
 @router.get("/api/zones/{zone_id}", response_model=CameraZoneResponse)
-async def get_zone(zone_id: int, db: AsyncSession = Depends(get_db)):
+async def get_zone(
+    zone_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:view")),
+):
     """Get details for a specific camera zone."""
     zone = await db.get(CameraZone, zone_id)
     if not zone:
@@ -562,6 +579,7 @@ async def update_zone(
     zone_id: int,
     data: CameraZoneUpdate,
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:edit")),
 ):
     """Update a camera zone's coordinates, name, assigned persons, timetable, or alert mode."""
     zone = await db.get(CameraZone, zone_id)
@@ -601,7 +619,11 @@ async def update_zone(
 
 
 @router.delete("/api/zones/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_zone(zone_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_zone(
+    zone_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:delete")),
+):
     """Delete a camera zone."""
     zone = await db.get(CameraZone, zone_id)
     if not zone:

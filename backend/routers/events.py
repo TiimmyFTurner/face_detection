@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth import require_permission
 from backend.database import get_db
 from backend.models import Event, Camera
 from backend.schemas import EventResponse, EventListResponse, EventStats
@@ -34,6 +35,7 @@ async def list_events(
     limit: int = Query(50, ge=1, le=200, description="Max events to return"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("dashboard:view")),
 ):
     """
     List detection events with optional filtering.
@@ -120,7 +122,10 @@ async def list_events(
 
 
 @router.get("/stats", response_model=EventStats)
-async def get_event_stats(db: AsyncSession = Depends(get_db)):
+async def get_event_stats(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("dashboard:view")),
+):
     """
     Get summary statistics for the dashboard.
 
@@ -169,6 +174,7 @@ async def get_grouped_events(
     is_known: Optional[bool] = Query(None, description="Filter known/unknown events"),
     limit_per_group: int = Query(15, ge=1, le=50, description="Max snapshots per person group"),
     db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("dashboard:view")),
 ):
     """
     Get detection events grouped by person identity.
@@ -243,3 +249,19 @@ async def get_grouped_events(
     grouped_list = list(grouped_map.values())
     grouped_list.sort(key=lambda g: g["latest_timestamp"], reverse=True)
     return grouped_list
+
+
+@router.delete("/{event_id}")
+async def delete_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("events:delete")),
+):
+    """Delete a detection event log entry."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    await db.delete(event)
+    await db.commit()
+    return {"success": True, "message": "Event deleted"}

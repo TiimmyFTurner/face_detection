@@ -477,3 +477,105 @@ class SystemSettingsUpdate(BaseModel):
     cooldown_seconds: Optional[int] = None
     frame_skip: Optional[int] = None
     downscale_factor: Optional[float] = None
+
+
+# ═══════════════════════════════════════════════════════════
+# Role & Permission Schemas
+# ═══════════════════════════════════════════════════════════
+
+class RoleBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    display_name: str = Field(..., min_length=2, max_length=255)
+    description: Optional[str] = ""
+    permissions: list[str] = []
+
+
+class RoleCreate(RoleBase):
+    pass
+
+
+class RoleUpdate(BaseModel):
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[list[str]] = None
+
+
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+    display_name: str
+    description: str = ""
+    permissions: list[str] = []
+    is_system: bool = False
+    user_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ═══════════════════════════════════════════════════════════
+# User Schemas
+# ═══════════════════════════════════════════════════════════
+
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=100)
+    full_name: str = Field(..., min_length=2, max_length=255)
+    role_id: Optional[int] = None
+    custom_permissions: list[str] = []
+    is_active: bool = True
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=4)
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role_id: Optional[int] = None
+    custom_permissions: Optional[list[str]] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    full_name: str
+    role_id: Optional[int] = None
+    role_name: str = ""
+    role_display_name: str = ""
+    custom_permissions: list[str] = []
+    effective_permissions: list[str] = []
+    permissions: list[str] = []
+    is_active: bool = True
+    last_login: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ═══════════════════════════════════════════════════════════
+# Authentication Schemas
+# ═══════════════════════════════════════════════════════════
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=4)
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str = Field(..., min_length=4)
+

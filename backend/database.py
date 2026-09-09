@@ -78,8 +78,96 @@ async def init_db() -> None:
 
         await conn.run_sync(_migrate)
 
+    # Auto-seed default roles and super admin if not present
+    await _seed_defaults()
 
-# ── FastAPI Dependency ───────────────────────────────────
+
+async def _seed_defaults() -> None:
+    """Seed initial roles and superadmin user if database is empty."""
+    from sqlalchemy import select
+    from backend.models import Role, User
+    from backend.auth import hash_password
+
+    async with async_session() as session:
+        # Check / Seed Roles
+        res = await session.execute(select(Role))
+        existing_roles = {r.name: r for r in res.scalars().all()}
+
+        default_roles_data = [
+            {
+                "name": "admin",
+                "display_name": "مدیر سیستم",
+                "description": "دسترسی کامل به تمامی بخش‌ها، تنظیمات، دوربین‌ها و مدیریت کاربران",
+                "permissions": ["*"],
+                "is_system": True,
+            },
+            {
+                "name": "supervisor",
+                "display_name": "سرپرست کارخانه / ناظر",
+                "description": "دسترسی به پیشخوان، شیفت‌ها، منطقه‌ها، دوربین‌ها و پرسنل بدون دسترسی به کاربران",
+                "permissions": [
+                    "dashboard:view", "events:export", "duty:view", "duty:manage",
+                    "zones:view", "zones:create", "zones:edit", "zones:delete",
+                    "cameras:view", "cameras:create", "cameras:edit", "cameras:test",
+                    "persons:view", "persons:create", "persons:edit", "settings:view",
+                ],
+                "is_system": False,
+            },
+            {
+                "name": "operator",
+                "display_name": "اپراتور حراست / مانیتورینگ",
+                "description": "مشاهده رویدادهای زنده، دوربین‌ها، پرسنل حاضر در شیفت و تایید هشدارهای غیبت",
+                "permissions": [
+                    "dashboard:view", "duty:view", "duty:manage",
+                    "cameras:view", "persons:view",
+                ],
+                "is_system": False,
+            },
+            {
+                "name": "viewer",
+                "display_name": "مشاهده‌گر / بازرس",
+                "description": "فقط مشاهده آمار پیشخوان و وضعیت شیفت پرسنل",
+                "permissions": [
+                    "dashboard:view", "duty:view",
+                ],
+                "is_system": False,
+            },
+        ]
+
+        for rdata in default_roles_data:
+            if rdata["name"] not in existing_roles:
+                role = Role(
+                    name=rdata["name"],
+                    display_name=rdata["display_name"],
+                    description=rdata["description"],
+                    permissions=rdata["permissions"],
+                    is_system=rdata["is_system"],
+                )
+                session.add(role)
+
+        await session.commit()
+
+        # Re-fetch admin role
+        admin_role_res = await session.execute(select(Role).where(Role.name == "admin"))
+        admin_role = admin_role_res.scalar_one_or_none()
+
+        # Check / Seed default Admin User
+        user_res = await session.execute(select(User).where(User.username == "admin"))
+        admin_user = user_res.scalar_one_or_none()
+        if not admin_user:
+            pwd_hash, salt = hash_password("admin123")
+            admin_user = User(
+                username="admin",
+                full_name="مدیر ارشد سامانه",
+                password_hash=pwd_hash,
+                salt=salt,
+                role_id=admin_role.id if admin_role else None,
+                custom_permissions=[],
+                is_active=True,
+            )
+            session.add(admin_user)
+            await session.commit()
+
 async def get_db() -> AsyncSession:
     """Yield an async database session for request-scoped use."""
     async with async_session() as session:

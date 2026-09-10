@@ -485,6 +485,8 @@ class SystemSettingsResponse(BaseModel):
     cooldown_seconds: int
     frame_skip: int
     downscale_factor: float
+    snapshot_retention_days: int = 30
+    event_log_retention_days: int = 0
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -495,6 +497,31 @@ class SystemSettingsUpdate(BaseModel):
     cooldown_seconds: Optional[int] = None
     frame_skip: Optional[int] = None
     downscale_factor: Optional[float] = None
+    snapshot_retention_days: Optional[int] = None
+    event_log_retention_days: Optional[int] = None
+
+
+class StorageStatsResponse(BaseModel):
+    """Storage and database statistics for snapshots and logs."""
+    snapshot_count: int
+    total_bytes: int
+    total_mb: float
+    event_count: int
+    oldest_snapshot_date: Optional[str] = None
+    newest_snapshot_date: Optional[str] = None
+    oldest_event_date: Optional[str] = None
+    newest_event_date: Optional[str] = None
+
+
+class CleanupResponse(BaseModel):
+    """Result of an on-demand cleanup operation."""
+    success: bool
+    deleted_files: int = 0
+    freed_bytes: int = 0
+    freed_mb: float = 0.0
+    records_removed: int = 0
+    message: str
+
 
 
 # ═══════════════════════════════════════════════════════════

@@ -331,9 +331,11 @@ DOWNSCALE_FACTOR=0.5
 COOLDOWN_SECONDS=60
 MAX_RECONNECT_BACKOFF=30
 
-# ── Local File Paths ──────────────────────────────────────
+# ── Storage & Automated Retention ─────────────────────────
 SNAPSHOT_DIR=./data/snapshots
 REFERENCE_PHOTO_DIR=./data/reference_photos
+SNAPSHOT_RETENTION_DAYS=30   # Days to keep snapshots (0 = no expiry)
+EVENT_LOG_RETENTION_DAYS=0    # Days to keep event logs in DB (0 = no expiry)
 
 # ── HTTP Server Settings ─────────────────────────────────
 HOST=0.0.0.0

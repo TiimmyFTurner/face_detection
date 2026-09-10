@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     save_snapshots: bool = True  # If False, events are only logged to DB without saving snapshot files to disk
     snapshot_dir: str = "./data/snapshots"
     reference_photo_dir: str = "./data/reference_photos"
+    snapshot_retention_days: int = 30  # 0 = No expiry (keep forever). Otherwise delete snapshot files older than N days.
+    event_log_retention_days: int = 0  # 0 = No expiry (keep forever). Otherwise delete event records older than N days.
+    snapshot_cleanup_interval_hours: int = 1  # Frequency of background retention worker in hours
 
     # ── Server ───────────────────────────────────────────
     host: str = "0.0.0.0"

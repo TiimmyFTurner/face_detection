@@ -20,6 +20,7 @@ from backend.config import settings
 from backend.database import init_db
 from backend.face_engine import face_engine
 from backend.stream_processor import stream_processor, ws_manager
+from backend.snapshot_cleanup import retention_worker
 from backend.routers import auth, cameras, events, persons, roles, snapshots, system, users, zones
 
 # ── Logging ──────────────────────────────────────────────
@@ -63,6 +64,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Stream processor failed to start: %s", e)
 
+    # Start automated snapshot and event log retention worker
+    try:
+        retention_worker.start()
+    except Exception as e:
+        logger.error("Retention worker failed to start: %s", e)
+
     logger.info("System ready. Dashboard: http://%s:%s", settings.host, settings.port)
     logger.info("=" * 60)
 
@@ -70,6 +77,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down...")
+    await retention_worker.stop()
     await stream_processor.stop_all()
     logger.info("Shutdown complete.")
 

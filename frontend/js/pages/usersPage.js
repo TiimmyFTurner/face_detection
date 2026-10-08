@@ -218,8 +218,70 @@ const UsersPage = {
     // ═══════════════════════════════════════════════════════
     // TAB 2: ROLES & PERMISSIONS MATRIX
     // ═══════════════════════════════════════════════════════
+    // TAB 2: ROLES & PERMISSIONS MATRIX
+    // ═══════════════════════════════════════════════════════
+    _getPermissionMeta(permKey) {
+        if (!this._permissionsRegistry || !this._permissionsRegistry.sections) {
+            return { label: permKey, desc: '', sectionTitle: '' };
+        }
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
+        for (const sec of this._permissionsRegistry.sections) {
+            for (const p of sec.permissions) {
+                if (p.key === permKey) {
+                    return {
+                        label: (isFa ? p.label_fa : p.label_en) || p.key,
+                        desc: (isFa ? p.description_fa : p.description_en) || '',
+                        sectionTitle: (isFa ? sec.title_fa : sec.title_en) || sec.id,
+                    };
+                }
+            }
+        }
+        return { label: permKey, desc: '', sectionTitle: '' };
+    },
+
+    _getRoleTheme(roleName) {
+        switch (roleName) {
+            case 'admin':
+                return {
+                    themeClass: 'role-theme-admin',
+                    icon: '👑',
+                    color: '#f59e0b',
+                    badgeText: I18n.t('role_admin_badge') || 'مدیر کل سیستم',
+                };
+            case 'supervisor':
+                return {
+                    themeClass: 'role-theme-supervisor',
+                    icon: '⚡',
+                    color: '#8b5cf6',
+                    badgeText: I18n.t('role_supervisor_badge') || 'سرپرست ارشد',
+                };
+            case 'operator':
+                return {
+                    themeClass: 'role-theme-operator',
+                    icon: '🛡️',
+                    color: '#06b6d4',
+                    badgeText: I18n.t('role_operator_badge') || 'اپراتور امنیتی',
+                };
+            case 'viewer':
+                return {
+                    themeClass: 'role-theme-viewer',
+                    icon: '👁️',
+                    color: '#10b981',
+                    badgeText: I18n.t('role_viewer_badge') || 'ناظر / بازرس',
+                };
+            default:
+                return {
+                    themeClass: 'role-theme-custom',
+                    icon: '🧩',
+                    color: '#ec4899',
+                    badgeText: I18n.t('role_custom_badge') || 'نقش سفارشی',
+                };
+        }
+    },
+
     _renderRolesTab(container) {
         const canManage = Auth.hasPermission('users:manage');
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
 
         if (this._roles.length === 0) {
             container.innerHTML = `
@@ -235,52 +297,97 @@ const UsersPage = {
         this._roles.forEach(role => {
             const isAdmin = role.name === 'admin' || (role.permissions || []).includes('*');
             const permCount = isAdmin
-                ? (this._permissionsRegistry?.all_permissions?.length || 18)
+                ? (this._permissionsRegistry?.all_permissions?.length || 22)
                 : (role.permissions || []).length;
 
             const isSystem = role.is_system || ['admin', 'supervisor', 'operator', 'viewer'].includes(role.name);
+            const theme = this._getRoleTheme(role.name);
 
-            // Preview top permission tags
+            // Preview top permission tags in active language (Persian!)
             let permsPreview = '';
             if (isAdmin) {
-                permsPreview = `<span class="badge badge-success">${I18n.t('all_permissions') || 'دسترسی کامل به تمامی بخش‌ها (*)'}</span>`;
+                permsPreview = `
+                    <div class="role-perm-admin-banner">
+                        <span class="admin-star-icon">👑</span>
+                        <span>${I18n.t('all_permissions_granted') || 'دسترسی کامل به تمامی بخش‌های سامانه (*)'}</span>
+                    </div>
+                `;
             } else {
-                const tags = (role.permissions || []).slice(0, 4).map(p => `<span class="badge badge-subtle">${p}</span>`).join(' ');
-                const rem = (role.permissions || []).length - 4;
-                permsPreview = tags + (rem > 0 ? ` <span class="badge badge-secondary">+${rem} دسترسی دیگر</span>` : '');
+                const perms = role.permissions || [];
+                if (perms.length === 0) {
+                    permsPreview = `<span class="text-muted text-xs">${I18n.t('no_permissions_assigned') || 'بدون دسترسی'}</span>`;
+                } else {
+                    const topChips = perms.slice(0, 4).map(p => {
+                        const meta = this._getPermissionMeta(p);
+                        return `<span class="role-perm-chip" title="${this._escape(meta.desc || meta.label)}">${this._escape(meta.label)}</span>`;
+                    }).join('');
+
+                    const rem = perms.length - 4;
+                    let remChip = '';
+                    if (rem > 0) {
+                        const remTitles = perms.slice(4).map(p => this._getPermissionMeta(p).label).join(' | ');
+                        remChip = `<span class="role-perm-chip role-perm-more" title="${this._escape(remTitles)}">+${isFa ? I18n.toPersianDigits(rem) : rem} ${I18n.t('more_permissions_badge') ? I18n.t('more_permissions_badge').replace('+{count} ', '') : 'دسترسی دیگر'}</span>`;
+                    }
+                    permsPreview = topChips + remChip;
+                }
             }
 
+            const userCountDisplay = isFa ? I18n.toPersianDigits(role.user_count || 0) : (role.user_count || 0);
+            const permCountDisplay = isFa ? I18n.toPersianDigits(permCount) : permCount;
+
             rolesGridHtml += `
-                <div class="role-card-item card-glass">
+                <div class="role-card-item ${theme.themeClass}">
                     <div class="role-card-header">
-                        <div class="d-flex align-items-center justify-content-between w-100">
-                            <div class="role-title-group">
-                                <h3 class="role-display-name">${this._escape(role.display_name)}</h3>
-                                <code class="role-slug">@${this._escape(role.name)}</code>
+                        <div class="role-header-top">
+                            <div class="role-identity">
+                                <div class="role-icon-box">
+                                    <span>${theme.icon}</span>
+                                </div>
+                                <div class="role-title-group">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <h3 class="role-display-name">${this._escape(role.display_name)}</h3>
+                                        <span class="role-type-badge ${isSystem ? 'system' : 'custom'}">
+                                            ${isSystem ? (I18n.t('role_type_system') || 'سیستمی') : (I18n.t('role_type_custom') || 'سفارشی')}
+                                        </span>
+                                    </div>
+                                    <code class="role-slug-badge">@${this._escape(role.name)}</code>
+                                </div>
                             </div>
-                            <div class="role-badges">
-                                ${isSystem ? `<span class="badge badge-secondary text-xs">${I18n.t('system_role') || 'سیستمی'}</span>` : ''}
-                                <span class="badge badge-info">${role.user_count || 0} ${I18n.t('users') || 'کاربر'}</span>
+                            <div class="role-users-count-pill" title="${userCountDisplay} ${I18n.t('users') || 'کاربر'}">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                <span>${userCountDisplay} ${I18n.t('users') || 'کاربر'}</span>
                             </div>
                         </div>
                     </div>
 
-                    <p class="role-card-desc text-muted">${this._escape(role.description || I18n.t('no_description') || 'بدون توضیحات')}</p>
+                    <div class="role-card-body">
+                        <p class="role-card-desc">${this._escape(role.description || I18n.t('no_description') || 'بدون شرح وظایف')}</p>
 
-                    <div class="role-perms-summary mt-3">
-                        <div class="text-xs text-muted mb-1 font-weight-bold">${I18n.t('permissions') || 'سطوح دسترسی'} (${permCount}):</div>
-                        <div class="role-tags-wrap">${permsPreview}</div>
+                        <div class="role-perms-summary">
+                            <div class="role-perms-header">
+                                <span class="role-perms-label">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 13px; height: 13px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                    <span>${I18n.t('permissions') || 'سطوح دسترسی'}</span>
+                                </span>
+                                <span class="role-perms-counter-badge ${isAdmin ? 'admin' : ''}">
+                                    ${isAdmin ? (I18n.t('all_permissions') || 'دسترسی جامع (*)') : `${permCountDisplay} ${I18n.t('active_permissions') || 'دسترسی مجاز'}`}
+                                </span>
+                            </div>
+                            <div class="role-tags-wrap">
+                                ${permsPreview}
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="role-card-footer mt-4 pt-3 d-flex justify-content-end gap-2">
+                    <div class="role-card-footer">
                         ${canManage ? `
-                            <button class="btn btn-outline-secondary btn-sm" onclick="UsersPage.openRoleModal(${role.id})">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            <button class="btn-role-action edit-action" onclick="UsersPage.openRoleModal(${role.id})">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                 <span>${I18n.t('edit_role_permissions') || 'ویرایش دسترسی‌ها'}</span>
                             </button>
                             ${!isSystem ? `
-                                <button class="btn btn-outline-danger btn-sm" title="${I18n.t('delete') || 'حذف'}" onclick="UsersPage.deleteRole(${role.id}, '${this._escape(role.display_name)}')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                <button class="btn-role-action delete-action" title="${I18n.t('delete') || 'حذف نقش'}" onclick="UsersPage.deleteRole(${role.id}, '${this._escape(role.display_name)}')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                 </button>
                             ` : ''}
                         ` : ''}
@@ -290,8 +397,26 @@ const UsersPage = {
         });
 
         container.innerHTML = `
-            <div class="roles-grid">
-                ${rolesGridHtml}
+            <div class="roles-tab-wrapper">
+                <div class="roles-intro-bar card-glass mb-4">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="roles-intro-icon">🛡️</div>
+                            <div>
+                                <h3 class="m-0 font-weight-bold" style="font-size: 1.05rem;">${I18n.t('tab_roles') || 'نقش‌ها و دسترسی‌های سامانه (RBAC)'}</h3>
+                                <p class="text-muted m-0 text-xs mt-1">${I18n.t('roles_header_desc') || 'تعریف نقش‌های کاربری، تنظیم سطوح دسترسی تفکیک‌شده به بخش‌های مختلف'}</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge badge-subtle px-3 py-2">
+                                ${isFa ? I18n.toPersianDigits(this._roles.length) : this._roles.length} نقش فعال در سامانه
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="roles-grid">
+                    ${rolesGridHtml}
+                </div>
             </div>
         `;
     },
@@ -524,83 +649,193 @@ const UsersPage = {
         const role = roleId ? this._roles.find(r => r.id === roleId) : null;
         const isEdit = !!role;
         const isAdmin = role && (role.name === 'admin' || (role.permissions || []).includes('*'));
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
+        const theme = this._getRoleTheme(role ? role.name : 'custom');
+
+        const allRegistryPerms = this._permissionsRegistry?.all_permissions || [];
+        const totalCount = allRegistryPerms.length || 22;
 
         const rolePerms = new Set(isAdmin
-            ? (this._permissionsRegistry?.all_permissions || [])
+            ? allRegistryPerms
             : (role ? role.permissions || [] : []));
+
+        const activeCount = isAdmin ? totalCount : rolePerms.size;
 
         const matrixHtml = this._buildPermissionsCheckboxGrid('role-perm', rolePerms, isAdmin);
 
         const modalHtml = `
-            <div class="modal-header">
+            <div class="modal-header modal-roles-header">
                 <div class="modal-title-group">
-                    <span class="modal-icon">${isEdit ? '🛡️' : '＋'}</span>
+                    <div class="modal-icon-badge" style="background: ${theme.color}22; color: ${theme.color}; border: 1px solid ${theme.color}55;">
+                        <span>${isEdit ? theme.icon : '＋'}</span>
+                    </div>
                     <div>
-                        <h2 class="modal-title">${isEdit ? (I18n.t('edit_role') || 'ویرایش نقش و دسترسی‌ها') : (I18n.t('add_role') || 'تعریف نقش جدید')}</h2>
-                        <p class="modal-subtitle">${isEdit ? role.display_name : (I18n.t('add_role_sub') || 'سطوح دسترسی این نقش را در بخش‌های مختلف مشخص نمایید')}</p>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <h2 class="modal-title">${isEdit ? (I18n.t('edit_role') || 'ویرایش نقش و دسترسی‌ها') : (I18n.t('add_role') || 'تعریف نقش جدید')}</h2>
+                            ${isEdit ? `<span class="badge badge-subtle text-xs">@${this._escape(role.name)}</span>` : ''}
+                        </div>
+                        <p class="modal-subtitle">${isEdit ? this._escape(role.display_name) : (I18n.t('add_role_sub') || 'سطوح دسترسی این نقش را در بخش‌های مختلف مشخص نمایید')}</p>
                     </div>
                 </div>
                 <button type="button" class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
 
-            <div class="modal-body">
+            <div class="modal-body modal-roles-body">
                 <div id="role-form-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem;"></div>
 
                 <form id="role-edit-form" onsubmit="UsersPage._saveRole(event, ${roleId || 'null'})">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="form-role-display-name" class="form-label">${I18n.t('role_display_name') || 'عنوان نمایشی نقش'} *</label>
-                            <input type="text" id="form-role-display-name" class="form-control" required value="${isEdit ? this._escape(role.display_name) : ''}" placeholder="مثال: سرپرست شیفت شب">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="form-role-name" class="form-label">${I18n.t('role_identifier') || 'شناسه سیستمی (Slug)'} *</label>
-                            <input type="text" id="form-role-name" class="form-control" required ${isEdit ? 'readonly disabled' : ''} value="${isEdit ? this._escape(role.name) : ''}" placeholder="night_shift_supervisor">
-                        </div>
-                    </div>
-
-                    <div class="form-group mb-4">
-                        <label for="form-role-desc" class="form-label">${I18n.t('description') || 'شرح وظایف و اختیارات'}</label>
-                        <input type="text" id="form-role-desc" class="form-control" value="${isEdit ? this._escape(role.description || '') : ''}">
-                    </div>
-
-                    <div class="permissions-matrix-header d-flex justify-content-between align-items-center mb-2">
-                        <h4 class="m-0 font-weight-bold">${I18n.t('granular_permissions') || 'ماتریس دسترسی‌های تفکیک‌شده'}</h4>
-                        ${!isAdmin ? `
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="UsersPage.toggleAllMatrixChecks(true)">${I18n.t('select_all') || 'انتخاب همه'}</button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="UsersPage.toggleAllMatrixChecks(false)">${I18n.t('deselect_all') || 'لغو انتخاب'}</button>
+                    <div class="role-meta-section card-glass p-3 mb-4">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="form-role-display-name" class="form-label d-flex align-items-center gap-2">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; color: #60a5fa;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                    <span>${I18n.t('role_display_name') || 'عنوان نمایشی نقش'} *</span>
+                                </label>
+                                <input type="text" id="form-role-display-name" class="form-control" required value="${isEdit ? this._escape(role.display_name) : ''}" placeholder="${I18n.t('role_display_name_placeholder') || 'مثال: سرپرست شیفت شب'}">
                             </div>
-                        ` : '<span class="badge badge-success">مدیر کل به صورت پیش‌فرض تمام اختیارات را دارد</span>'}
+                            <div class="col-md-6">
+                                <label for="form-role-name" class="form-label d-flex align-items-center gap-2">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; color: #60a5fa;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                                    <span>${I18n.t('role_identifier') || 'شناسه سیستمی نقش (Slug)'} *</span>
+                                </label>
+                                <input type="text" id="form-role-name" class="form-control" required ${isEdit ? 'readonly disabled' : ''} value="${isEdit ? this._escape(role.name) : ''}" placeholder="${I18n.t('role_identifier_placeholder') || 'night_shift_supervisor'}">
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label for="form-role-desc" class="form-label d-flex align-items-center gap-2">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; color: #60a5fa;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                                <span>${I18n.t('role_description_label') || I18n.t('role_description') || 'شرح وظایف و اختیارات'}</span>
+                            </label>
+                            <input type="text" id="form-role-desc" class="form-control" value="${isEdit ? this._escape(role.description || '') : ''}" placeholder="${I18n.t('role_description_placeholder') || 'توضیحات مربوط به حوزه اختیارات و وظایف این نقش...'}">
+                        </div>
                     </div>
 
-                    <div class="permissions-matrix-wrap card-glass p-3 mb-4">
+                    <!-- Permissions Matrix Header & Toolbar -->
+                    <div class="matrix-control-bar card-glass p-3 mb-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <h4 class="m-0 font-weight-bold" style="font-size: 1rem; color: #93c5fd;">
+                                    🛡️ ${I18n.t('granular_permissions') || 'ماتریس دسترسی‌های تفکیک‌شده'}
+                                </h4>
+                                <span class="active-perms-badge" id="active-perms-counter">
+                                    <span id="active-perms-num">${isFa ? I18n.toPersianDigits(activeCount) : activeCount}</span> از <span id="total-perms-num">${isFa ? I18n.toPersianDigits(totalCount) : totalCount}</span> دسترسی فعال
+                                </span>
+                            </div>
+
+                            ${isAdmin ? `
+                                <div class="admin-full-badge">
+                                    <span>👑 ${I18n.t('admin_full_access_note') || 'مدیر کل به صورت پیش‌فرض تمام اختیارات را دارد'}</span>
+                                </div>
+                            ` : `
+                                <div class="matrix-quick-actions d-flex gap-2">
+                                    <button type="button" class="btn btn-xs btn-outline-primary" onclick="UsersPage.toggleAllMatrixChecks(true)">
+                                        ✓ ${I18n.t('select_all') || 'انتخاب همه'}
+                                    </button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="UsersPage.toggleAllMatrixChecks(false)">
+                                        ✕ ${I18n.t('deselect_all') || 'لغو انتخاب'}
+                                    </button>
+                                </div>
+                            `}
+                        </div>
+
+                        <!-- Live Filter / Search Bar -->
+                        <div class="matrix-search-box position-relative mt-2">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="matrix-search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input type="text" id="matrix-search-input" class="form-control form-control-sm matrix-search-input" placeholder="${I18n.t('search_permissions_placeholder') || 'جستجو در نام یا شرح دسترسی...'}" oninput="UsersPage.filterPermissions(this.value)">
+                        </div>
+                    </div>
+
+                    <!-- Permissions Items Matrix (Single smooth scroll container) -->
+                    <div class="permissions-matrix-wrap" id="permissions-matrix-container">
                         ${matrixHtml}
+                        <div id="no-perms-found" class="text-center p-4 text-muted" style="display: none;">
+                            🔍 هیچ دسترسی منطبق با عبارت جستجو شده یافت نشد.
+                        </div>
                     </div>
 
-                    <div class="modal-actions">
+                    <div class="modal-actions mt-4 pt-3 border-top d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('cancel') || 'انصراف'}</button>
-                        <button type="submit" id="save-role-btn" class="btn btn-primary">
+                        <button type="submit" id="save-role-btn" class="btn btn-primary d-inline-flex align-items-center gap-2">
                             <span>💾</span>
-                            <span>${I18n.t('save') || 'ذخیره نقش'}</span>
+                            <span>${I18n.t('save_role_btn') || I18n.t('save') || 'ذخیره نقش'}</span>
                         </button>
                     </div>
                 </form>
             </div>
         `;
 
-        App.openModal(modalHtml, 'modal-wide');
+        App.openModal(modalHtml, 'modal-wide modal-roles-modal');
+        this.updateActivePermsCount();
+    },
+
+    filterPermissions(query) {
+        const q = (query || '').trim().toLowerCase();
+        const sections = document.querySelectorAll('.perm-section-block');
+        let totalVisible = 0;
+
+        sections.forEach(sec => {
+            let sectionHasVisible = false;
+            const secBoxes = sec.querySelectorAll('.permission-item-box');
+            secBoxes.forEach(box => {
+                const text = box.textContent.toLowerCase();
+                const matches = !q || text.includes(q);
+                box.style.display = matches ? 'block' : 'none';
+                if (matches) {
+                    sectionHasVisible = true;
+                    totalVisible++;
+                }
+            });
+            sec.style.display = sectionHasVisible ? 'block' : 'none';
+        });
+
+        const noFoundEl = document.getElementById('no-perms-found');
+        if (noFoundEl) {
+            noFoundEl.style.display = totalVisible === 0 ? 'block' : 'none';
+        }
+    },
+
+    togglePermBox(boxEl, event) {
+        if (!boxEl) return;
+        if (event && event.target && event.target.tagName === 'INPUT') {
+            this.updateActivePermsCount();
+            return;
+        }
+        const cb = boxEl.querySelector('input[type="checkbox"]');
+        if (cb && !cb.disabled) {
+            cb.checked = !cb.checked;
+            this.updateActivePermsCount();
+        }
+    },
+
+    updateActivePermsCount() {
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
+        const checkedBoxes = document.querySelectorAll('.role-perm-cb:checked');
+        const numEl = document.getElementById('active-perms-num');
+        if (numEl) {
+            numEl.textContent = isFa ? I18n.toPersianDigits(checkedBoxes.length) : checkedBoxes.length;
+        }
+
+        document.querySelectorAll('.permission-item-box').forEach(box => {
+            const cb = box.querySelector('input[type="checkbox"]');
+            if (cb) {
+                box.classList.toggle('is-checked', cb.checked);
+            }
+        });
     },
 
     toggleAllMatrixChecks(checkState) {
         document.querySelectorAll('.role-perm-cb').forEach(cb => {
             if (!cb.disabled) cb.checked = checkState;
         });
+        this.updateActivePermsCount();
     },
 
     toggleSectionChecks(sectionId, checkState) {
         document.querySelectorAll(`.role-perm-cb[data-section="${sectionId}"]`).forEach(cb => {
             if (!cb.disabled) cb.checked = checkState;
         });
+        this.updateActivePermsCount();
     },
 
     async _saveRole(e, roleId) {
@@ -669,35 +904,49 @@ const UsersPage = {
     // ═══════════════════════════════════════════════════════
     _buildPermissionsCheckboxGrid(cbClassPrefix, checkedPermsSet, disableAll = false) {
         if (!this._permissionsRegistry || !this._permissionsRegistry.sections) {
-            return '<div class="text-muted">در حال بارگذاری لیست دسترسی‌ها...</div>';
+            return '<div class="text-muted p-3">در حال بارگذاری لیست دسترسی‌ها...</div>';
         }
 
-        const isFa = I18n.currentLang === 'fa';
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
         let sectionsHtml = '';
 
+        const sectionIcons = {
+            dashboard: '📊',
+            duty: '⏱️',
+            zones: '📍',
+            cameras: '📹',
+            persons: '👤',
+            settings: '⚙️',
+            users: '👥',
+        };
+
         this._permissionsRegistry.sections.forEach(section => {
-            const title = isFa ? section.title_fa : section.title_en;
+            const title = (isFa ? section.title_fa : section.title_en) || section.id;
+            const icon = sectionIcons[section.id] || '📌';
             let itemsHtml = '';
 
             section.permissions.forEach(p => {
                 const isChecked = checkedPermsSet.has(p.key) || checkedPermsSet.has('*');
-                const label = isFa ? p.label_fa : p.label_en;
-                const desc = isFa ? p.description_fa : p.description_en;
+                const label = (isFa ? p.label_fa : p.label_en) || p.key;
+                const desc = (isFa ? p.description_fa : p.description_en) || '';
 
                 itemsHtml += `
-                    <div class="permission-item-box">
+                    <div class="permission-item-box ${isChecked ? 'is-checked' : ''}" onclick="UsersPage.togglePermBox(this, event)">
                         <label class="perm-checkbox-label">
                             <input type="checkbox"
                                    class="${cbClassPrefix}-cb"
                                    data-section="${section.id}"
                                    value="${p.key}"
                                    ${isChecked ? 'checked' : ''}
-                                   ${disableAll ? 'disabled' : ''}>
+                                   ${disableAll ? 'disabled' : ''}
+                                   onchange="UsersPage.updateActivePermsCount()">
                             <span class="perm-checkbox-custom"></span>
                             <div class="perm-text-group">
-                                <span class="perm-title">${this._escape(label)}</span>
-                                <span class="perm-key-code">${this._escape(p.key)}</span>
-                                <small class="perm-desc text-muted">${this._escape(desc)}</small>
+                                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                    <span class="perm-title">${this._escape(label)}</span>
+                                    <span class="perm-key-code">${this._escape(p.key)}</span>
+                                </div>
+                                ${desc ? `<small class="perm-desc">${this._escape(desc)}</small>` : ''}
                             </div>
                         </label>
                     </div>
@@ -705,13 +954,17 @@ const UsersPage = {
             });
 
             sectionsHtml += `
-                <div class="perm-section-block mb-3">
-                    <div class="perm-section-header d-flex justify-content-between align-items-center mb-2">
-                        <span class="perm-section-title font-weight-bold">📌 ${this._escape(title)}</span>
+                <div class="perm-section-block mb-3" data-section-id="${section.id}">
+                    <div class="perm-section-header d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="perm-section-icon">${icon}</span>
+                            <span class="perm-section-title font-weight-bold">${this._escape(title)}</span>
+                            <span class="badge badge-subtle text-xs">${section.permissions.length}</span>
+                        </div>
                         ${!disableAll ? `
-                            <div class="perm-section-quick-btns">
-                                <a href="javascript:void(0)" class="text-xs mr-2" onclick="UsersPage.toggleSectionChecks('${section.id}', true)">${I18n.t('all') || 'همه'}</a>
-                                <a href="javascript:void(0)" class="text-xs text-muted" onclick="UsersPage.toggleSectionChecks('${section.id}', false)">${I18n.t('none') || 'هیچ'}</a>
+                            <div class="perm-section-quick-btns d-flex gap-2">
+                                <button type="button" class="btn-perm-sec-toggle" onclick="UsersPage.toggleSectionChecks('${section.id}', true)">${I18n.t('all') || 'همه'}</button>
+                                <button type="button" class="btn-perm-sec-toggle secondary" onclick="UsersPage.toggleSectionChecks('${section.id}', false)">${I18n.t('none') || 'هیچ'}</button>
                             </div>
                         ` : ''}
                     </div>

@@ -3741,34 +3741,167 @@ html[dir="rtl"] textarea {
     border-color: rgba(59, 130, 246, 0.5);
 }
 
-/* ── Roles Grid & Cards ──────────────────────────────────── */
+/* ── Roles Tab & RBAC Matrix ─────────────────────────────── */
+.roles-tab-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.roles-intro-bar {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.4rem;
+    backdrop-filter: blur(12px);
+}
+
+.roles-intro-icon {
+    font-size: 1.8rem;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+}
+
 .roles-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
     gap: 1.25rem;
 }
 
 .role-card-item {
-    background: rgba(15, 20, 40, 0.7);
+    background: linear-gradient(180deg, rgba(17, 24, 39, 0.85) 0%, rgba(13, 18, 30, 0.95) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 1.25rem;
+    border-radius: 16px;
+    padding: 1.35rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.role-card-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    opacity: 0.85;
+    transition: height 0.25s ease, opacity 0.25s ease;
 }
 
 .role-card-item:hover {
-    transform: translateY(-2px);
-    border-color: rgba(59, 130, 246, 0.35);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.role-card-item:hover::before {
+    height: 4px;
+    opacity: 1;
+}
+
+/* Role Theme Specific Color Palettes */
+.role-theme-admin::before {
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+.role-theme-admin:hover {
+    border-color: rgba(245, 158, 11, 0.4);
+    box-shadow: 0 12px 32px rgba(245, 158, 11, 0.15), 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.role-theme-supervisor::before {
+    background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+}
+.role-theme-supervisor:hover {
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 12px 32px rgba(139, 92, 246, 0.15), 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.role-theme-operator::before {
+    background: linear-gradient(90deg, #06b6d4, #3b82f6);
+}
+.role-theme-operator:hover {
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: 0 12px 32px rgba(6, 182, 212, 0.15), 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.role-theme-viewer::before {
+    background: linear-gradient(90deg, #10b981, #06b6d4);
+}
+.role-theme-viewer:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.15), 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.role-theme-custom::before {
+    background: linear-gradient(90deg, #ec4899, #8b5cf6);
+}
+.role-theme-custom:hover {
+    border-color: rgba(236, 72, 153, 0.4);
+    box-shadow: 0 12px 32px rgba(236, 72, 153, 0.15), 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+/* Role Header Elements */
+.role-header-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.role-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.role-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.role-theme-admin .role-icon-box {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%);
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.role-theme-supervisor .role-icon-box {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+    border-color: rgba(139, 92, 246, 0.35);
+}
+
+.role-theme-operator .role-icon-box {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.2) 0%, rgba(14, 165, 233, 0.1) 100%);
+    border-color: rgba(6, 182, 212, 0.35);
+}
+
+.role-theme-viewer .role-icon-box {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%);
+    border-color: rgba(16, 185, 129, 0.35);
 }
 
 .role-title-group {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
 .role-display-name {
@@ -3776,98 +3909,425 @@ html[dir="rtl"] textarea {
     font-weight: 700;
     color: var(--text-primary);
     margin: 0;
+    line-height: 1.3;
 }
 
-.role-slug {
-    font-size: 0.75rem;
-    color: #60a5fa;
-    background: rgba(59, 130, 246, 0.1);
-    padding: 1px 6px;
-    border-radius: 4px;
+.role-type-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    line-height: 1;
+}
+
+.role-type-badge.system {
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.role-type-badge.custom {
+    background: rgba(236, 72, 153, 0.12);
+    color: #f472b6;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+.role-slug-badge {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.72rem;
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 2px 7px;
+    border-radius: 5px;
     width: fit-content;
+    direction: ltr;
+    display: inline-block;
+}
+
+.role-users-count-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 4px 9px;
+    border-radius: 20px;
+    flex-shrink: 0;
 }
 
 .role-card-desc {
     font-size: 0.82rem;
-    line-height: 1.45;
-    margin-top: 0.75rem;
-    min-height: 2.4rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0.85rem 0 1rem;
+    min-height: 2.5rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Permissions Preview in Cards */
+.role-perms-summary {
+    background: rgba(10, 14, 26, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 0.85rem 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.role-perms-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.role-perms-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+}
+
+.role-perms-counter-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.role-perms-counter-badge.admin {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.3);
 }
 
 .role-tags-wrap {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.35rem;
+    gap: 0.4rem;
 }
 
-/* ── Permissions Matrix Grid ─────────────────────────────── */
-.permissions-matrix-wrap {
-    max-height: 380px;
-    overflow-y: auto;
-    padding-right: 0.4rem;
-    border-radius: 10px;
-    background: rgba(10, 14, 28, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+.role-perm-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.73rem;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    transition: all 0.15s ease;
+    cursor: default;
 }
 
-[dir="rtl"] .permissions-matrix-wrap {
-    padding-right: 0;
-    padding-left: 0.4rem;
-}
-
-.perm-section-block {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-
-.perm-section-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding-bottom: 0.4rem;
-}
-
-.perm-section-title {
-    font-size: 0.88rem;
+.role-perm-chip:hover {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.3);
     color: #93c5fd;
 }
 
-.perm-items-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 0.55rem;
-    margin-top: 0.6rem;
+.role-perm-more {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+    font-weight: 600;
+    cursor: pointer;
 }
 
-.permission-item-box {
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+.role-perm-admin-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fbbf24;
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(239, 68, 68, 0.06) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    padding: 7px 12px;
     border-radius: 8px;
-    padding: 0.55rem 0.65rem;
+    width: 100%;
+}
+
+.role-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-role-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-role-action.edit-action {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    color: #93c5fd;
+    width: 100%;
+}
+
+.btn-role-action.edit-action:hover {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.55);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
+    transform: translateY(-1px);
+}
+
+.btn-role-action.delete-action {
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    color: #fb7185;
+    padding: 0.5rem 0.65rem;
+}
+
+.btn-role-action.delete-action:hover {
+    background: rgba(244, 63, 94, 0.22);
+    border-color: rgba(244, 63, 94, 0.55);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(244, 63, 94, 0.25);
+    transform: translateY(-1px);
+}
+
+/* ── Role Edit Modal & Permissions Matrix (Clean Single Scroll) ── */
+.modal.modal-roles-modal {
+    max-height: 90vh !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important;
+    border-radius: 18px;
+}
+
+.modal-roles-header {
+    flex-shrink: 0;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-icon-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+}
+
+.modal-roles-body {
+    flex: 1 1 auto;
+    overflow-y: auto !important;
+    padding: 1.25rem 1.5rem 1.75rem;
+}
+
+/* Remove double scrollbar inside the modal */
+.modal-roles-body .permissions-matrix-wrap {
+    max-height: none !important;
+    overflow-y: visible !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.matrix-control-bar {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+}
+
+.active-perms-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+.admin-full-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    padding: 4px 10px;
+    border-radius: 8px;
+}
+
+.matrix-search-box {
+    position: relative;
+    width: 100%;
+}
+
+.matrix-search-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+[dir="rtl"] .matrix-search-icon {
+    right: 12px;
+}
+[dir="ltr"] .matrix-search-icon {
+    left: 12px;
+}
+
+.matrix-search-input {
+    background: rgba(10, 14, 28, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    font-size: 0.84rem !important;
+    transition: all 0.2s ease !important;
+}
+
+[dir="rtl"] .matrix-search-input {
+    padding-right: 36px !important;
+    padding-left: 12px !important;
+}
+[dir="ltr"] .matrix-search-input {
+    padding-left: 36px !important;
+    padding-right: 12px !important;
+}
+
+.matrix-search-input:focus {
+    border-color: rgba(59, 130, 246, 0.6) !important;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Permissions Section Container */
+.perm-section-block {
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.9rem;
+    transition: border-color 0.2s ease;
+}
+
+.perm-section-block:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.perm-section-header {
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.perm-section-icon {
+    font-size: 1.1rem;
+}
+
+.perm-section-title {
+    font-size: 0.9rem;
+    color: #93c5fd;
+    letter-spacing: normal;
+}
+
+.btn-perm-sec-toggle {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 6px;
+    cursor: pointer;
     transition: all 0.15s ease;
 }
 
+.btn-perm-sec-toggle:hover {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.45);
+    color: #ffffff;
+}
+
+.btn-perm-sec-toggle.secondary {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-tertiary);
+}
+
+.btn-perm-sec-toggle.secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+
+/* Permission Item Cards (Interactive Grid) */
+.perm-items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 0.65rem;
+    margin-top: 0.75rem;
+}
+
+.permission-item-box {
+    background: rgba(10, 14, 28, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    padding: 0.7rem 0.8rem;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+
 .permission-item-box:hover {
-    background: rgba(59, 130, 246, 0.08);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(59, 130, 246, 0.35);
+    transform: translateY(-1px);
+}
+
+.permission-item-box.is-checked {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.45);
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.12);
 }
 
 .perm-checkbox-label {
     display: flex;
     align-items: flex-start;
-    gap: 0.6rem;
+    gap: 0.7rem;
     cursor: pointer;
     margin: 0;
     width: 100%;
 }
 
 .perm-checkbox-label input[type="checkbox"] {
-    margin-top: 3px;
+    margin-top: 2px;
     accent-color: #3b82f6;
-    width: 16px;
-    height: 16px;
+    width: 17px;
+    height: 17px;
     cursor: pointer;
     flex-shrink: 0;
 }
@@ -3875,142 +4335,45 @@ html[dir="rtl"] textarea {
 .perm-text-group {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+    width: 100%;
 }
 
 .perm-title {
     font-weight: 600;
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     color: var(--text-primary);
+    line-height: 1.35;
+}
+
+.permission-item-box.is-checked .perm-title {
+    color: #93c5fd;
 }
 
 .perm-key-code {
-    font-family: monospace;
-    font-size: 0.7rem;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.68rem;
     color: #60a5fa;
-    opacity: 0.85;
+    opacity: 0.8;
+    direction: ltr;
+    background: rgba(59, 130, 246, 0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    width: fit-content;
 }
 
 .perm-desc {
-    font-size: 0.72rem;
-    line-height: 1.3;
+    font-size: 0.74rem;
+    line-height: 1.4;
     color: var(--text-tertiary);
+    margin-top: 2px;
 }
 
-.btn-group-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
+/* RTL Form Polish */
+[dir="rtl"] .form-label {
+    text-transform: none;
+    letter-spacing: normal;
 }
-
-.btn-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    backdrop-filter: blur(8px);
-}
-
-.btn-action-btn svg {
-    width: 15px;
-    height: 15px;
-    stroke: currentColor;
-    transition: transform 0.2s ease;
-}
-
-.btn-action-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.btn-action-btn:hover svg {
-    transform: scale(1.15);
-}
-
-.btn-action-edit:hover {
-    background: rgba(59, 130, 246, 0.18);
-    border-color: rgba(59, 130, 246, 0.5);
-    color: #60a5fa;
-    box-shadow: 0 0 14px rgba(59, 130, 246, 0.3);
-}
-
-.btn-action-key:hover {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(245, 158, 11, 0.5);
-    color: #fbbf24;
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.3);
-}
-
-.btn-action-delete:hover {
-    background: rgba(244, 63, 94, 0.18);
-    border-color: rgba(244, 63, 94, 0.5);
-    color: #fb7185;
-    box-shadow: 0 0 14px rgba(244, 63, 94, 0.3);
-}
-
-.role-card-footer .btn-outline-secondary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.45rem 0.9rem;
-    font-size: 0.82rem;
-    font-weight: 600;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-}
-
-.role-card-footer .btn-outline-secondary svg {
-    width: 14px;
-    height: 14px;
-    stroke: currentColor;
-}
-
-.role-card-footer .btn-outline-secondary:hover {
-    background: rgba(59, 130, 246, 0.15);
-    border-color: rgba(59, 130, 246, 0.4);
-    color: #93c5fd;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 10px rgba(59, 130, 246, 0.2);
-}
-
-.role-card-footer .btn-outline-danger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.82rem;
-    border-radius: 8px;
-    border: 1px solid rgba(244, 63, 94, 0.3);
-    background: rgba(244, 63, 94, 0.08);
-    color: #fb7185;
-    transition: all 0.2s ease;
-}
-
-.role-card-footer .btn-outline-danger svg {
-    width: 14px;
-    height: 14px;
-    stroke: currentColor;
-}
-
-.role-card-footer .btn-outline-danger:hover {
-    background: rgba(244, 63, 94, 0.2);
-    border-color: rgba(244, 63, 94, 0.6);
-    color: #ffffff;
-    box-shadow: 0 0 12px rgba(244, 63, 94, 0.35);
-    transform: translateY(-1px);
-}
-
 
 /* ── Data Table Styling ──────────────────────────────────── */
 .table-responsive {

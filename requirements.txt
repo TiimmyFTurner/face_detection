@@ -3,7 +3,8 @@ fastapi[standard]>=0.115
 uvicorn[standard]>=0.30
 
 # ── Database ──────────────────────────────────────────────
-sqlalchemy>=2.0
+sqlalchemy[asyncio]>=2.0
+greenlet>=3.0
 aiosqlite>=0.20
 
 # ── File Upload ───────────────────────────────────────────

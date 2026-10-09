@@ -253,16 +253,28 @@ async def test_api_settings_and_cleanup_endpoints(client: AsyncClient, setup_tes
     data = get_resp.json()
     assert "snapshot_retention_days" in data
     assert "event_log_retention_days" in data
+    assert "downscale_factor" in data
+    assert "frame_skip" in data
+    assert "roi_crop_enabled" in data
+    assert "live_preview_fps" in data
 
-    # 2. Patch retention settings
+    # 2. Patch retention & performance settings
     patch_resp = await client.patch("/api/settings", json={
         "snapshot_retention_days": 7,
         "event_log_retention_days": 90,
+        "downscale_factor": 0.75,
+        "frame_skip": 3,
+        "roi_crop_enabled": False,
+        "live_preview_fps": 2.0,
     })
     assert patch_resp.status_code == 200
     updated = patch_resp.json()
     assert updated["snapshot_retention_days"] == 7
     assert updated["event_log_retention_days"] == 90
+    assert updated["downscale_factor"] == 0.75
+    assert updated["frame_skip"] == 3
+    assert updated["roi_crop_enabled"] is False
+    assert updated["live_preview_fps"] == 2.0
 
     # 3. Storage stats endpoint
     stats_resp = await client.get("/api/settings/storage-stats")

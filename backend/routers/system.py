@@ -46,6 +46,11 @@ async def get_settings(
         downscale_factor=float(settings.downscale_factor),
         snapshot_retention_days=int(getattr(settings, "snapshot_retention_days", 30)),
         event_log_retention_days=int(getattr(settings, "event_log_retention_days", 0)),
+        roi_crop_enabled=bool(getattr(settings, "roi_crop_enabled", True)),
+        live_preview_fps=float(getattr(settings, "live_preview_fps", 1.0)),
+        duty_cycle_window=float(getattr(settings, "duty_cycle_window", 30.0)),
+        duty_burst_duration=float(getattr(settings, "duty_burst_duration", 2.0)),
+        max_reconnect_backoff=int(getattr(settings, "max_reconnect_backoff", 30)),
     )
 
 
@@ -100,6 +105,31 @@ async def update_settings(
         env_updates["EVENT_LOG_RETENTION_DAYS"] = str(settings.event_log_retention_days)
         logger.info("Setting 'event_log_retention_days' updated to: %d", settings.event_log_retention_days)
 
+    if update_data.roi_crop_enabled is not None:
+        settings.roi_crop_enabled = bool(update_data.roi_crop_enabled)
+        env_updates["ROI_CROP_ENABLED"] = str(settings.roi_crop_enabled)
+        logger.info("Setting 'roi_crop_enabled' updated to: %s", settings.roi_crop_enabled)
+
+    if update_data.live_preview_fps is not None:
+        settings.live_preview_fps = max(0.1, min(10.0, float(update_data.live_preview_fps)))
+        env_updates["LIVE_PREVIEW_FPS"] = str(settings.live_preview_fps)
+        logger.info("Setting 'live_preview_fps' updated to: %.1f", settings.live_preview_fps)
+
+    if update_data.duty_cycle_window is not None:
+        settings.duty_cycle_window = max(5.0, min(300.0, float(update_data.duty_cycle_window)))
+        env_updates["DUTY_CYCLE_WINDOW"] = str(settings.duty_cycle_window)
+        logger.info("Setting 'duty_cycle_window' updated to: %.1f", settings.duty_cycle_window)
+
+    if update_data.duty_burst_duration is not None:
+        settings.duty_burst_duration = max(1.0, min(60.0, float(update_data.duty_burst_duration)))
+        env_updates["DUTY_BURST_DURATION"] = str(settings.duty_burst_duration)
+        logger.info("Setting 'duty_burst_duration' updated to: %.1f", settings.duty_burst_duration)
+
+    if update_data.max_reconnect_backoff is not None:
+        settings.max_reconnect_backoff = max(5, min(120, int(update_data.max_reconnect_backoff)))
+        env_updates["MAX_RECONNECT_BACKOFF"] = str(settings.max_reconnect_backoff)
+        logger.info("Setting 'max_reconnect_backoff' updated to: %d", settings.max_reconnect_backoff)
+
     if env_updates:
         update_env_file(env_updates)
 
@@ -112,6 +142,11 @@ async def update_settings(
         downscale_factor=float(settings.downscale_factor),
         snapshot_retention_days=int(getattr(settings, "snapshot_retention_days", 30)),
         event_log_retention_days=int(getattr(settings, "event_log_retention_days", 0)),
+        roi_crop_enabled=bool(getattr(settings, "roi_crop_enabled", True)),
+        live_preview_fps=float(getattr(settings, "live_preview_fps", 1.0)),
+        duty_cycle_window=float(getattr(settings, "duty_cycle_window", 30.0)),
+        duty_burst_duration=float(getattr(settings, "duty_burst_duration", 2.0)),
+        max_reconnect_backoff=int(getattr(settings, "max_reconnect_backoff", 30)),
     )
 
 

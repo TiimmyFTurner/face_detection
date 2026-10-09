@@ -12,7 +12,7 @@ Sets up:
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -98,6 +98,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── No-Cache Middleware for Static Frontend Assets ───────
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 
 # ── API Routers ──────────────────────────────────────────

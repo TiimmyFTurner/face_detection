@@ -487,6 +487,11 @@ class SystemSettingsResponse(BaseModel):
     downscale_factor: float
     snapshot_retention_days: int = 30
     event_log_retention_days: int = 0
+    roi_crop_enabled: bool = True
+    live_preview_fps: float = 1.0
+    duty_cycle_window: float = 30.0
+    duty_burst_duration: float = 2.0
+    max_reconnect_backoff: int = 30
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -499,6 +504,11 @@ class SystemSettingsUpdate(BaseModel):
     downscale_factor: Optional[float] = None
     snapshot_retention_days: Optional[int] = None
     event_log_retention_days: Optional[int] = None
+    roi_crop_enabled: Optional[bool] = None
+    live_preview_fps: Optional[float] = None
+    duty_cycle_window: Optional[float] = None
+    duty_burst_duration: Optional[float] = None
+    max_reconnect_backoff: Optional[int] = None
 
 
 class StorageStatsResponse(BaseModel):

@@ -1119,3 +1119,56 @@ async def get_person_analytics(
         recent_events=recent_event_responses,
     )
 
+
+@router.post("/reindex-embeddings")
+async def reindex_person_embeddings(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:edit")),
+) -> dict[str, Any]:
+    """
+    Recompute face embeddings for all persons from stored reference photos
+    using the currently active InsightFace model (e.g. when switching between buffalo_l and buffalo_s).
+    """
+    result = await db.execute(
+        select(PersonEmbedding, Person.name)
+        .join(Person, Person.id == PersonEmbedding.person_id)
+    )
+    rows = result.all()
+
+    if not rows:
+        return {"success": True, "updated": 0, "failed": 0, "message": "No embeddings to re-index."}
+
+    updated_count = 0
+    failed_count = 0
+
+    for emb, _name in rows:
+        photo_path = Path(emb.reference_photo_path)
+        if not photo_path.exists():
+            failed_count += 1
+            continue
+
+        try:
+            img_bytes = photo_path.read_bytes()
+            new_vec = face_engine.extract_embedding_from_photo(img_bytes)
+            if new_vec is not None:
+                emb.embedding = new_vec.tolist()
+                updated_count += 1
+            else:
+                failed_count += 1
+        except Exception as e:
+            logger.warning("Failed to re-index photo %s: %s", photo_path, e)
+            failed_count += 1
+
+    if updated_count > 0:
+        await db.commit()
+        await stream_processor.refresh_known_persons()
+
+    return {
+        "success": True,
+        "model": settings.insightface_model,
+        "updated": updated_count,
+        "failed": failed_count,
+        "message": f"Successfully re-indexed {updated_count} embeddings using model '{settings.insightface_model}'.",
+    }
+
+

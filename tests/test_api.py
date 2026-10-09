@@ -29,17 +29,41 @@ async def override_get_db():
             raise
 
 
+from backend.auth import get_current_user
+from backend.models import User, Role
+
+mock_admin = User(
+    id=1,
+    username="admin",
+    full_name="Admin",
+    is_active=True,
+    custom_permissions=["*"],
+    role=Role(id=1, name="admin", permissions=["*"]),
+)
+
+async def override_get_current_user():
+    return mock_admin
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[get_current_user] = override_get_current_user
+
+import backend.stream_processor
+backend.stream_processor.async_session = test_session
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def setup_database():
     """Create tables before each test, drop after."""
+    from backend.stream_processor import stream_processor
+    stream_processor._zones_cache.clear()
+    stream_processor._camera_names.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    stream_processor._zones_cache.clear()
+    stream_processor._camera_names.clear()
 
 
 @pytest_asyncio.fixture
@@ -137,19 +161,64 @@ async def test_update_camera(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_delete_camera(client: AsyncClient):
+    from backend.models import CameraZone, Event
+    from backend.stream_processor import stream_processor
+    from sqlalchemy import select
+
+    # 1. Create a camera
     create_resp = await client.post("/api/cameras", json={
         "name": "To Delete",
         "rtsp_url": "rtsp://test@192.168.1.1/stream",
-        "is_active": False,
+        "is_active": True,
     })
     camera_id = create_resp.json()["id"]
 
+    # 2. Create a zone on this camera
+    zone_resp = await client.post(f"/api/cameras/{camera_id}/zones", json={
+        "name": "Zone To Delete",
+        "x": 10.0,
+        "y": 10.0,
+        "width": 50.0,
+        "height": 50.0,
+        "alert_mode": "absence",
+    })
+    assert zone_resp.status_code == 201
+
+    # 3. Add a normal detection event and a camera_disconnected event
+    async with test_session() as session:
+        normal_evt = Event(camera_id=camera_id, person_name="Tiimmy", alert_type="normal", snapshot_path="test.jpg")
+        disc_evt = Event(camera_id=camera_id, person_name="Tiimmy", alert_type="camera_disconnected", snapshot_path="test2.jpg")
+        session.add_all([normal_evt, disc_evt])
+        await session.commit()
+
+    # Verify stream_processor cached zones for this camera
+    assert camera_id in stream_processor._zones_cache
+
+    # 4. Delete the camera
     response = await client.delete(f"/api/cameras/{camera_id}")
     assert response.status_code == 204
 
-    # Verify it's gone
+    # Verify camera is gone
     get_resp = await client.get(f"/api/cameras/{camera_id}")
     assert get_resp.status_code == 404
+
+    # Verify stream_processor cache purged the camera
+    assert camera_id not in stream_processor._zones_cache
+
+    # Verify zones for this camera were deleted from DB
+    async with test_session() as session:
+        zones_res = await session.execute(select(CameraZone).where(CameraZone.camera_id == camera_id))
+        assert len(zones_res.scalars().all()) == 0
+
+        # Disconnect alert event was removed
+        disc_res = await session.execute(select(Event).where(Event.alert_type == "camera_disconnected"))
+        assert len(disc_res.scalars().all()) == 0
+
+        # Normal detection event had camera_id unlinked (set to NULL)
+        normal_res = await session.execute(select(Event).where(Event.person_name == "Tiimmy"))
+        events = normal_res.scalars().all()
+        assert len(events) == 1
+        assert events[0].camera_id is None
 
 
 @pytest.mark.asyncio
@@ -188,6 +257,13 @@ async def test_grouped_events(client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+
+
+@pytest.mark.asyncio
+async def test_delete_nonexistent_event(client: AsyncClient):
+    response = await client.delete("/api/events/999999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Event not found"
 
 
 # ═══════════════════════════════════════════════════════════
@@ -393,3 +469,13 @@ async def test_legacy_zone_backward_compatibility(client: AsyncClient):
     # Verify status board endpoint works
     status_resp = await client.get("/api/zones/status")
     assert status_resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_reindex_embeddings_endpoint(client: AsyncClient):
+    response = await client.post("/api/persons/reindex-embeddings")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "updated" in data
+

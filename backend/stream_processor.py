@@ -239,6 +239,24 @@ class StreamProcessor:
         self._camera_last_frame_time.pop(camera_id, None)
         self._last_preview_time.pop(camera_id, None)
         self._processing_cameras.discard(camera_id)
+
+        # Clear zones cache and offline alert state for this camera
+        async with self._cache_lock:
+            self._zones_cache.pop(camera_id, None)
+            self._camera_last_disconnect_alert.pop(camera_id, None)
+            # Remove any cooldown keys for this camera
+            to_del_cd = [k for k in self._cooldown_cache if k[0] == camera_id]
+            for k in to_del_cd:
+                self._cooldown_cache.pop(k, None)
+            # Clean up tracking for any deleted zones
+            active_zone_ids = {z["id"] for zlist in self._zones_cache.values() for z in zlist}
+            for k in list(self._zone_last_seen.keys()):
+                if k[0] not in active_zone_ids:
+                    self._zone_last_seen.pop(k, None)
+            for k in list(self._zone_last_absence_alert.keys()):
+                if k[0] not in active_zone_ids:
+                    self._zone_last_absence_alert.pop(k, None)
+
         logger.info("Stopped stream for camera %d.", camera_id)
 
     async def refresh_known_persons(self) -> None:
@@ -282,8 +300,9 @@ class StreamProcessor:
 
             async with async_session() as session:
                 cams_result = await session.execute(select(Camera))
-                for c in cams_result.scalars().all():
-                    self._camera_names[c.id] = c.name
+                all_cams = cams_result.scalars().all()
+                active_cam_ids = {c.id for c in all_cams if c.is_active}
+                self._camera_names = {c.id: c.name for c in all_cams if c.is_active}
 
                 result = await session.execute(
                     select(CameraZone).where(CameraZone.is_active == True)  # noqa: E712
@@ -291,6 +310,10 @@ class StreamProcessor:
                 zones = result.scalars().all()
 
                 for z in zones:
+                    # Ignore zones for deleted or deactivated cameras
+                    if z.camera_id not in active_cam_ids:
+                        continue
+
                     if z.camera_id not in zones_map:
                         zones_map[z.camera_id] = []
                     zones_map[z.camera_id].append({
@@ -309,7 +332,15 @@ class StreamProcessor:
                     })
 
             self._zones_cache = zones_map
-            logger.info("Refreshed camera zones cache: %d cameras with configured zones.", len(zones_map))
+            # Clean up tracking for any zones that no longer exist
+            active_zone_ids = {z["id"] for zlist in zones_map.values() for z in zlist}
+            for k in list(self._zone_last_seen.keys()):
+                if k[0] not in active_zone_ids:
+                    self._zone_last_seen.pop(k, None)
+            for k in list(self._zone_last_absence_alert.keys()):
+                if k[0] not in active_zone_ids:
+                    self._zone_last_absence_alert.pop(k, None)
+            logger.info("Refreshed camera zones cache: %d active cameras with configured zones.", len(zones_map))
 
     @staticmethod
     def _is_zone_in_schedule(start_time: str, end_time: str, active_days: list[str]) -> bool:
@@ -346,6 +377,12 @@ class StreamProcessor:
                     known_persons_map = {kp.person_id: kp.person_name for kp in self._known_persons_cache}
 
                 for camera_id, zones in zones_snapshot:
+                    # Defensive checks: ignore deleted, deactivated, or stopped cameras
+                    if camera_id not in self._camera_names:
+                        continue
+                    if camera_id not in self._threads or (camera_id in self._stop_events and self._stop_events[camera_id].is_set()):
+                        continue
+
                     is_cam_online = self.is_camera_online(camera_id)
                     camera_name = self._camera_names.get(camera_id, f"Camera #{camera_id}")
 
@@ -368,6 +405,14 @@ class StreamProcessor:
 
                             # If camera is NOT online/connected:
                             if not is_cam_online:
+                                # Re-verify camera was not stopped or deleted concurrently
+                                if (
+                                    camera_id not in self._threads
+                                    or camera_id not in self._camera_names
+                                    or (camera_id in self._stop_events and self._stop_events[camera_id].is_set())
+                                ):
+                                    continue
+
                                 # Log camera disconnected alert (throttled to once per 5 minutes per camera)
                                 # AND CRITICALLY: DO NOT LOG ABSENCE!
                                 last_disc = self._camera_last_disconnect_alert.get(camera_id, 0)
@@ -640,7 +685,10 @@ class StreamProcessor:
                 )
 
             finally:
-                self._camera_connected[camera_id] = False
+                if stop_event.is_set():
+                    self._camera_connected.pop(camera_id, None)
+                else:
+                    self._camera_connected[camera_id] = False
                 if cap is not None:
                     try:
                         cap.release()
@@ -677,6 +725,9 @@ class StreamProcessor:
         Supports Station Zone ROI cropping to minimize processed pixels.
         """
         if not face_engine.is_ready:
+            return
+
+        if camera_id not in self._threads or (camera_id in self._stop_events and self._stop_events[camera_id].is_set()):
             return
 
         camera_zones = self._zones_cache.get(camera_id, [])

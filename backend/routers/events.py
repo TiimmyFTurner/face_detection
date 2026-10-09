@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,7 +87,7 @@ async def list_events(
         if event.camera_id:
             if event.camera_id not in camera_cache:
                 cam = await db.get(Camera, event.camera_id)
-                camera_cache[event.camera_id] = cam.name if cam else "Deleted Camera"
+                camera_cache[event.camera_id] = cam.name if cam else ""
             camera_name = camera_cache[event.camera_id]
 
         ts = event.timestamp

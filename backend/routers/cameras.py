@@ -19,14 +19,14 @@ import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import Union
 
 from backend.auth import require_permission
 from backend.database import get_db
-from backend.models import Camera
+from backend.models import Camera, CameraZone, Event
 from backend.schemas import CameraCreate, CameraBatchCreate, CameraUpdate, CameraResponse, CameraTestResult
 from backend.stream_processor import stream_processor
 
@@ -164,6 +164,8 @@ async def update_camera(
             await stream_processor.start_camera(camera.id, camera.name, camera.rtsp_url)
         else:
             await stream_processor.stop_camera(camera.id)
+        # Refresh zone cache so deactivating a camera immediately removes its zones from absence/offline monitoring
+        await stream_processor.refresh_zones()
 
     return camera
 
@@ -174,16 +176,37 @@ async def delete_camera(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("cameras:delete")),
 ):
-    """Remove a camera and stop its stream."""
+    """Remove a camera, clean up its zones, and stop its stream."""
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
-    # Stop stream first
+    # 1. Stop stream and clear in-memory caches immediately
     await stream_processor.stop_camera(camera_id)
 
+    # 2. Delete all camera zones associated with this camera
+    await db.execute(delete(CameraZone).where(CameraZone.camera_id == camera_id))
+
+    # 3. Clean up any disconnect or absence alerts generated for this camera
+    await db.execute(
+        delete(Event).where(
+            Event.camera_id == camera_id,
+            Event.alert_type.in_(["camera_disconnected", "absence_timeout"]),
+        )
+    )
+
+    # 4. Unlink camera from historical detection events so they are preserved without broken camera references
+    await db.execute(
+        update(Event).where(Event.camera_id == camera_id).values(camera_id=None)
+    )
+
+    # 5. Delete the camera
     await db.delete(camera)
     await db.commit()
+
+    # 6. Refresh stream processor zone caches immediately so background loop drops it
+    await stream_processor.refresh_zones()
+
     logger.info("Camera deleted: id=%d", camera_id)
 
 

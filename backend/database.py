@@ -3,6 +3,7 @@ Async SQLAlchemy database setup.
 Provides engine, session factory, and FastAPI dependency injection.
 """
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
@@ -16,6 +17,13 @@ engine = create_async_engine(
     # SQLite-specific: allow concurrent reads
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
 )
+
+if "sqlite" in settings.database_url:
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 async_session = async_sessionmaker(
     engine,
@@ -73,6 +81,19 @@ async def init_db() -> None:
                 sync_conn.exec_driver_sql("UPDATE events SET alert_type = 'normal' WHERE alert_type IS NULL OR alert_type = ''")
                 sync_conn.exec_driver_sql("UPDATE events SET zone_name = '' WHERE zone_name IS NULL")
                 sync_conn.exec_driver_sql("UPDATE cameras SET rtsp_url = replace(rtsp_url, '%40', '@') WHERE instr(rtsp_url, '%40') > 0")
+
+                # Clean up orphan camera zones whose camera was previously deleted
+                sync_conn.exec_driver_sql("DELETE FROM camera_zones WHERE camera_id NOT IN (SELECT id FROM cameras)")
+                # Clean up orphan disconnect / absence alerts for cameras that no longer exist
+                sync_conn.exec_driver_sql(
+                    "DELETE FROM events WHERE alert_type IN ('camera_disconnected', 'absence_timeout') "
+                    "AND (camera_id IS NULL OR camera_id NOT IN (SELECT id FROM cameras))"
+                )
+                # Unlink camera_id on remaining historical events if camera was deleted
+                sync_conn.exec_driver_sql(
+                    "UPDATE events SET camera_id = NULL WHERE camera_id IS NOT NULL "
+                    "AND camera_id NOT IN (SELECT id FROM cameras)"
+                )
             except Exception:
                 pass
 

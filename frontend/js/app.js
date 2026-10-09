@@ -260,7 +260,13 @@ const App = {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: response.statusText }));
-            throw new Error(error.detail || `HTTP ${response.status}`);
+            let msg = error.detail || `HTTP ${response.status}`;
+            if (Array.isArray(msg)) {
+                msg = msg.map((m) => (m && m.msg ? `${m.loc ? m.loc.slice(1).join('.') + ': ' : ''}${m.msg}` : JSON.stringify(m))).join(', ');
+            } else if (typeof msg === 'object' && msg !== null) {
+                msg = JSON.stringify(msg);
+            }
+            throw new Error(msg);
         }
 
         return response.json();

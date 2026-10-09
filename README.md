@@ -13,6 +13,9 @@ A production-ready, self-hosted platform for real-time face detection, recogniti
 - [Live Duty & Shift Roster Monitoring (پایش زنده پرسنل در شیفت)](#-live-duty--shift-roster-monitoring)
 - [Zone Monitoring & Security Schedules](#-zone-monitoring--security-schedules)
 - [Identity & Comprehensive Person Analytics](#-identity--comprehensive-person-analytics)
+- [System Settings & Performance Optimization (تنظیمات سیستم و بهینه‌سازی بار)](#-system-settings--performance-optimization)
+- [InsightFace Models & Embedding Re-indexing (مدل‌های هوش مصنوعی و بازسازی بردارها)](#-insightface-models--embedding-re-indexing)
+- [Automated Storage Retention & Cleanup (مدیریت فضای دیسک و پاکسازی خودکار)](#-automated-storage-retention--cleanup)
 - [User Management & Access Control (کاربران و دسترسی‌ها)](#-user-management--access-control)
 - [Prerequisites](#-prerequisites)
 - [Quick Start](#-quick-start)
@@ -88,21 +91,23 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 ## ✨ Key Features
 
 - **Multi-Camera Processing:** Concurrently ingests and analyzes multiple RTSP camera streams in isolated asynchronous worker loops.
-- **State-of-the-Art Recognition:** Leverages **InsightFace (ArcFace `buffalo_l` model)** to extract 512-d face feature vectors.
+- **State-of-the-Art Recognition:** Leverages **InsightFace (ArcFace `buffalo_l` or lightweight `buffalo_s`)** to extract 512-d face feature vectors.
+- **Dynamic Runtime Settings & Performance Tuning:** Live adjustment of downscaling (25%–100%), frame skipping (1–10), station zone ROI cropping, preview FPS, and retention policies directly from the web UI (`⚙️`) with instant `.env` persistence.
+- **Cross-Model Embedding Re-indexing:** Built-in CLI script (`python -m scripts.reindex_embeddings`) and REST endpoint (`POST /api/persons/reindex-embeddings`) to automatically recompute stored vector representations when switching AI models.
+- **Automated Storage Retention & Cleanup:** Background hourly worker automatically purges expired snapshot images and database event logs according to configured retention policies, with live disk usage breakdown.
 - **Live Duty & Shift Attendance Tracking:** Real-time roster of personnel currently on duty with live station presence, current absence duration, and compliance percentages.
 - **Absence Time Windows & Incident Counts:**
   - Tracks detailed absence intervals (e.g. `10:30 - 11:15 (45m)`) categorized into *late arrival*, *intermediate gaps*, and *current missing status*.
   - Counts total absence incidents during the shift (`X بار غیبت در این شیفت`) and displays a roster-wide KPI.
   - Interactive expandable time windows drawer in both Grid and List views with auto-refresh state preservation.
 - **Camera Offline Safeguard:** Decouples camera disconnects from absence times; offline camera periods are displayed with a distinct yellow status (`دوربین قطع است`) and are strictly excluded from absence durations and counts.
+- **Clean Camera Deletion Cascades:** Removing a camera automatically cleans up associated zones and alerts, unlinks camera IDs on historical detection logs, and clears in-memory state to prevent phantom alerts.
 - **Spatial Zone Monitoring:** Draw designated areas directly on camera snapshots and attach staff members.
 - **Shift Timetable Schedules:** Define active monitoring hours and active weekdays with automated absence timeout detection.
 - **Identity & Comprehensive Person Analytics:** Deep audit modal with 6 specialized tabs (Overview, Shifts, 24-Hour Timeline, 14-Day Attendance Log, Cameras, and Recent Sightings).
 - **User Management & RBAC:** Secure JWT authentication, password hashing, and role-based permissions (`admin`, `operator`, `viewer`).
 - **Security & Absence Alerts:** Real-time audio alerts and toast notifications for missing staff, unauthorized entries, and out-of-zone events.
 - **Full Dual-Language Localization:** Persian (`fa`) as default with full RTL layout, Vazirmatn typography, Solar Hijri (Jalali) timestamps, and instant English (`en`) switching.
-- **Low Overhead & Frame Skipping:** Configurable frame skipping and downscaling to minimize CPU utilization.
-- **Resilient Connection Handling:** Automatic RTSP reconnection with exponential backoff if camera streams drop.
 - **Hardware Acceleration:** Out-of-the-box support for CUDA / GPU acceleration via ONNX Runtime, with automatic CPU fallback.
 
 ---
@@ -173,6 +178,84 @@ Click on any person card to launch the **Person Analytics Modal** (`PersonAnalyt
 - **5. توزیع دوربین‌ها (Cameras):** Percentage distribution across all facility camera feeds.
 - **6. آخرین ترددها (Recent Sightings):** Gallery of cropped high-res face snapshots with confidence scores and timestamps.
 - **7. خروجی چاپی (Print Summary):** Clean, print-optimized report for administrative and HR records.
+
+---
+
+## ⚙️ System Settings & Performance Optimization (تنظیمات سیستم و بهینه‌سازی بار)
+
+FaceTrack features a dedicated runtime configuration modal accessible from the header navigation bar (`⚙️ تنظیمات سیستم` / `SettingsModal`). Settings can be changed on the fly without server downtime and are automatically persisted to `.env`:
+
+### 1. AI Downscaling (کاهش مقیاس فریم برای هوش مصنوعی)
+- **Range Slider (۲۵٪ تا ۱۰۰٪) & Quick Presets:**
+  - `۱۰۰٪` (کیفیت اصلی / بدون کاهش): حداکثر جزئیات چهره در فواصل دور | بالاترین مصرف پردازنده
+  - `۷۵٪` (وضوح بالا): مناسب برای دوربین‌های 1080p و بالاتر با جزئیات شفاف
+  - `۵۰٪` (متعادل - پیش‌فرض پیشنهادی): ۴ برابر کاهش پیکسل‌ها با حفظ دقت بالا | ایده‌آل برای اکثر سناریوها
+  - `۲۵٪` (حداکثر سرعت): ۱۶ برابر کاهش حجم پردازش | مناسب برای سخت‌افزارهای ضعیف و فواصل نزدیک
+- **Tradeoff Advice Pill:** نمایش زنده راهنمای نسبت دقت به سرعت متناسب با درصد انتخابی.
+
+### 2. نرخ پرش فریم (Frame Skip Rate)
+- **Pill Presets (۱، ۳، ۵، ۱۰):**
+  - مقدار `۵` (پیش‌فرض): یعنی از هر ۵ فریم استریم، ۱ فریم توسط هوش مصنوعی آنالیز می‌شود (کاهش ۸۰ درصدی بار پردازنده).
+  - در صورت نیاز به ردیابی بسیار سریع سوژه‌ها می‌توان مقدار را روی `۱` یا `۳` قرار داد.
+
+### 3. برش هوشمند محدوده منطقه‌ها (Station Zone ROI Cropping)
+- **Toggle Switch (`ROI_CROP_ENABLED`):**
+  - در حالت فعال، فریم ویدیویی ابتدا فقط به ابعاد مستطیل ایستگاه‌های فعال برش داده شده و سپس به مدل هوش مصنوعی ارسال می‌شود.
+  - این قابلیت موجب **کاهش ۷۰٪ تا ۸۵٪ پیکسل‌های پردازشی** در هر فریم شده و مصرف CPU/GPU را به شدت پایین می‌آورد.
+
+### 4. تنظیمات پیشرفته استریم و منابع (Advanced Stream Settings)
+- **📺 نرخ فریم پیش‌نمایش زنده (`LIVE_PREVIEW_FPS`):** محدودسازی نرخ انکود تصاویر JPEG در پیشخوان (پیش‌فرض: ۱ فریم در ثانیه) برای جلوگیری از اشغال بی‌مورد پهنای باند و پردازنده.
+- **🔄 دوره پایش چرخشی (`DUTY_CYCLE_WINDOW`):** تنظیم طول چرخه پایش نوبتی دوربین‌ها (پیش‌فرض: ۳۰ ثانیه).
+- **⚡ مدت پایش فعال (`DUTY_BURST_DURATION`):** پنجره زمانی فعال بودن تشخیص چهره در هر چرخه (پیش‌فرض: ۲ ثانیه).
+- **🔌 حداکثر زمان اتصال مجدد (`MAX_RECONNECT_BACKOFF`):** کنترل سقف وقفه تلاش مجدد اتصال به دوربین‌های قطع‌شده.
+
+---
+
+## 🧠 InsightFace Models & Embedding Re-indexing (مدل‌های هوش مصنوعی و بازسازی بردارها)
+
+FaceTrack از دو بسته مدل InsightFace پشتیبانی می‌کند:
+
+| مدل / ویژگی | `buffalo_l` (مدل اصلی - پیش‌فرض) | `buffalo_s` (مدل سبک و سریع) |
+| :--- | :--- | :--- |
+| **مدل تشخیص چهره (Detector)** | `det_10g.onnx` (SCRFD 10G) | `det_500m.onnx` (SCRFD 500M) |
+| **مدل استخراج ویژگی (Recognition)** | **ArcFace ResNet-50** (`w600k_r50.onnx`) | **ArcFace MobileFaceNet** (`w600k_mbf.onnx`) |
+| **طول بردار ویژگی (Embedding)** | ۵۱۲ عدد اعشاری (512-d float) | ۵۱۲ عدد اعشاری (512-d float) |
+| **سرعت و مصرف منابع** | نیاز به CPU قوی یا GPU | **۵ تا ۱۰ برابر سریع‌تر** / مصرف بسیار کم CPU و RAM |
+| **کاربرد ایده‌آل** | محیط‌های بزرگ، فواصل دور، دوربین‌های متعدد با سرور قدرتمند | مینی‌کامپیوترها، لپ‌تاپ‌ها و سیستم‌های اداری بدون کارت گرافیک |
+
+> [!IMPORTANT]
+> **نکته بسیار مهم در تغییر مدل:**
+> بردارهای ۵۱۲ بعدی استخراج‌شده توسط مدل ResNet-50 (`buffalo_l`) در فضای برداری متفاوتی نسبت به MobileFaceNet (`buffalo_s`) قرار دارند. در نتیجه، بردار یک چهره که با `buffalo_l` ثبت شده با فریم زنده‌ای که با `buffalo_s` گرفته شود همخوانی نخواهد داشت (شباهت کسینوسی نزدیک صفر خواهد بود).
+
+### بازسازی و استخراج مجدد بردارها (Re-indexing Embeddings):
+عکس‌های مرجع پرسنل همواره با کیفیت اصلی در مسیر `data/reference_photos/` ذخیره هستند. هر زمان مدل را در `.env` تغییر دادید (`INSIGHTFACE_MODEL=buffalo_s` یا `buffalo_l`)، کافی است یکی از دو روش زیر را برای به‌روزرسانی بردارهای دیتابیس اجرا کنید:
+
+1. **از طریق دستور خط فرمان (CLI):**
+   ```powershell
+   .\venv\Scripts\python.exe -m scripts.reindex_embeddings
+   ```
+2. **از طریق API بدون نیاز به ریستارت سرور:**
+   ```http
+   POST /api/persons/reindex-embeddings
+   ```
+   این فراخوانی تمامی عکس‌های ذخیره‌شده را مجدداً با مدل فعال پردازش کرده، بردارهای دیتابیس را به‌روزرسانی می‌کند و کش پردازش استریم زنده را بلافاصله تازه می‌سازد.
+
+---
+
+## 🗄️ Automated Storage Retention & Cleanup (مدیریت فضای دیسک و پاکسازی خودکار)
+
+FaceTrack مجهز به سامانه جامع مدیریت دیسک و نگهداری فایل‌ها است:
+
+1. **سیاست نگهداری تصاویر اسنپ‌شات (`SNAPSHOT_RETENTION_DAYS`):**
+   - تعیین مدت نگهداری عکس‌های ذخیره‌شده از چهره‌ها (۱ روز، ۱ هفته، ۱ ماه، ۳ ماه یا بدون انقضا).
+   - تصاویر قدیمی‌تر از مهلت مقرر به طور خودکار از روی دیسک پاک می‌شوند، در حالی که سوابق متنی رویدادها در دیتابیس حفظ می‌گردد.
+2. **سیاست نگهداری لاگ‌های دیتابیس (`EVENT_LOG_RETENTION_DAYS`):**
+   - تعیین سقف زمانی سوابق رویدادها در پایگاه داده (۷ روز، ۳۰ روز، ۹۰ روز، ۶ ماه، ۱ سال یا بدون انقضا).
+3. **کارگر پس‌زمینه خودکار (Hourly Retention Worker):**
+   - کارگر `RetentionWorker` به طور ساعتی در پس‌زمینه اجرا شده و فایل‌ها و رکوردهای منقضی‌شده را پاکسازی می‌نماید.
+4. **داشبورد زنده آمار ذخیره‌سازی و پاکسازی درجا:**
+   - نمایش لحظه‌ای تعداد فایل‌های اسنپ‌شات، حجم اشغال‌شده به مگابایت/گیگابایت و تعداد کل رکوردهای رویداد.
+   - دکمه‌های پاکسازی فوری (`پاکسازی اکنون / Clean Now`) در پنجره تنظیمات برای آزادسازی سریع فضای دیسک در هر لحظه.
 
 ---
 
@@ -323,19 +406,25 @@ DATABASE_URL=sqlite+aiosqlite:///./data/face_tracking.db
 
 # ── Face Recognition & AI Settings ──────────────────────
 MATCH_THRESHOLD=0.5
-INSIGHTFACE_MODEL=buffalo_l
+INSIGHTFACE_MODEL=buffalo_l   # buffalo_l (High Accuracy) or buffalo_s (Fast CPU)
+LOG_UNKNOWN_FACES=True        # If False, ignore and do not log unidentified faces
 
-# ── Performance Tuning ────────────────────────────────────
-FRAME_SKIP=5
-DOWNSCALE_FACTOR=0.5
-COOLDOWN_SECONDS=60
-MAX_RECONNECT_BACKOFF=30
+# ── Stream Processing & Performance Tuning ───────────────
+FRAME_SKIP=5                  # Process 1 frame every N frames
+DOWNSCALE_FACTOR=0.5          # Scale down video resolution (0.25, 0.5, 0.75, 1.0)
+ROI_CROP_ENABLED=True         # Crop exclusively to station zone areas before AI analysis
+LIVE_PREVIEW_FPS=1.0          # Throttle live preview encode rate (FPS)
+DUTY_CYCLE_WINDOW=30.0        # Staggered camera detection duty cycle period (seconds)
+DUTY_BURST_DURATION=2.0       # Active detection burst window per cycle (seconds)
+COOLDOWN_SECONDS=60           # Seconds before re-logging the same identity on same camera
+MAX_RECONNECT_BACKOFF=30      # Max backoff delay (seconds) on dropped RTSP streams
 
 # ── Storage & Automated Retention ─────────────────────────
 SNAPSHOT_DIR=./data/snapshots
 REFERENCE_PHOTO_DIR=./data/reference_photos
-SNAPSHOT_RETENTION_DAYS=30   # Days to keep snapshots (0 = no expiry)
-EVENT_LOG_RETENTION_DAYS=0    # Days to keep event logs in DB (0 = no expiry)
+SNAPSHOT_RETENTION_DAYS=30    # Days to keep snapshot images on disk (0 = keep forever)
+EVENT_LOG_RETENTION_DAYS=0    # Days to keep event records in DB (0 = keep forever)
+SAVE_SNAPSHOTS=True           # If False, log events without writing image files to disk
 
 # ── HTTP Server Settings ─────────────────────────────────
 HOST=0.0.0.0
@@ -381,6 +470,12 @@ Access the web dashboard by opening `http://localhost:8000` in your web browser.
 - **Role-Based Accounts:** Administer user accounts with granular permissions (`admin`, `operator`, `viewer`).
 - **Security Controls:** Password updates, credential resets, and session management.
 
+### 7. System Settings & Storage Management (`⚙️ تنظیمات سیستم` / پنجره تنظیمات)
+- **AI Performance Controls:** Slider for Downscaling (25% to 100%), Frame Skip presets (1 to 10), and Station Zone ROI Cropping toggle.
+- **Live Preview & Duty Cycle Tuning:** Configure live preview encode FPS, staggered camera duty bursts, and max reconnect backoff delay.
+- **Disk & Database Retention:** Set automated expiry days for snapshot files and event log records.
+- **On-Demand Storage Cleanup:** Real-time counters showing file count, disk space consumed (MB/GB), and database records with one-click cleanup triggers.
+
 ---
 
 ## 📡 API Reference
@@ -399,11 +494,16 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `PUT` | `/api/users/{id}` | Update user information or role *(Admin only)* |
 | `DELETE` | `/api/users/{id}` | Delete a user account *(Admin only)* |
 | `GET` | `/api/health` | Service health status and AI engine readiness |
+| `GET` | `/api/settings` | Retrieve runtime system configuration, retention, and performance settings |
+| `PATCH` | `/api/settings` | **Update runtime configuration on the fly** & persist to `.env` |
+| `GET` | `/api/settings/storage-stats` | **Live disk storage stats** (snapshot files, MB used, DB event count) |
+| `POST` | `/api/settings/cleanup-snapshots` | On-demand cleanup of snapshot image files older than N days |
+| `POST` | `/api/settings/cleanup-logs` | On-demand cleanup of database event records older than N days |
 | `GET` | `/api/cameras` | List all configured cameras |
 | `POST` | `/api/cameras` | Register a new camera stream |
 | `GET` | `/api/cameras/{id}` | Retrieve camera configuration details |
 | `PUT` | `/api/cameras/{id}` | Update camera URL, name, location, or active status |
-| `DELETE` | `/api/cameras/{id}` | Remove camera configuration and terminate stream worker |
+| `DELETE` | `/api/cameras/{id}` | Remove camera, cascade clean its zones/alerts, and terminate stream worker |
 | `POST` | `/api/cameras/{id}/test` | Test live camera RTSP connection |
 | `GET` | `/api/cameras/{id}/stream` | MJPEG live video stream |
 | `GET` | `/api/cameras/{id}/snapshot` | Current JPEG snapshot from live stream |
@@ -418,6 +518,7 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `POST` | `/api/persons` | Enroll a person with reference photo upload |
 | `DELETE` | `/api/persons/{id}` | Remove registered individual and associated embeddings |
 | `POST` | `/api/persons/{id}/photos` | Upload additional reference photos for an individual |
+| `POST` | `/api/persons/reindex-embeddings` | **Recompute all embeddings** from photos using active InsightFace model |
 | `GET` | `/api/persons/{id}/analytics` | **Comprehensive person analytics**, punctuality & 14-day history |
 | `GET` | `/api/events` | Query detection event logs with pagination and filters |
 | `GET` | `/api/events/stats` | Retrieve daily event metrics summary |
@@ -487,8 +588,22 @@ python -m pytest tests/test_face_engine.py -v
 
 ### Q3: High CPU usage
 - **Increase Frame Skipping:** Set `FRAME_SKIP=10` in `.env` to process every 10th frame.
-- **Lower Resolution:** Set `DOWNSCALE_FACTOR=0.4` or `0.3`.
+- **Lower Resolution:** Set `DOWNSCALE_FACTOR=0.4` or `0.3` (or use the slider in `⚙️ تنظیمات سیستم`).
+- **Enable Station ROI Cropping:** Turn on `ROI_CROP_ENABLED=True` to only process pixels within defined station zones.
 - **Model Choice:** Switch model from `buffalo_l` to `buffalo_s` in `.env`.
+
+### Q4: Switched to `buffalo_s` (or `buffalo_l`) and faces are no longer recognized?
+- **Root Cause:** Embeddings from `buffalo_l` (ResNet-50) and `buffalo_s` (MobileFaceNet) are incompatible latent spaces. Cosine similarity between them drops to near zero.
+- **Solution:** Re-index your stored reference photos using the active model:
+  ```powershell
+  .\venv\Scripts\python.exe -m scripts.reindex_embeddings
+  ```
+  Or trigger it via REST API without server restart: `POST /api/persons/reindex-embeddings`.
+
+### Q5: How does automated snapshot disk and database retention work?
+- Configure `SNAPSHOT_RETENTION_DAYS=30` and `EVENT_LOG_RETENTION_DAYS=90` in `.env` (or via `⚙️ تنظیمات سیستم`).
+- The built-in `RetentionWorker` runs automatically every hour in the background to delete expired snapshot files and event rows.
+- You can also trigger immediate cleanup anytime from the Settings modal (`پاکسازی اکنون`) or via API (`POST /api/settings/cleanup-snapshots`).
 
 ---
 
@@ -502,15 +617,17 @@ face_detection/
 ├── .env.example              # Environment variables template
 ├── .gitignore                # Git ignore rules
 ├── README.md                 # Project documentation
+├── SERVICE_GUIDE.html        # Production service deployment & operations guide
 │
 ├── backend/                  # FastAPI Application Core
 │   ├── __init__.py
-│   ├── main.py               # Application entry point & lifespan
+│   ├── main.py               # Application entry point, lifespan & no-cache middleware
 │   ├── config.py             # Pydantic environment configuration
-│   ├── database.py           # Async SQLAlchemy database initialization
-│   ├── models.py             # Database ORM models (Camera, Person, Event, CameraZone, ZoneViolationLog, User)
+│   ├── database.py           # Async SQLAlchemy database initialization & cascades
+│   ├── models.py             # Database ORM models (Camera, Person, Event, CameraZone, User)
 │   ├── schemas.py            # Pydantic validation schemas
 │   ├── face_engine.py        # InsightFace detector & vector matcher
+│   ├── snapshot_cleanup.py   # Disk usage analysis, hourly retention worker & .env updater
 │   ├── stream_processor.py   # Async RTSP ingestion, zone watchdog & WebSocket manager
 │   └── routers/
 │       ├── __init__.py
@@ -518,8 +635,9 @@ face_detection/
 │       ├── users.py          # User management & RBAC endpoints
 │       ├── cameras.py        # Camera API & live stream endpoints
 │       ├── zones.py          # Spatial zones, duty roster & absence windows
-│       ├── persons.py        # Person enrollment & comprehensive analytics
+│       ├── persons.py        # Person enrollment, analytics & embedding re-indexing
 │       ├── events.py         # Event logs & metrics endpoints
+│       ├── system.py         # System settings, runtime config & storage cleanup
 │       └── snapshots.py      # Image serving endpoint
 │
 ├── frontend/                 # Dashboard Frontend App
@@ -535,6 +653,7 @@ face_detection/
 │       │   ├── eventCard.js  # Live event card & detail modal
 │       │   ├── personForm.js # Person upload & photo dropzone modal
 │       │   ├── personAnalyticsModal.js # 6-tab comprehensive person analytics modal
+│       │   ├── settingsModal.js # Dynamic runtime settings & storage cleanup modal
 │       │   └── zoneModal.js  # Interactive canvas zone drawer & shift modal
 │       └── pages/
 │           ├── cameras.js    # Camera management page view
@@ -544,6 +663,9 @@ face_detection/
 │           ├── usersPage.js  # User administration & role management view
 │           └── zonesPage.js  # Live Presence Board, shifts & security logs view
 │
+├── scripts/                  # Management & Maintenance Scripts
+│   └── reindex_embeddings.py # CLI script to recompute face embeddings across AI models
+│
 ├── data/                     # Persistent Data Directory (Excluded from git)
 │   ├── snapshots/            # Event cropped snapshot JPEGs
 │   └── reference_photos/     # Enrolled person photos
@@ -551,7 +673,8 @@ face_detection/
 └── tests/                    # Test Suite
     ├── __init__.py
     ├── test_api.py           # API integration test suite
-    └── test_face_engine.py   # AI face matcher unit tests
+    ├── test_face_engine.py   # AI face matcher unit tests
+    └── test_snapshot_cleanup.py # Storage retention & system settings tests
 ```
 
 ---

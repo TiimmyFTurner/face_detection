@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaceTrack Service Management Guide</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-hover: #334155;
+            --border: #334155;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #38bdf8;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --code-bg: #090d16;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        h1, h2, h3 { color: #fff; margin-top: 1.8rem; margin-bottom: 0.8rem; font-weight: 700; }
+        h1 { font-size: 2rem; border-bottom: 2px solid var(--border); padding-bottom: 0.8rem; color: var(--primary); }
+        h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; color: #38bdf8; }
+        h3 { font-size: 1.15rem; color: #e2e8f0; }
+
+        p, ul, ol { margin-bottom: 1rem; }
+        ul, ol { padding-left: 1.5rem; }
+        li { margin-bottom: 0.4rem; }
+
+        .meta-box {
+            background: rgba(56, 189, 248, 0.08);
+            border-left: 4px solid var(--primary);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+        }
+
+        .meta-box p { margin: 0.25rem 0; font-size: 0.95rem; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: #141e33;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.92rem;
+        }
+
+        th {
+            background: #1b263b;
+            color: #93c5fd;
+            font-weight: 600;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            position: relative;
+        }
+
+        code {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.9rem;
+            color: #38bdf8;
+        }
+
+        pre code { color: #f1f5f9; }
+
+        .alert-box {
+            background: rgba(251, 191, 36, 0.1);
+            border-left: 4px solid var(--warning);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.25rem 0;
+            color: #fef08a;
+        }
+
+        .alert-danger {
+            background: rgba(248, 113, 113, 0.1);
+            border-left-color: var(--danger);
+            color: #fca5a5;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: #334155;
+            color: #f8fafc;
+            border: none;
+            padding: 0.25rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:hover { background: #475569; }
+
+        .btn-print {
+            float: right;
+            background: var(--primary);
+            color: #0f172a;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: -0.5rem;
+        }
+        .btn-print:hover { opacity: 0.9; }
+
+        @media print {
+            body { background: #fff; color: #000; padding: 0; }
+            .container { box-shadow: none; border: none; padding: 0; }
+            .btn-print, .copy-btn { display: none; }
+            pre { background: #f8fafc; border: 1px solid #e2e8f0; }
+            code { color: #000; }
+            th { background: #f1f5f9; color: #000; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <button class="btn-print" onclick="window.print()">🖨️ Print / Save PDF</button>
+    <h1>🛠️ FaceTrack Service Management Guide</h1>
+    <p style="color: var(--text-muted); font-size: 1.05rem; margin-top: 0.4rem;">
+        راهنمای مدیریت و پشتیبانی سرویس مانیتورینگ چهره و شیفت پرسنل در سرور ویندوز
+    </p>
+
+    <div class="meta-box">
+        <p><strong>📂 Project Location:</strong> <code>C:\face_detection</code></p>
+        <p><strong>⚙️ Windows Service Name:</strong> <code>FaceTrack</code> (FaceTrack Monitoring Service)</p>
+        <p><strong>🌐 Dashboard URL:</strong> <a href="http://localhost:5173" style="color: var(--primary);">http://localhost:5173</a></p>
+        <p><strong>🔧 Wrapper Executable:</strong> <code>facetrack-service.exe</code> (WinSW)</p>
+    </div>
+
+    <h2>🚀 Quick Command Reference</h2>
+    <p>Open <strong>PowerShell</strong> or <strong>Command Prompt</strong> as <strong>Administrator</strong> and navigate to the project directory:</p>
+    <pre><code>cd C:\face_detection</code><button class="copy-btn" onclick="navigator.clipboard.writeText('cd C:\\face_detection')">Copy</button></pre>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Action</th>
+                <th>WinSW Command</th>
+                <th>Native PowerShell Alternative</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Check Status</strong></td>
+                <td><code>.\facetrack-service.exe status</code></td>
+                <td><code>Get-Service FaceTrack</code></td>
+            </tr>
+            <tr>
+                <td><strong>Start Service</strong></td>
+                <td><code>.\facetrack-service.exe start</code></td>
+                <td><code>Start-Service FaceTrack</code></td>
+            </tr>
+            <tr>
+                <td><strong>Stop Service</strong></td>
+                <td><code>.\facetrack-service.exe stop</code></td>
+                <td><code>Stop-Service FaceTrack</code></td>
+            </tr>
+            <tr>
+                <td><strong>Restart Service</strong></td>
+                <td><code>.\facetrack-service.exe restart</code></td>
+                <td><code>Restart-Service FaceTrack</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>🔄 Full Reinstall Cycle (If XML Configuration Changed)</h2>
+    <p>If modifications were made to <code>facetrack-service.xml</code> (e.g. changing ports or arguments):</p>
+    <pre><code>cd C:\face_detection
+.\facetrack-service.exe stop
+.\facetrack-service.exe uninstall
+.\facetrack-service.exe install
+.\facetrack-service.exe start</code><button class="copy-btn" onclick="navigator.clipboard.writeText('cd C:\\face_detection\n.\\facetrack-service.exe stop\n.\\facetrack-service.exe uninstall\n.\\facetrack-service.exe install\n.\\facetrack-service.exe start')">Copy</button></pre>
+
+    <h2>📋 Monitoring & Log Files</h2>
+    <p>Logs automatically rotate at 10 MB and preserve up to 5 archive backups.</p>
+    <ul>
+        <li><strong>Standard Log (Detections & Events):</strong> <code>C:\face_detection\facetrack-service.out.log</code></li>
+        <li><strong>Error Log (Exceptions & Warnings):</strong> <code>C:\face_detection\facetrack-service.err.log</code></li>
+        <li><strong>Wrapper Engine Log:</strong> <code>C:\face_detection\facetrack-service.wrapper.log</code></li>
+    </ul>
+
+    <h3>Live Log Streaming (Real-Time Output)</h3>
+    <pre><code>Get-Content C:\face_detection\facetrack-service.out.log -Tail 50 -Wait</code><button class="copy-btn" onclick="navigator.clipboard.writeText('Get-Content C:\\face_detection\\facetrack-service.out.log -Tail 50 -Wait')">Copy</button></pre>
+
+    <h3>Error Log Streaming</h3>
+    <pre><code>Get-Content C:\face_detection\facetrack-service.err.log -Tail 50 -Wait</code><button class="copy-btn" onclick="navigator.clipboard.writeText('Get-Content C:\\face_detection\\facetrack-service.err.log -Tail 50 -Wait')">Copy</button></pre>
+
+    <h2>🔒 Crucial Rules (Data Preservation)</h2>
+    <div class="alert-box alert-danger">
+        <p><strong>1. DO NOT DELETE OR OVERWRITE <code>C:\face_detection\data\`:</strong></p>
+        <p>Contains <code>face_tracking.db</code> (all people, registered faces, shift records, system logs). Deleting it will wipe out system data!</p>
+    </div>
+    <div class="alert-box">
+        <p><strong>2. DO NOT DELETE <code>C:\face_detection\venv\`:</strong></p>
+        <p>Contains the server's Python virtual environment and offline dependencies.</p>
+    </div>
+
+    <h2>🩺 Troubleshooting</h2>
+
+    <h3>1. Port Conflict (WinError 10048 or WinError 10013)</h3>
+    <p>If port 5173 is occupied by another process or an orphaned Python task:</p>
+    <pre><code>Stop-Process -Name python -Force
+C:\face_detection\venv\Scripts\python.exe -c "import socket; s = socket.socket(); s.bind(('0.0.0.0', 5173)); s.close(); print('Port 5173 is free!')"
+.\facetrack-service.exe start</code><button class="copy-btn" onclick="navigator.clipboard.writeText('Stop-Process -Name python -Force\nC:\\face_detection\\venv\\Scripts\\python.exe -c &quot;import socket; s = socket.socket(); s.bind((\'0.0.0.0\', 5173)); s.close(); print(\'Port 5173 is free!\')&quot;\n.\\facetrack-service.exe start')">Copy</button></pre>
+
+    <h3>2. Allow Port in Firewall</h3>
+    <p>If client computers cannot access the web dashboard on port 5173:</p>
+    <pre><code>New-NetFirewallRule -DisplayName "FaceTrack Web Dashboard" -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow</code><button class="copy-btn" onclick="navigator.clipboard.writeText('New-NetFirewallRule -DisplayName &quot;FaceTrack Web Dashboard&quot; -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow')">Copy</button></pre>
+
+    <h3>3. Windows Services Graphical Manager</h3>
+    <p>Press <code>Win + R</code> &rarr; type <code>services.msc</code> &rarr; locate <strong>FaceTrack Monitoring Service</strong>.</p>
+</div>
+
+</body>
+</html>

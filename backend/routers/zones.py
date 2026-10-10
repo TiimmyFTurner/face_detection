@@ -104,6 +104,27 @@ def is_time_in_timetable(start_time: Any, end_time: Any, active_days: Any) -> bo
         return current_hm >= start or current_hm <= end
 
 
+def is_time_in_free_time(free_times: Any) -> tuple[bool, Optional[str]]:
+    """Check if the current local time falls within any defined free time / break interval (lunch, tea, rest)."""
+    parsed_breaks = _parse_list_field(free_times, [])
+    if not parsed_breaks:
+        return False, None
+    now_hm = datetime.now().strftime("%H:%M")
+    for b in parsed_breaks:
+        if not isinstance(b, dict):
+            continue
+        start = str(b.get("start_time") or "00:00")
+        end = str(b.get("end_time") or "00:00")
+        name = str(b.get("name") or "Break")
+        if start <= end:
+            if start <= now_hm <= end:
+                return True, name
+        else:
+            if now_hm >= start or now_hm <= end:
+                return True, name
+    return False, None
+
+
 # ── Camera-Scoped Endpoints ──────────────────────────────
 
 @router.get("/api/cameras/{camera_id}/zones", response_model=list[CameraZoneResponse])
@@ -132,7 +153,7 @@ async def create_camera_zone(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("zones:create")),
 ):
-    """Create a new important area/zone on a camera with timetable and assigned persons."""
+    """Create a new important area/zone on a camera with timetable, free times, and assigned persons."""
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -149,6 +170,8 @@ async def create_camera_zone(
         start_time=data.start_time or "00:00",
         end_time=data.end_time or "23:59",
         active_days=data.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        absence_timeout_minutes=data.absence_timeout_minutes if data.absence_timeout_minutes is not None else 2,
+        free_times=data.free_times or [],
         is_active=data.is_active,
     )
     db.add(zone)
@@ -195,6 +218,8 @@ async def get_zones_status(
             active_days,
         )
 
+        in_free_time, break_name = is_time_in_free_time(z.free_times)
+
         days_str = ",".join(str(d) for d in active_days) if active_days else "All Days"
         timetable_text = f"{z.start_time or '00:00'} - {z.end_time or '23:59'} ({days_str})"
 
@@ -212,6 +237,17 @@ async def get_zones_status(
                 last_seen_sec = None
                 last_seen_str = "Off Duty (Outside Timetable)"
                 minutes_absent = None
+            elif in_free_time:
+                if last_seen > 0 and (now - last_seen) < 120.0:
+                    status_str = "present"
+                    last_seen_sec = round(now - last_seen, 1)
+                    last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                    minutes_absent = 0
+                else:
+                    status_str = "on_break"
+                    last_seen_sec = round(now - last_seen, 1) if last_seen > 0 else None
+                    last_seen_str = f"On Break ({break_name})"
+                    minutes_absent = 0
             elif last_seen > 0 and (now - last_seen) < 120.0:
                 status_str = "present"
                 last_seen_sec = round(now - last_seen, 1)
@@ -249,6 +285,10 @@ async def get_zones_status(
                 is_in_schedule=in_schedule,
                 timetable_text=timetable_text,
                 alert_mode=z.alert_mode or "absence",
+                absence_timeout_minutes=getattr(z, "absence_timeout_minutes", 2) or 2,
+                free_times=_parse_list_field(z.free_times, []),
+                is_in_free_time=in_free_time,
+                current_break_name=break_name,
                 assigned_persons=assigned_status_list,
             )
         )
@@ -333,6 +373,8 @@ async def get_duty_roster(
 
         shift_window_str = f"{start_str} - {end_str}"
 
+        in_free_time, break_name = is_time_in_free_time(z.free_times)
+
         # Elapsed minutes of current shift so far today
         if in_schedule:
             if current_hm_mins >= start_mins:
@@ -371,6 +413,19 @@ async def get_duty_roster(
                 last_seen_sec = None
                 last_seen_str = "Camera Disconnected"
                 curr_absence_mins = 0
+            elif in_free_time:
+                if last_seen > 0 and (now_ts - last_seen) < 120.0:
+                    status_str = "present"
+                    is_in_zone = True
+                    last_seen_sec = round(now_ts - last_seen, 1)
+                    last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                    curr_absence_mins = 0
+                else:
+                    status_str = "on_break"
+                    is_in_zone = False
+                    last_seen_sec = round(now_ts - last_seen, 1) if last_seen > 0 else None
+                    last_seen_str = f"On Break ({break_name})"
+                    curr_absence_mins = 0
             elif last_seen > 0 and (now_ts - last_seen) < 120.0:
                 status_str = "present"
                 is_in_zone = True
@@ -413,8 +468,8 @@ async def get_duty_roster(
             if in_schedule and elapsed_shift_mins > 0:
                 if not shift_events:
                     # No actual face sightings today
-                    if not is_cam_online:
-                        # Camera is offline/disconnected — NEVER add camera disconnected time to absence!
+                    if not is_cam_online or in_free_time:
+                        # Camera is offline or on free time
                         shift_absence_mins = 0
                         shift_presence_mins = 0
                         compliance = 100.0
@@ -483,8 +538,8 @@ async def get_duty_roster(
                                 )
 
                     # Trailing absence from last sighting to now
-                    # CRITICAL: If camera is disconnected, trailing time is camera downtime, NOT person absence!
-                    if is_in_zone or not is_cam_online:
+                    # CRITICAL: If camera is disconnected or currently on free time/break, trailing time is NOT absence!
+                    if is_in_zone or not is_cam_online or in_free_time:
                         trailing_absence = 0
                     else:
                         last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
@@ -531,7 +586,11 @@ async def get_duty_roster(
                     shift_window_str=shift_window_str,
                     shift_duration_hours=dur_h,
                     active_days=active_days,
+                    absence_timeout_minutes=getattr(z, "absence_timeout_minutes", 2) or 2,
+                    free_times=_parse_list_field(z.free_times, []),
                     is_in_duty_hours=in_schedule,
+                    is_in_free_time=in_free_time,
+                    current_break_name=break_name if in_free_time else None,
                     status=status_str,
                     camera_online=is_cam_online,
                     is_in_zone=is_in_zone,
@@ -550,9 +609,9 @@ async def get_duty_roster(
                 )
             )
 
-    # Sort: absent first, then camera_offline, then present, then by current absence minutes desc, then by name
+    # Sort: absent first, then camera_offline, then present, then on_break, then off_duty
     roster.sort(key=lambda r: (
-        0 if r.status == "absent" else (1 if r.status == "camera_offline" else (2 if r.status == "present" else 3)),
+        0 if r.status == "absent" else (1 if r.status == "camera_offline" else (2 if r.status == "present" else (3 if r.status == "on_break" else 4))),
         -r.current_absence_minutes,
         r.person_name,
     ))
@@ -561,6 +620,7 @@ async def get_duty_roster(
     present_count = len([r for r in roster if r.status == "present"])
     absent_count = len([r for r in roster if r.status == "absent"])
     camera_offline_count = len([r for r in roster if r.status == "camera_offline"])
+    on_break_count = len([r for r in roster if r.status == "on_break"])
     total_absence_incidents = sum(r.absence_count for r in roster)
     total_shift_absence_minutes = sum(r.shift_absence_minutes for r in roster)
     avg_compliance = round(sum(r.shift_compliance_pct for r in roster) / len(roster), 1) if roster else 100.0
@@ -571,6 +631,7 @@ async def get_duty_roster(
         present_count=present_count,
         absent_count=absent_count,
         camera_offline_count=camera_offline_count,
+        on_break_count=on_break_count,
         total_absence_incidents=total_absence_incidents,
         total_shift_absence_minutes=total_shift_absence_minutes,
         total_shift_absence_str=_format_duration(total_shift_absence_minutes * 60),
@@ -701,6 +762,10 @@ async def update_zone(
         zone.end_time = data.end_time
     if data.active_days is not None:
         zone.active_days = data.active_days
+    if data.absence_timeout_minutes is not None:
+        zone.absence_timeout_minutes = data.absence_timeout_minutes
+    if data.free_times is not None:
+        zone.free_times = data.free_times
     if data.is_active is not None:
         zone.is_active = data.is_active
 

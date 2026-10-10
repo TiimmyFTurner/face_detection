@@ -321,23 +321,36 @@ const ZonesPage = {
                 overallStatus = 'off_duty';
                 statusColor = '#94a3b8';
                 statusBadge = I18n.t('badge_off_duty');
+            } else if (z.is_in_free_time) {
+                overallStatus = 'on_break';
+                statusColor = '#06b6d4';
+                statusBadge = I18n.t('badge_on_break');
             } else if ((z.assigned_persons || []).some(p => p.status === 'absent')) {
                 overallStatus = 'absent';
                 statusColor = '#ef4444';
                 statusBadge = I18n.t('badge_absent');
             }
 
+            const timeoutMins = z.absence_timeout_minutes || 2;
+            const freeTimesList = Array.isArray(z.free_times) ? z.free_times : [];
+
             if (ZonesPage._viewMode === 'list') {
                 return `
-                    <div class="presence-card list-item" style="background: var(--bg-glass); border: 1px solid ${overallStatus === 'absent' ? 'rgba(239, 68, 68, 0.4)' : overallStatus === 'present' ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); padding: 0.85rem 1.25rem; backdrop-filter: blur(12px);">
+                    <div class="presence-card list-item" style="background: var(--bg-glass); border: 1px solid ${overallStatus === 'absent' ? 'rgba(239, 68, 68, 0.4)' : overallStatus === 'present' ? 'rgba(16, 185, 129, 0.3)' : overallStatus === 'on_break' ? 'rgba(6, 182, 212, 0.4)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); padding: 0.85rem 1.25rem; backdrop-filter: blur(12px);">
                         <div class="presence-list-zone">
                             <div>
-                                <div style="font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                <div style="font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                     <span>🎯</span>
                                     <span>${ZonesPage.escapeHtml(z.zone_name)}</span>
+                                    <span style="font-size: 0.68rem; font-weight: 700; padding: 2px 6px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                                        ⏱️ ${timeoutMins}m
+                                    </span>
                                 </div>
                                 <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 2px;">
                                     📹 ${ZonesPage.escapeHtml(z.camera_name)} · <span style="color: var(--accent-blue);">${ZonesPage.escapeHtml(I18n.formatTimetableText(z.timetable_text))}</span>
+                                    ${freeTimesList.length > 0 ? `
+                                        · <span style="color: var(--accent-cyan); font-weight: 600;">☕ ${freeTimesList.map(ft => `${ZonesPage.escapeHtml(ft.name || 'Break')}: ${ft.start_time}-${ft.end_time}`).join(', ')}</span>
+                                    ` : ''}
                                 </div>
                             </div>
                         </div>
@@ -349,9 +362,10 @@ const ZonesPage = {
                                 const lastSeenDisplay = I18n.formatLastSeen(p);
                                 const isP = p.status === 'present';
                                 const isA = p.status === 'absent';
+                                const isB = p.status === 'on_break';
                                 return `
                                     <span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 3px 8px; border-radius: var(--radius-sm); font-size: 0.75rem; background: var(--bg-surface); border: 1px solid var(--border-subtle);">
-                                        <span>${isP ? '🟢' : isA ? '🔴' : '⚪'}</span>
+                                        <span>${isP ? '🟢' : isA ? '🔴' : isB ? '☕' : '⚪'}</span>
                                         <strong>${ZonesPage.escapeHtml(p.person_name)}</strong>
                                         <span style="font-size: 0.68rem; color: var(--text-tertiary);">(${lastSeenDisplay})</span>
                                     </span>
@@ -363,7 +377,7 @@ const ZonesPage = {
                             <span style="font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: var(--radius-full); background: ${statusColor}22; color: ${statusColor}; border: 1px solid ${statusColor}55;">
                                 ${statusBadge}
                             </span>
-                            <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${z.camera_id})" style="font-size: 0.75rem; padding: 4px 10px;">
+                            <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${z.camera_id}, ${z.zone_id})" style="font-size: 0.75rem; padding: 4px 10px;">
                                 ${I18n.t('edit_area_shift')}
                             </button>
                         </div>
@@ -372,14 +386,17 @@ const ZonesPage = {
             }
 
             return `
-                <div class="presence-card" style="background: var(--bg-glass); border: 1px solid ${overallStatus === 'absent' ? 'rgba(239, 68, 68, 0.4)' : overallStatus === 'present' ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)'}; border-radius: var(--radius-lg); padding: 1.25rem; backdrop-filter: blur(12px); display: flex; flex-direction: column; justify-content: space-between;">
+                <div class="presence-card" style="background: var(--bg-glass); border: 1px solid ${overallStatus === 'absent' ? 'rgba(239, 68, 68, 0.4)' : overallStatus === 'present' ? 'rgba(16, 185, 129, 0.3)' : overallStatus === 'on_break' ? 'rgba(6, 182, 212, 0.4)' : 'var(--border-subtle)'}; border-radius: var(--radius-lg); padding: 1.25rem; backdrop-filter: blur(12px); display: flex; flex-direction: column; justify-content: space-between;">
                     <div>
                         <!-- Header -->
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.85rem;">
                             <div>
-                                <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                     <span>🎯</span>
                                     <span>${ZonesPage.escapeHtml(z.zone_name)}</span>
+                                    <span style="font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                                        ⏱️ ${timeoutMins}m
+                                    </span>
                                 </div>
                                 <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.15rem;">
                                     📹 ${ZonesPage.escapeHtml(z.camera_name)}
@@ -390,10 +407,19 @@ const ZonesPage = {
                             </span>
                         </div>
 
-                        <!-- Timetable / Shift -->
+                        <!-- Timetable / Shift & Free Times -->
                         <div style="background: var(--bg-surface-hover); padding: 0.6rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 0.85rem; font-size: 0.75rem;">
                             <div style="color: var(--text-tertiary); font-weight: 600; text-transform: uppercase; font-size: 0.65rem;">${I18n.t('timetable_shift')}</div>
                             <div style="color: var(--accent-blue); font-weight: 600; margin-top: 0.15rem;">${ZonesPage.escapeHtml(I18n.formatTimetableText(z.timetable_text))}</div>
+                            ${freeTimesList.length > 0 ? `
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem;">
+                                    ${freeTimesList.map(ft => `
+                                        <span style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; color: var(--accent-cyan); background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.3); padding: 1px 6px; border-radius: var(--radius-sm);">
+                                            ☕ ${ZonesPage.escapeHtml(ft.name || 'Break')}: ${ft.start_time}-${ft.end_time}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
                         </div>
 
                         <!-- Attached Person(s) Status List -->
@@ -403,13 +429,16 @@ const ZonesPage = {
                                 <div style="font-size: 0.78rem; color: var(--text-tertiary); font-style: italic;">${I18n.t('no_staff_assigned')}</div>
                             ` : z.assigned_persons.map(p => {
                                 const lastSeenDisplay = I18n.formatLastSeen(p);
+                                const isP = p.status === 'present';
+                                const isA = p.status === 'absent';
+                                const isB = p.status === 'on_break';
                                 return `
                                     <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                                         <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
-                                            <span>👤</span>
+                                            <span>${isP ? '🟢' : isA ? '🔴' : isB ? '☕' : '⚪'}</span>
                                             <span>${ZonesPage.escapeHtml(p.person_name)}</span>
                                         </div>
-                                        <div style="font-size: 0.72rem; font-weight: 600; color: ${p.status === 'present' ? 'var(--accent-emerald)' : p.status === 'absent' ? '#f87171' : 'var(--text-tertiary)'};">
+                                        <div style="font-size: 0.72rem; font-weight: 600; color: ${isP ? 'var(--accent-emerald)' : isA ? '#f87171' : isB ? 'var(--accent-cyan)' : 'var(--text-tertiary)'};">
                                             ${lastSeenDisplay}
                                         </div>
                                     </div>
@@ -420,13 +449,13 @@ const ZonesPage = {
 
                     <!-- Actions -->
                     <div style="display: flex; gap: 0.5rem; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem;">
-                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${z.camera_id})" style="flex: 1; justify-content: center; font-size: 0.75rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${z.camera_id}, ${z.zone_id})" style="flex: 1; justify-content: center; font-size: 0.75rem;">
                             ${I18n.t('edit_area_shift')}
                         </button>
                     </div>
                 </div>
             `;
-        }).join('');
+        }).join('');;
     },
 
     /**
@@ -472,12 +501,32 @@ const ZonesPage = {
                                         const rawTimetable = `${z.start_time || '00:00'} - ${z.end_time || '23:59'} (${(z.active_days || []).join(', ')})`;
                                         const formattedTimetable = I18n.formatTimetableText(rawTimetable);
                                         const attachedIds = (z.assigned_person_ids || []).map(id => I18n.isRTL() ? I18n.toPersianDigits(id) : id).join(', ') || I18n.t('none');
+                                        const timeoutMins = z.absence_timeout_minutes || 2;
+                                        const freeTimesList = Array.isArray(z.free_times) ? z.free_times : [];
 
                                         return `
-                                            <div style="background: var(--bg-surface); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                                                <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.35rem;">🎯 ${ZonesPage.escapeHtml(z.name)}</div>
-                                                <div style="font-size: 0.78rem; color: var(--accent-blue); margin-bottom: 0.3rem;">🕐 ${formattedTimetable}</div>
-                                                <div style="font-size: 0.75rem; color: var(--text-tertiary);">${I18n.t('attached_ids', { ids: attachedIds })}</div>
+                                            <div style="background: var(--bg-surface); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; justify-content: space-between; gap: 0.5rem;">
+                                                <div>
+                                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.35rem; gap: 0.5rem;">
+                                                        <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-primary);">🎯 ${ZonesPage.escapeHtml(z.name)}</div>
+                                                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.show(${cam.id}, ${z.id})" style="font-size: 0.72rem; padding: 2px 7px;">
+                                                            ✏️ ${I18n.t('edit')}
+                                                        </button>
+                                                    </div>
+                                                    <div style="font-size: 0.78rem; color: var(--accent-blue); margin-bottom: 0.3rem;">🕐 ${formattedTimetable}</div>
+                                                    <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.35rem;">${I18n.t('attached_ids', { ids: attachedIds })}</div>
+                                                    
+                                                    <div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem;">
+                                                        <span style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: var(--radius-sm); background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                                                            ⏱️ ${timeoutMins}m
+                                                        </span>
+                                                        ${freeTimesList.map(ft => `
+                                                            <span style="font-size: 0.68rem; color: var(--accent-cyan); background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.3); padding: 1px 6px; border-radius: var(--radius-sm);">
+                                                                ☕ ${ZonesPage.escapeHtml(ft.name || 'Break')}: ${ft.start_time}-${ft.end_time}
+                                                            </span>
+                                                        `).join('')}
+                                                    </div>
+                                                </div>
                                             </div>
                                         `;
                                     }).join('')}

@@ -78,6 +78,9 @@ const DutyPage = {
                         <button class="btn btn-sm ${DutyPage._currentFilter === 'offline' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-offline" onclick="DutyPage.setFilter('offline')">
                             🟡 ${I18n.t('filter_camera_offline')}
                         </button>
+                        <button class="btn btn-sm ${DutyPage._currentFilter === 'break' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-break" onclick="DutyPage.setFilter('break')">
+                            ☕ ${I18n.t('status_on_break')}
+                        </button>
                     </div>
 
                     <!-- Only Active Shift Toggle -->
@@ -160,7 +163,7 @@ const DutyPage = {
      */
     setFilter(filter) {
         DutyPage._currentFilter = filter;
-        ['all', 'present', 'absent', 'offline'].forEach(f => {
+        ['all', 'present', 'absent', 'offline', 'break'].forEach(f => {
             const btn = document.getElementById(`filter-duty-${f}`);
             if (btn) {
                 btn.className = `btn btn-sm ${DutyPage._currentFilter === f ? 'btn-primary' : 'btn-ghost'}`;
@@ -356,6 +359,11 @@ const DutyPage = {
                             🟡 ${I18n.t('duty_camera_disconnected_badge', { count: isRtl ? I18n.toPersianDigits(d.camera_offline_count) : d.camera_offline_count })}
                         </span>
                     ` : ''}
+                    ${d.on_break_count > 0 ? `
+                        <span class="duty-kpi-badge cyan" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border-color: rgba(14, 165, 233, 0.4); cursor: pointer;" onclick="DutyPage.setFilter('break')" title="${I18n.t('status_on_break')}">
+                            ☕ ${isRtl ? `${I18n.toPersianDigits(d.on_break_count)} نفر در استراحت` : `${d.on_break_count} On Break`}
+                        </span>
+                    ` : ''}
                 </div>
             </div>
 
@@ -422,6 +430,8 @@ const DutyPage = {
             roster = roster.filter(r => r.status === 'absent');
         } else if (DutyPage._currentFilter === 'offline') {
             roster = roster.filter(r => r.status === 'camera_offline');
+        } else if (DutyPage._currentFilter === 'break') {
+            roster = roster.filter(r => r.status === 'on_break');
         }
 
         if (roster.length === 0) {
@@ -448,8 +458,9 @@ const DutyPage = {
             const isPresent = person.status === 'present';
             const isAbsent = person.status === 'absent';
             const isOffline = person.status === 'camera_offline';
-            const borderAccent = isPresent ? 'var(--accent-emerald)' : (isAbsent ? 'var(--accent-rose)' : (isOffline ? '#facc15' : 'rgba(255, 255, 255, 0.2)'));
-            const cardClass = isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : (isOffline ? 'duty-camera-offline' : ''));
+            const isOnBreak = person.status === 'on_break';
+            const borderAccent = isPresent ? 'var(--accent-emerald)' : (isAbsent ? 'var(--accent-rose)' : (isOffline ? '#facc15' : (isOnBreak ? '#38bdf8' : 'rgba(255, 255, 255, 0.2)')));
+            const cardClass = isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : (isOffline ? 'duty-camera-offline' : (isOnBreak ? 'duty-on-break' : '')));
 
             // Avatar / Initial fallback
             const avatarHtml = person.avatar_url
@@ -465,6 +476,12 @@ const DutyPage = {
                 statusBadgeHtml = `
                     <span class="badge-status-pill on-station" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
                         🟢 ${isRtl ? `حاضر در منطقه (${I18n.toPersianDigits(secAgo)} ثانیه پیش)` : `In Zone (${secAgo}s ago)`}
+                    </span>
+                `;
+            } else if (isOnBreak) {
+                statusBadgeHtml = `
+                    <span class="badge-status-pill on-break" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
+                        ☕ ${person.current_break_name ? (isRtl ? `استراحت (${person.current_break_name})` : `On Break (${person.current_break_name})`) : (isRtl ? 'زمان استراحت مجاز' : 'On Break')}
                     </span>
                 `;
             } else if (isOffline) {
@@ -495,9 +512,11 @@ const DutyPage = {
             const shiftDurHours = isRtl ? I18n.toPersianDigits(person.shift_duration_hours) : person.shift_duration_hours;
 
             // Current Absence & Sum of Absence strings
-            const currAbsenceDisplay = isPresent
-                ? (isRtl ? '۰ دقیقه (حاضر)' : '0m (Present)')
-                : (isRtl ? I18n.toPersianDigits(person.current_absence_str) : person.current_absence_str);
+            const currAbsenceDisplay = isOnBreak
+                ? (isRtl ? 'استراحت (مجاز)' : 'Break (Excused)')
+                : (isPresent
+                    ? (isRtl ? '۰ دقیقه (حاضر)' : '0m (Present)')
+                    : (isRtl ? I18n.toPersianDigits(person.current_absence_str) : person.current_absence_str));
 
             const sumShiftAbsenceDisplay = isRtl
                 ? I18n.toPersianDigits(person.shift_absence_str)
@@ -615,7 +634,19 @@ const DutyPage = {
                     <!-- 2 Main Absence / Status Metrics -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                         <!-- Status / Current Absence -->
-                        ${isOffline ? `
+                        ${isOnBreak ? `
+                            <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                                <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                                    ${I18n.t('status') || 'وضعیت'}
+                                </div>
+                                <div style="font-size: 1.05rem; font-weight: 800; color: #38bdf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${person.current_break_name || ''}">
+                                    ${person.current_break_name || (isRtl ? 'زمان استراحت' : 'Break Time')}
+                                </div>
+                                <div style="font-size: 0.68rem; color: #7dd3fc; margin-top: 0.15rem;">
+                                    ${isRtl ? 'غیبت معاف است (مجاز)' : 'Absence exempt (Excused)'}
+                                </div>
+                            </div>
+                        ` : (isOffline ? `
                             <div style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
                                 <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                                     ${I18n.t('status') || 'وضعیت'}
@@ -639,7 +670,7 @@ const DutyPage = {
                                     ${isPresent ? I18n.t('in_zone_present') : (person.last_seen_str || I18n.t('absent_not_seen'))}
                                 </div>
                             </div>
-                        `}
+                        `)}
 
                         <!-- Sum of Current Shift Absence -->
                         <div style="background: rgba(245, 158, 11, 0.09); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">

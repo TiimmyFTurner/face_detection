@@ -1,5 +1,5 @@
 /**
- * ZoneModal Component — Interactive visual zone drawer and person attachment manager.
+ * ZoneModal Component — Interactive visual zone drawer, shift timetable, break times, and person attachment manager.
  */
 const ZoneModal = {
     _camera: null,
@@ -9,16 +9,41 @@ const ZoneModal = {
     _startX: 0,
     _startY: 0,
     _currentBox: null, // { x, y, width, height } in %
+    _editingZoneId: null, // null when creating new, number when editing
+    _selectedPersonIds: new Set(),
+    _freeTimes: [],
+    _personSearchQuery: '',
 
     /**
      * Open the zone management modal for a specific camera.
+     * Optionally jump straight into editing a specific zoneId.
      */
-    async show(cameraId) {
-        const camera = CamerasPage._cameras.find(c => c.id === cameraId);
-        if (!camera) return;
+    async show(cameraId, targetZoneId = null) {
+        // Robust camera resolution
+        let camera = (typeof CamerasPage !== 'undefined' && CamerasPage._cameras)
+            ? CamerasPage._cameras.find(c => c.id === cameraId)
+            : null;
+        if (!camera && typeof ZonesPage !== 'undefined' && ZonesPage._cameras) {
+            camera = ZonesPage._cameras.find(c => c.id === cameraId);
+        }
+        if (!camera) {
+            try {
+                const cams = await App.api('/api/cameras');
+                camera = cams.find(c => c.id === cameraId);
+            } catch (e) {}
+        }
+
+        if (!camera) {
+            App.toast(I18n.t('err_failed_load', { msg: 'Camera not found' }), 'error');
+            return;
+        }
 
         ZoneModal._camera = camera;
         ZoneModal._currentBox = { x: 20, y: 20, width: 40, height: 40 }; // Default box
+        ZoneModal._editingZoneId = null;
+        ZoneModal._selectedPersonIds = new Set();
+        ZoneModal._freeTimes = [];
+        ZoneModal._personSearchQuery = '';
 
         App.toast(I18n.t('loading'), 'info');
 
@@ -30,6 +55,25 @@ const ZoneModal = {
 
             ZoneModal._zones = zones || [];
             ZoneModal._persons = persons || [];
+
+            // If a target zone was requested, pre-populate into edit mode
+            if (targetZoneId) {
+                const targetZone = ZoneModal._zones.find(z => z.id === targetZoneId);
+                if (targetZone) {
+                    ZoneModal._editingZoneId = targetZone.id;
+                    ZoneModal._currentBox = {
+                        x: targetZone.x,
+                        y: targetZone.y,
+                        width: targetZone.width,
+                        height: targetZone.height,
+                    };
+                    ZoneModal._selectedPersonIds = new Set(targetZone.assigned_person_ids || []);
+                    ZoneModal._freeTimes = Array.isArray(targetZone.free_times)
+                        ? JSON.parse(JSON.stringify(targetZone.free_times))
+                        : [];
+                }
+            }
+
             ZoneModal.renderModal();
         } catch (err) {
             App.toast(I18n.t('err_failed_load', { msg: err.message }), 'error');
@@ -61,9 +105,18 @@ const ZoneModal = {
             { key: 'Sun', label: 'Sun' },
         ];
 
-        const defaultCheckedDays = I18n.isRTL()
-            ? ['Sat', 'Sun', 'Mon', 'Tue', 'Wed']
-            : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+        const editingZone = ZoneModal._editingZoneId
+            ? ZoneModal._zones.find(z => z.id === ZoneModal._editingZoneId)
+            : null;
+
+        const defaultCheckedDays = editingZone
+            ? (editingZone.active_days || [])
+            : (I18n.isRTL() ? ['Sat', 'Sun', 'Mon', 'Tue', 'Wed'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+
+        const isEditing = !!editingZone;
+        const formTitle = isEditing
+            ? I18n.t('zone_edit_title', { name: ZoneModal.escapeHtml(editingZone.name) })
+            : I18n.t('zone_add_title');
 
         const content = `
             <div class="modal-header">
@@ -73,8 +126,8 @@ const ZoneModal = {
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
 
-            <div class="modal-body" style="padding: 1.25rem; max-height: 80vh; overflow-y: auto;">
-                <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+            <div class="modal-body" style="padding: 1.25rem; max-height: 82vh; overflow-y: auto;">
+                <div style="color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
                     <span>${I18n.t('zone_canvas_hint')}</span>
                     <button class="btn btn-secondary btn-sm" onclick="ZoneModal.refreshSnapshot()">${I18n.t('refresh_snapshot')}</button>
                 </div>
@@ -88,55 +141,96 @@ const ZoneModal = {
                         <!-- Existing zones rendered here -->
                         ${ZoneModal.renderZoneOverlays()}
                         <!-- Dynamic active drawing box -->
-                        <div id="active-draw-box" style="position: absolute; display: none; border: 2px dashed var(--accent-blue); background: rgba(59, 130, 246, 0.25); border-radius: 4px; pointer-events: none;"></div>
+                        <div id="active-draw-box" style="position: absolute; display: ${ZoneModal._currentBox ? 'block' : 'none'}; left: ${ZoneModal._currentBox ? ZoneModal._currentBox.x : 0}%; top: ${ZoneModal._currentBox ? ZoneModal._currentBox.y : 0}%; width: ${ZoneModal._currentBox ? ZoneModal._currentBox.width : 0}%; height: ${ZoneModal._currentBox ? ZoneModal._currentBox.height : 0}%; border: 2px dashed ${isEditing ? 'var(--accent-amber)' : 'var(--accent-blue)'}; background: ${isEditing ? 'rgba(245, 158, 11, 0.25)' : 'rgba(59, 130, 246, 0.25)'}; border-radius: 4px; pointer-events: none;"></div>
                     </div>
                 </div>
 
                 <div class="zone-editor-grid" style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 1.5rem; align-items: start;">
-                    <!-- Area Form -->
-                    <div class="zone-form-panel" style="background: var(--bg-surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);">
-                        <h4 style="margin-top: 0; margin-bottom: 0.9rem; font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                            <span>➕</span> <span>${I18n.t('zone_add_title')}</span>
-                        </h4>
+                    <!-- Area Form Panel -->
+                    <div id="zone-form-panel" class="zone-form-panel" style="background: var(--bg-surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid ${isEditing ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-subtle)'}; box-shadow: ${isEditing ? '0 0 16px rgba(245, 158, 11, 0.1)' : 'none'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.6rem;">
+                            <h4 id="zone-form-title" style="margin: 0; font-size: 1rem; font-weight: 700; color: ${isEditing ? 'var(--accent-amber)' : 'var(--text-primary)'}; display: flex; align-items: center; gap: 0.4rem;">
+                                <span>${isEditing ? '✏️' : '➕'}</span> <span>${formTitle}</span>
+                            </h4>
+                            ${isEditing ? `
+                                <button class="btn btn-secondary btn-sm" onclick="ZoneModal.cancelEdit()" style="font-size: 0.72rem; padding: 2px 8px;">
+                                    ${I18n.t('btn_cancel_edit')}
+                                </button>
+                            ` : ''}
+                        </div>
                         
+                        <!-- Zone Name -->
                         <div class="form-group" style="margin-bottom: 0.85rem;">
                             <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_zone_name')}</label>
-                            <input type="text" id="zone-name-input" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('placeholder_zone_name'))}" required style="padding: 0.6rem 0.85rem;" />
+                            <input type="text" id="zone-name-input" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('placeholder_zone_name'))}" value="${isEditing ? ZoneModal.escapeAttr(editingZone.name) : ''}" required style="padding: 0.6rem 0.85rem;" />
                         </div>
 
+                        <!-- Attach Persons with Live Search Filter -->
                         <div class="form-group" style="margin-bottom: 0.85rem;">
-                            <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_attach_persons')}</label>
-                            <div id="zone-persons-picker" style="max-height: 140px; overflow-y: auto; background: var(--bg-surface); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.4rem;">
-                                ${ZoneModal._persons.length === 0 ? `
-                                    <span style="font-size: 0.75rem; color: var(--text-tertiary); grid-column: 1 / -1;">${I18n.t('no_enrolled_persons_hint')}</span>
-                                ` : ZoneModal._persons.map(p => `
-                                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-primary); cursor: pointer; background: var(--bg-surface-hover); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                                        <input type="checkbox" name="zone-person" value="${p.id}" />
-                                        <span>👤 ${ZoneModal.escapeHtml(p.name)} <span style="font-size: 0.7rem; color: var(--text-tertiary);">(${ZoneModal.escapeHtml(p.role || I18n.t('known_identity'))})</span></span>
-                                    </label>
-                                `).join('')}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">${I18n.t('label_attach_persons')}</label>
+                                <span id="zone-selected-count-badge" style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(59, 130, 246, 0.15); padding: 2px 6px; border-radius: var(--radius-sm);">
+                                    ${I18n.t('selected_persons_count', { count: I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._selectedPersonIds.size) : ZoneModal._selectedPersonIds.size })}
+                                </span>
+                            </div>
+
+                            <!-- Search Input with Clear Button -->
+                            <div style="position: relative; margin-bottom: 0.4rem;">
+                                <input type="text" id="zone-person-search-input" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('search_persons_placeholder'))}" value="${ZoneModal.escapeAttr(ZoneModal._personSearchQuery)}" oninput="ZoneModal.filterPersons(this.value)" style="padding: 0.48rem 2rem 0.48rem 0.85rem; font-size: 0.82rem; width: 100%;" />
+                                <span id="zone-person-search-clear" onclick="ZoneModal.clearSearchInput()" style="position: absolute; ${I18n.isRTL() ? 'left: 10px;' : 'right: 10px;'} top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-tertiary); font-size: 0.85rem; padding: 2px 4px; display: ${(ZoneModal._personSearchQuery || '').trim() ? 'inline' : 'none'};" title="${ZoneModal.escapeAttr(I18n.t('clear') || 'Clear')}">✕</span>
+                            </div>
+
+                            <!-- Quick Action Bar -->
+                            <div id="zone-person-search-actions">
+                                ${ZoneModal.renderPersonSearchActionsHtml()}
+                            </div>
+
+                            <!-- Selected Person Chips Preview -->
+                            <div id="zone-selected-chips-container" style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.45rem;">
+                                ${ZoneModal.renderSelectedChipsHtml()}
+                            </div>
+
+                            <!-- Filtered Persons Checkbox List -->
+                            <div id="zone-persons-picker" style="max-height: 150px; overflow-y: auto; background: var(--bg-surface); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.35rem;">
+                                ${ZoneModal.renderPersonsListHtml()}
                             </div>
                         </div>
 
+                        <!-- Alert Policy -->
                         <div class="form-group" style="margin-bottom: 0.85rem;">
                             <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_alert_policy')}</label>
                             <select id="zone-alert-mode" class="form-input" style="font-size: 0.85rem; padding: 0.55rem 0.85rem;">
-                                <option value="absence">${I18n.t('policy_absence')}</option>
-                                <option value="unauthorized">${I18n.t('policy_unauthorized')}</option>
-                                <option value="both">${I18n.t('policy_both')}</option>
+                                <option value="absence" ${isEditing && editingZone.alert_mode === 'absence' ? 'selected' : ''}>${I18n.t('policy_absence')}</option>
+                                <option value="unauthorized" ${isEditing && editingZone.alert_mode === 'unauthorized' ? 'selected' : ''}>${I18n.t('policy_unauthorized')}</option>
+                                <option value="both" ${isEditing && editingZone.alert_mode === 'both' ? 'selected' : ''}>${I18n.t('policy_both')}</option>
                             </select>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 1rem;">
+                        <!-- Absence Alarm Timer (Minutes) -->
+                        <div class="form-group" style="margin-bottom: 0.85rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
+                                    ${I18n.t('label_absence_timer')}
+                                </label>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <input type="number" id="zone-absence-timeout" class="form-input" min="1" max="120" value="${isEditing ? (editingZone.absence_timeout_minutes || 2) : 2}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; width: 90px;" />
+                                <span style="font-size: 0.78rem; color: var(--text-secondary);">${I18n.isRTL() ? 'دقیقه غیبت قبل از فعال شدن آژیر' : 'minutes before alarm sounds'}</span>
+                            </div>
+                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 0.25rem;">${I18n.t('absence_timer_hint')}</div>
+                        </div>
+
+                        <!-- Shift Timetable & Active Days -->
+                        <div class="form-group" style="margin-bottom: 0.85rem;">
                             <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_shift_schedule')}</label>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
                                 <div>
                                     <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block; margin-bottom: 0.2rem;">${I18n.t('label_start_time')}</span>
-                                    <input type="time" id="zone-start-time" class="form-input" value="08:00" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
+                                    <input type="time" id="zone-start-time" class="form-input" value="${isEditing ? (editingZone.start_time || '08:00') : '08:00'}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
                                 </div>
                                 <div>
                                     <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block; margin-bottom: 0.2rem;">${I18n.t('label_end_time')}</span>
-                                    <input type="time" id="zone-end-time" class="form-input" value="17:00" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
+                                    <input type="time" id="zone-end-time" class="form-input" value="${isEditing ? (editingZone.end_time || '17:00') : '17:00'}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
                                 </div>
                             </div>
                             <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem;" id="zone-days-picker">
@@ -149,18 +243,59 @@ const ZoneModal = {
                             </div>
                         </div>
 
-                        <button class="btn btn-primary" onclick="ZoneModal.saveZone()" style="width: 100%; justify-content: center; padding: 0.65rem 1rem; font-weight: 700; font-size: 0.9rem;">
-                            💾 ${I18n.t('btn_save_zone')}
-                        </button>
+                        <!-- Free Times & Breaks (Lunch, Rest, etc.) -->
+                        <div class="form-group" style="margin-bottom: 1.1rem; background: var(--bg-surface); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: var(--text-primary); margin: 0;">${I18n.t('label_free_times')}</label>
+                            </div>
+                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.5rem;">${I18n.t('free_times_hint')}</div>
+
+                            <!-- Existing Free Times Pills List -->
+                            <div id="zone-free-times-list" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.6rem;">
+                                ${ZoneModal.renderFreeTimesListHtml()}
+                            </div>
+
+                            <!-- Add New Free Time Form Row -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.4rem; align-items: center;">
+                                <input type="text" id="free-time-name" class="form-input" placeholder="${ZoneModal.escapeAttr(I18n.t('free_time_name_placeholder'))}" style="padding: 0.4rem 0.6rem; font-size: 0.78rem;" />
+                                <input type="time" id="free-time-start" class="form-input" value="12:00" style="padding: 0.4rem 0.5rem; font-size: 0.78rem;" />
+                                <input type="time" id="free-time-end" class="form-input" value="13:00" style="padding: 0.4rem 0.5rem; font-size: 0.78rem;" />
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.addFreeTimeFromInputs()" style="padding: 0.4rem 0.7rem; font-size: 0.75rem;">
+                                    ${I18n.t('add_free_time_btn')}
+                                </button>
+                            </div>
+
+                            <!-- Presets -->
+                            <div style="display: flex; gap: 0.4rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.addPresetFreeTime('lunch')" style="font-size: 0.68rem; padding: 2px 7px;">
+                                    🍽️ ${I18n.t('quick_add_lunch')}
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.addPresetFreeTime('rest')" style="font-size: 0.68rem; padding: 2px 7px;">
+                                    ☕ ${I18n.t('quick_add_rest')}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" onclick="ZoneModal.saveZone()" style="flex: 1; justify-content: center; padding: 0.65rem 1rem; font-weight: 700; font-size: 0.9rem;">
+                                ${isEditing ? I18n.t('btn_update_zone') : I18n.t('btn_save_zone')}
+                            </button>
+                            ${isEditing ? `
+                                <button class="btn btn-secondary" onclick="ZoneModal.cancelEdit()" style="padding: 0.65rem 1rem;">
+                                    ${I18n.t('btn_cancel_edit')}
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
 
-                    <!-- Configured Zones List -->
+                    <!-- Configured Zones List Panel -->
                     <div class="zone-list-panel" style="background: var(--bg-surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);">
                         <h4 style="margin-top: 0; margin-bottom: 0.9rem; font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
                             <span>🎯</span> <span>${I18n.t('active_zones_count', { count: I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._zones.length) : ZoneModal._zones.length })}</span>
                         </h4>
                         
-                        <div id="active-zones-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 380px; overflow-y: auto; padding-inline-end: 2px;">
+                        <div id="active-zones-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 480px; overflow-y: auto; padding-inline-end: 2px;">
                             ${ZoneModal.renderZonesList()}
                         </div>
                     </div>
@@ -183,13 +318,14 @@ const ZoneModal = {
         if (!ZoneModal._zones || ZoneModal._zones.length === 0) return '';
 
         return ZoneModal._zones.map((zone, idx) => {
+            const isBeingEdited = ZoneModal._editingZoneId === zone.id;
             const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
-            const color = colors[idx % colors.length];
+            const color = isBeingEdited ? '#f59e0b' : colors[idx % colors.length];
 
             return `
-                <div class="zone-box-overlay" style="position: absolute; left: ${zone.x}%; top: ${zone.y}%; width: ${zone.width}%; height: ${zone.height}%; border: 2px solid ${color}; background: ${color}22; border-radius: 4px; pointer-events: none;">
+                <div class="zone-box-overlay ${isBeingEdited ? 'editing' : ''}" style="position: absolute; left: ${zone.x}%; top: ${zone.y}%; width: ${zone.width}%; height: ${zone.height}%; border: ${isBeingEdited ? '3px dashed #f59e0b' : `2px solid ${color}`}; background: ${color}22; border-radius: 4px; pointer-events: none; box-shadow: ${isBeingEdited ? '0 0 14px rgba(245, 158, 11, 0.5)' : 'none'};">
                     <span style="position: absolute; top: -20px; left: 0; background: ${color}; color: #fff; font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; white-space: nowrap;">
-                        ${ZoneModal.escapeHtml(zone.name)}
+                        ${isBeingEdited ? '✏️ ' : ''}${ZoneModal.escapeHtml(zone.name)}
                     </span>
                 </div>
             `;
@@ -197,7 +333,7 @@ const ZoneModal = {
     },
 
     /**
-     * Render the active zones list with delete buttons and assigned persons.
+     * Render the active zones list with edit and delete buttons.
      */
     renderZonesList() {
         if (ZoneModal._zones.length === 0) {
@@ -205,37 +341,418 @@ const ZoneModal = {
         }
 
         return ZoneModal._zones.map(zone => {
+            const isEditing = ZoneModal._editingZoneId === zone.id;
             const assignedNames = (zone.assigned_person_ids || []).map(pid => {
                 const person = ZoneModal._persons.find(p => p.id === pid);
                 return person ? person.name : `ID:${pid}`;
             });
 
-            const policyLabel = zone.alert_mode === 'absence' ? I18n.t('policy_absence') : zone.alert_mode === 'unauthorized' ? I18n.t('policy_unauthorized') : I18n.t('policy_both');
+            const policyLabel = zone.alert_mode === 'absence'
+                ? I18n.t('policy_absence')
+                : zone.alert_mode === 'unauthorized'
+                    ? I18n.t('policy_unauthorized')
+                    : I18n.t('policy_both');
+
+            const timeoutMins = zone.absence_timeout_minutes || 2;
+            const freeTimesList = Array.isArray(zone.free_times) ? zone.free_times : [];
 
             return `
-                <div class="zone-item-card" style="background: var(--bg-surface); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem;">
+                <div class="zone-item-card" style="background: var(--bg-surface); padding: 0.9rem 1.1rem; border-radius: var(--radius-md); border: 1px solid ${isEditing ? 'var(--accent-amber)' : 'var(--border-subtle)'}; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; box-shadow: ${isEditing ? '0 0 10px rgba(245, 158, 11, 0.2)' : 'none'};">
                     <div style="flex: 1;">
-                        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
+                        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
                             <span>🎯</span>
                             <span>${ZoneModal.escapeHtml(zone.name)}</span>
-                            <span style="font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: var(--radius-full); background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.3); margin-inline-start: auto;">
+                            <span style="font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: var(--radius-full); background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.3);">
                                 ${policyLabel}
                             </span>
+                            <span style="font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                                ⏱️ ${timeoutMins}m
+                            </span>
                         </div>
+
                         <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
                             👤 ${I18n.t('assigned_staff')} <strong>${assignedNames.length > 0 ? ZoneModal.escapeHtml(assignedNames.join(', ')) : I18n.t('none')}</strong>
                         </div>
-                        <div style="font-size: 0.74rem; color: var(--text-tertiary); display: flex; align-items: center; gap: 0.3rem;">
+
+                        <div style="font-size: 0.74rem; color: var(--text-tertiary); display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.25rem;">
                             <span>🕐</span>
                             <span>${zone.start_time || '00:00'} - ${zone.end_time || '23:59'} (${(zone.active_days || []).join(', ')})</span>
                         </div>
+
+                        ${freeTimesList.length > 0 ? `
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem;">
+                                ${freeTimesList.map(ft => `
+                                    <span style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; color: var(--accent-cyan); background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.3); padding: 1px 6px; border-radius: var(--radius-sm);">
+                                        ☕ ${ZoneModal.escapeHtml(ft.name || 'Break')}: ${ft.start_time}-${ft.end_time}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                     </div>
-                    <button class="btn btn-danger btn-sm" onclick="ZoneModal.deleteZone(${zone.id})" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; align-self: center;" title="${ZoneModal.escapeAttr(I18n.t('delete'))}">
-                        🗑️
-                    </button>
+
+                    <div style="display: flex; gap: 0.35rem; align-self: flex-start;">
+                        <button class="btn btn-secondary btn-sm" onclick="ZoneModal.editZone(${zone.id})" style="padding: 0.4rem 0.6rem; font-size: 0.8rem;" title="${ZoneModal.escapeAttr(I18n.t('edit'))}">
+                            ✏️
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="ZoneModal.deleteZone(${zone.id})" style="padding: 0.4rem 0.6rem; font-size: 0.8rem;" title="${ZoneModal.escapeAttr(I18n.t('delete'))}">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
             `;
         }).join('');
+    },
+
+    /**
+     * Switch form into edit mode for an existing zone.
+     */
+    editZone(zoneId) {
+        const zone = ZoneModal._zones.find(z => z.id === zoneId);
+        if (!zone) return;
+
+        ZoneModal._editingZoneId = zone.id;
+        ZoneModal._currentBox = {
+            x: zone.x,
+            y: zone.y,
+            width: zone.width,
+            height: zone.height,
+        };
+        ZoneModal._selectedPersonIds = new Set(zone.assigned_person_ids || []);
+        ZoneModal._freeTimes = Array.isArray(zone.free_times)
+            ? JSON.parse(JSON.stringify(zone.free_times))
+            : [];
+        ZoneModal._personSearchQuery = '';
+
+        // Re-render modal to display edit mode
+        ZoneModal.renderModal();
+
+        // Scroll form panel into view
+        const formPanel = document.getElementById('zone-form-panel');
+        if (formPanel) {
+            formPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    },
+
+    /**
+     * Cancel edit mode and reset to new zone form.
+     */
+    cancelEdit() {
+        ZoneModal._editingZoneId = null;
+        ZoneModal._currentBox = { x: 20, y: 20, width: 40, height: 40 };
+        ZoneModal._selectedPersonIds = new Set();
+        ZoneModal._freeTimes = [];
+        ZoneModal._personSearchQuery = '';
+        ZoneModal.renderModal();
+    },
+
+    /**
+     * Render quick action bar for person search.
+     */
+    renderPersonSearchActionsHtml() {
+        const q = (ZoneModal._personSearchQuery || '').trim().toLowerCase();
+        const hasQuery = q.length > 0;
+        const hasSelection = ZoneModal._selectedPersonIds.size > 0;
+
+        let matchCount = 0;
+        if (hasQuery) {
+            matchCount = ZoneModal._persons.filter(p => {
+                const name = (p.name || '').toLowerCase();
+                const role = (p.role || '').toLowerCase();
+                return name.includes(q) || role.includes(q);
+            }).length;
+        }
+
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; font-size: 0.72rem; min-height: 22px;">
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                    ${hasQuery && matchCount > 0 ? `
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.selectAllFiltered()" style="font-size: 0.68rem; padding: 2px 7px;">
+                            ${I18n.t('select_all_filtered')} (${I18n.isRTL() ? I18n.toPersianDigits(matchCount) : matchCount})
+                        </button>
+                    ` : ''}
+                    ${hasSelection ? `
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.clearPersonSelection()" style="font-size: 0.68rem; padding: 2px 7px; color: var(--accent-rose);">
+                            ${I18n.t('clear_selection')}
+                        </button>
+                    ` : ''}
+                </div>
+                ${hasQuery ? `
+                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">
+                        ${I18n.t('search_results_active')}: <strong>${I18n.isRTL() ? I18n.toPersianDigits(matchCount) : matchCount}</strong>
+                    </span>
+                ` : ''}
+            </div>
+        `;
+    },
+
+    /**
+     * Render the filtered persons search results.
+     * When no search query is typed, displays a search prompt instead of listing all persons.
+     */
+    renderPersonsListHtml() {
+        const q = (ZoneModal._personSearchQuery || '').trim().toLowerCase();
+
+        // If no search query, do NOT show all persons - guide the user to search
+        if (!q) {
+            return `
+                <div style="font-size: 0.78rem; color: var(--text-tertiary); grid-column: 1 / -1; padding: 1.1rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem;">
+                    <span style="font-size: 1.3rem; opacity: 0.6;">🔍</span>
+                    <span>${I18n.t('search_persons_prompt')}</span>
+                </div>
+            `;
+        }
+
+        const filtered = ZoneModal._persons.filter(p => {
+            const name = (p.name || '').toLowerCase();
+            const role = (p.role || '').toLowerCase();
+            return name.includes(q) || role.includes(q);
+        });
+
+        if (filtered.length === 0) {
+            return `
+                <div style="font-size: 0.78rem; color: var(--text-tertiary); grid-column: 1 / -1; padding: 1rem 0.5rem; text-align: center;">
+                    ${I18n.t('no_matched_persons')}
+                </div>
+            `;
+        }
+
+        return filtered.map(p => {
+            const isChecked = ZoneModal._selectedPersonIds.has(p.id);
+            return `
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-primary); cursor: pointer; background: ${isChecked ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-surface-hover)'}; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid ${isChecked ? 'rgba(59, 130, 246, 0.4)' : 'var(--border-subtle)'}; transition: all 0.15s ease;">
+                    <input type="checkbox" value="${p.id}" ${isChecked ? 'checked' : ''} onchange="ZoneModal.togglePerson(${p.id}, this.checked)" />
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        👤 <strong>${ZoneModal.escapeHtml(p.name)}</strong>
+                        <span style="font-size: 0.68rem; color: var(--text-tertiary);">(${ZoneModal.escapeHtml(p.role || I18n.t('known_identity'))})</span>
+                    </span>
+                </label>
+            `;
+        }).join('');
+    },
+
+    /**
+     * Render chips for selected persons.
+     */
+    renderSelectedChipsHtml() {
+        if (ZoneModal._selectedPersonIds.size === 0) return '';
+
+        return Array.from(ZoneModal._selectedPersonIds).map(pid => {
+            const person = ZoneModal._persons.find(p => p.id === pid);
+            const name = person ? person.name : `ID:${pid}`;
+            return `
+                <span style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; background: rgba(59, 130, 246, 0.2); color: var(--text-primary); border: 1px solid rgba(59, 130, 246, 0.4); padding: 2px 7px; border-radius: var(--radius-full);">
+                    <span>👤 ${ZoneModal.escapeHtml(name)}</span>
+                    <button type="button" onclick="ZoneModal.togglePerson(${pid}, false)" style="background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 0.75rem; padding: 0 2px; line-height: 1;">✕</button>
+                </span>
+            `;
+        }).join('');
+    },
+
+    /**
+     * Handle person search input filter.
+     */
+    filterPersons(query) {
+        ZoneModal._personSearchQuery = query;
+
+        // Update clear button visibility
+        const clearBtn = document.getElementById('zone-person-search-clear');
+        if (clearBtn) {
+            clearBtn.style.display = (query || '').trim() ? 'inline' : 'none';
+        }
+
+        // Update action bar
+        const actionsContainer = document.getElementById('zone-person-search-actions');
+        if (actionsContainer) {
+            actionsContainer.innerHTML = ZoneModal.renderPersonSearchActionsHtml();
+        }
+
+        // Update results list
+        const picker = document.getElementById('zone-persons-picker');
+        if (picker) {
+            picker.innerHTML = ZoneModal.renderPersonsListHtml();
+        }
+    },
+
+    /**
+     * Clear the search input and reset search results.
+     */
+    clearSearchInput() {
+        const input = document.getElementById('zone-person-search-input');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+        ZoneModal.filterPersons('');
+    },
+
+    /**
+     * Toggle single person selection.
+     */
+    togglePerson(personId, isChecked) {
+        if (isChecked) {
+            ZoneModal._selectedPersonIds.add(personId);
+        } else {
+            ZoneModal._selectedPersonIds.delete(personId);
+        }
+
+        // Update badge count
+        const badge = document.getElementById('zone-selected-count-badge');
+        if (badge) {
+            const count = I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._selectedPersonIds.size) : ZoneModal._selectedPersonIds.size;
+            badge.textContent = I18n.t('selected_persons_count', { count });
+        }
+
+        // Update chips
+        const chipsContainer = document.getElementById('zone-selected-chips-container');
+        if (chipsContainer) {
+            chipsContainer.innerHTML = ZoneModal.renderSelectedChipsHtml();
+        }
+
+        // Update action bar (clear selection button status)
+        const actionsContainer = document.getElementById('zone-person-search-actions');
+        if (actionsContainer) {
+            actionsContainer.innerHTML = ZoneModal.renderPersonSearchActionsHtml();
+        }
+
+        // Update picker checkbox states
+        const picker = document.getElementById('zone-persons-picker');
+        if (picker) {
+            picker.innerHTML = ZoneModal.renderPersonsListHtml();
+        }
+    },
+
+    /**
+     * Select all persons currently matching search filter.
+     */
+    selectAllFiltered() {
+        const q = (ZoneModal._personSearchQuery || '').trim().toLowerCase();
+        if (!q) return;
+
+        const filtered = ZoneModal._persons.filter(p => {
+            const name = (p.name || '').toLowerCase();
+            const role = (p.role || '').toLowerCase();
+            return name.includes(q) || role.includes(q);
+        });
+
+        filtered.forEach(p => ZoneModal._selectedPersonIds.add(p.id));
+
+        const badge = document.getElementById('zone-selected-count-badge');
+        if (badge) {
+            const count = I18n.isRTL() ? I18n.toPersianDigits(ZoneModal._selectedPersonIds.size) : ZoneModal._selectedPersonIds.size;
+            badge.textContent = I18n.t('selected_persons_count', { count });
+        }
+        const chipsContainer = document.getElementById('zone-selected-chips-container');
+        if (chipsContainer) chipsContainer.innerHTML = ZoneModal.renderSelectedChipsHtml();
+
+        const actionsContainer = document.getElementById('zone-person-search-actions');
+        if (actionsContainer) actionsContainer.innerHTML = ZoneModal.renderPersonSearchActionsHtml();
+
+        const picker = document.getElementById('zone-persons-picker');
+        if (picker) picker.innerHTML = ZoneModal.renderPersonsListHtml();
+    },
+
+    /**
+     * Clear all selected persons.
+     */
+    clearPersonSelection() {
+        ZoneModal._selectedPersonIds.clear();
+
+        const badge = document.getElementById('zone-selected-count-badge');
+        if (badge) {
+            const count = I18n.isRTL() ? I18n.toPersianDigits(0) : 0;
+            badge.textContent = I18n.t('selected_persons_count', { count });
+        }
+        const chipsContainer = document.getElementById('zone-selected-chips-container');
+        if (chipsContainer) chipsContainer.innerHTML = '';
+
+        const actionsContainer = document.getElementById('zone-person-search-actions');
+        if (actionsContainer) actionsContainer.innerHTML = ZoneModal.renderPersonSearchActionsHtml();
+
+        const picker = document.getElementById('zone-persons-picker');
+        if (picker) picker.innerHTML = ZoneModal.renderPersonsListHtml();
+    },
+
+    /**
+     * Render the list of free times (lunch, rest, etc.).
+     */
+    renderFreeTimesListHtml() {
+        if (!ZoneModal._freeTimes || ZoneModal._freeTimes.length === 0) {
+            return `<div style="font-size: 0.72rem; color: var(--text-tertiary); font-style: italic;">${I18n.t('no_free_times_hint')}</div>`;
+        }
+
+        return ZoneModal._freeTimes.map((ft, idx) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-hover); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span>☕</span>
+                    <strong style="color: var(--text-primary);">${ZoneModal.escapeHtml(ft.name || 'Break')}</strong>
+                    <span style="color: var(--accent-blue); font-weight: 600;">(${ft.start_time} - ${ft.end_time})</span>
+                </div>
+                <button type="button" onclick="ZoneModal.removeFreeTime(${idx})" style="background: none; border: none; color: #f87171; cursor: pointer; font-size: 0.8rem; padding: 2px 4px;">
+                    ✕
+                </button>
+            </div>
+        `).join('');
+    },
+
+    /**
+     * Add free time from the input fields in the modal.
+     */
+    addFreeTimeFromInputs() {
+        const nameInput = document.getElementById('free-time-name');
+        const startInput = document.getElementById('free-time-start');
+        const endInput = document.getElementById('free-time-end');
+
+        const name = (nameInput ? nameInput.value : '').trim() || (I18n.isRTL() ? 'استراحت' : 'Break');
+        const startTime = (startInput ? startInput.value : '').trim() || '12:00';
+        const endTime = (endInput ? endInput.value : '').trim() || '13:00';
+
+        ZoneModal._freeTimes.push({
+            name,
+            start_time: startTime,
+            end_time: endTime,
+        });
+
+        if (nameInput) nameInput.value = '';
+
+        const container = document.getElementById('zone-free-times-list');
+        if (container) {
+            container.innerHTML = ZoneModal.renderFreeTimesListHtml();
+        }
+    },
+
+    /**
+     * Add preset free time (lunch or rest).
+     */
+    addPresetFreeTime(type) {
+        if (type === 'lunch') {
+            ZoneModal._freeTimes.push({
+                name: I18n.isRTL() ? 'ناهار' : 'Lunch',
+                start_time: '12:00',
+                end_time: '13:00',
+            });
+        } else if (type === 'rest') {
+            ZoneModal._freeTimes.push({
+                name: I18n.isRTL() ? 'استراحت' : 'Rest',
+                start_time: '16:00',
+                end_time: '16:30',
+            });
+        }
+
+        const container = document.getElementById('zone-free-times-list');
+        if (container) {
+            container.innerHTML = ZoneModal.renderFreeTimesListHtml();
+        }
+    },
+
+    /**
+     * Remove a free time interval by index.
+     */
+    removeFreeTime(idx) {
+        ZoneModal._freeTimes.splice(idx, 1);
+        const container = document.getElementById('zone-free-times-list');
+        if (container) {
+            container.innerHTML = ZoneModal.renderFreeTimesListHtml();
+        }
     },
 
     /**
@@ -289,7 +806,7 @@ const ZoneModal = {
     },
 
     /**
-     * Save a new camera zone.
+     * Save a new camera zone or update an existing one.
      */
     async saveZone() {
         const nameInput = document.getElementById('zone-name-input');
@@ -304,13 +821,14 @@ const ZoneModal = {
             return;
         }
 
-        // Get checked person IDs
-        const checkedPersons = Array.from(document.querySelectorAll('#zone-persons-picker input[type="checkbox"]:checked'))
-            .map(cb => parseInt(cb.value, 10));
-
+        const checkedPersons = Array.from(ZoneModal._selectedPersonIds);
         const alertMode = document.getElementById('zone-alert-mode').value;
         const startTime = document.getElementById('zone-start-time') ? document.getElementById('zone-start-time').value : '08:00';
         const endTime = document.getElementById('zone-end-time') ? document.getElementById('zone-end-time').value : '17:00';
+        const absenceTimeout = document.getElementById('zone-absence-timeout')
+            ? parseInt(document.getElementById('zone-absence-timeout').value, 10) || 2
+            : 2;
+
         const checkedDays = Array.from(document.querySelectorAll('#zone-days-picker input[type="checkbox"]:checked'))
             .map(cb => cb.value);
 
@@ -325,15 +843,37 @@ const ZoneModal = {
             start_time: startTime,
             end_time: endTime,
             active_days: checkedDays.length > 0 ? checkedDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            absence_timeout_minutes: absenceTimeout,
+            free_times: ZoneModal._freeTimes || [],
             is_active: true,
         };
 
         try {
             App.toast(I18n.t('loading'), 'info');
-            const created = await App.api(`/api/cameras/${ZoneModal._camera.id}/zones`, 'POST', payload);
-            ZoneModal._zones.push(created);
-            App.toast(I18n.t('zone_saved_toast', { name: created.name }), 'success');
-            ZoneModal.renderModal();
+
+            if (ZoneModal._editingZoneId) {
+                // Update existing zone
+                const updated = await App.api(`/api/zones/${ZoneModal._editingZoneId}`, 'PUT', payload);
+                const idx = ZoneModal._zones.findIndex(z => z.id === ZoneModal._editingZoneId);
+                if (idx !== -1) {
+                    ZoneModal._zones[idx] = updated;
+                }
+                App.toast(I18n.t('zone_updated_toast', { name: updated.name }), 'success');
+                ZoneModal.cancelEdit();
+            } else {
+                // Create new zone
+                const created = await App.api(`/api/cameras/${ZoneModal._camera.id}/zones`, 'POST', payload);
+                ZoneModal._zones.push(created);
+                App.toast(I18n.t('zone_saved_toast', { name: created.name }), 'success');
+                ZoneModal.renderModal();
+            }
+
+            // Refresh ZonesPage board if currently active
+            if (typeof ZonesPage !== 'undefined' && typeof ZonesPage.fetchData === 'function') {
+                ZonesPage.fetchData().then(() => {
+                    if (typeof ZonesPage.render === 'function') ZonesPage.render();
+                }).catch(() => {});
+            }
         } catch (err) {
             App.toast(I18n.t('err_failed_save', { msg: err.message }), 'error');
         }
@@ -348,8 +888,18 @@ const ZoneModal = {
         try {
             await App.api(`/api/zones/${zoneId}`, 'DELETE');
             ZoneModal._zones = ZoneModal._zones.filter(z => z.id !== zoneId);
+            if (ZoneModal._editingZoneId === zoneId) {
+                ZoneModal._editingZoneId = null;
+            }
             App.toast(I18n.t('zone_deleted_toast'), 'success');
             ZoneModal.renderModal();
+
+            // Refresh ZonesPage if open
+            if (typeof ZonesPage !== 'undefined' && typeof ZonesPage.fetchData === 'function') {
+                ZonesPage.fetchData().then(() => {
+                    if (typeof ZonesPage.render === 'function') ZonesPage.render();
+                }).catch(() => {});
+            }
         } catch (err) {
             App.toast(I18n.t('err_failed_delete', { msg: err.message }), 'error');
         }

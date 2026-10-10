@@ -248,6 +248,13 @@ class PersonAnalyticsResponse(BaseModel):
 # Camera Zone (Important Area) Schemas
 # ═══════════════════════════════════════════════════════════
 
+class FreeTimeInterval(BaseModel):
+    """Interval defining free/break time during a shift."""
+    name: str = Field(default="Break", max_length=100)
+    start_time: str = Field(..., description="Start time HH:MM")
+    end_time: str = Field(..., description="End time HH:MM")
+
+
 class CameraZoneCreate(BaseModel):
     """Schema for creating a camera important area."""
     name: str = Field(..., min_length=1, max_length=255, examples=["Work Desk"])
@@ -260,6 +267,8 @@ class CameraZoneCreate(BaseModel):
     start_time: str = Field(default="00:00", description="Shift start time HH:MM")
     end_time: str = Field(default="23:59", description="Shift end time HH:MM")
     active_days: list[str] = Field(default_factory=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    absence_timeout_minutes: int = Field(default=2, ge=1, le=1440, description="Absence alarm timer in minutes")
+    free_times: list[dict[str, Any]] = Field(default_factory=list, description="Free times e.g. lunch/rest intervals")
     is_active: bool = Field(default=True)
 
 
@@ -275,6 +284,8 @@ class CameraZoneUpdate(BaseModel):
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     active_days: Optional[list[str]] = None
+    absence_timeout_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    free_times: Optional[list[dict[str, Any]]] = None
     is_active: Optional[bool] = None
 
 
@@ -292,6 +303,8 @@ class CameraZoneResponse(BaseModel):
     start_time: str = "00:00"
     end_time: str = "23:59"
     active_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    absence_timeout_minutes: int = 2
+    free_times: list[dict[str, Any]] = []
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -349,6 +362,32 @@ class CameraZoneResponse(BaseModel):
     def parse_is_active(cls, v: Any) -> bool:
         return True if v is None else bool(v)
 
+    @field_validator("absence_timeout_minutes", mode="before")
+    @classmethod
+    def parse_absence_timeout_minutes(cls, v: Any) -> int:
+        if v is None:
+            return 2
+        try:
+            return max(1, min(1440, int(v)))
+        except Exception:
+            return 2
+
+    @field_validator("free_times", mode="before")
+    @classmethod
+    def parse_free_times(cls, v: Any) -> list[dict[str, Any]]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                return []
+        if isinstance(v, list):
+            return v
+        return []
+
     model_config = {"from_attributes": True}
 
 
@@ -356,7 +395,7 @@ class ZonePersonStatus(BaseModel):
     """Real-time presence state for an assigned individual."""
     person_id: int
     person_name: str
-    status: str  # "present", "absent", "off_duty"
+    status: str  # "present", "absent", "off_duty", "on_break"
     last_seen_seconds_ago: Optional[float] = None
     last_seen_str: str = ""
     minutes_absent: Optional[int] = None
@@ -371,6 +410,10 @@ class ZoneStatusResponse(BaseModel):
     is_in_schedule: bool
     timetable_text: str
     alert_mode: str
+    absence_timeout_minutes: int = 2
+    free_times: list[dict[str, Any]] = []
+    is_in_free_time: bool = False
+    current_break_name: Optional[str] = None
     assigned_persons: list[ZonePersonStatus] = []
 
 
@@ -389,8 +432,12 @@ class PersonDutyStatus(BaseModel):
     shift_window_str: str
     shift_duration_hours: float
     active_days: list[str] = []
+    absence_timeout_minutes: int = 2
+    free_times: list[dict[str, Any]] = []
     is_in_duty_hours: bool
-    status: str  # "present", "absent", "off_duty", "camera_offline"
+    is_in_free_time: bool = False
+    current_break_name: Optional[str] = None
+    status: str  # "present", "absent", "off_duty", "camera_offline", "on_break"
     camera_online: bool = True
     is_in_zone: bool
     last_seen_seconds_ago: Optional[float] = None
@@ -414,6 +461,7 @@ class DutyRosterResponse(BaseModel):
     present_count: int
     absent_count: int
     camera_offline_count: int = 0
+    on_break_count: int = 0
     total_absence_incidents: int = 0
     total_shift_absence_minutes: int
     total_shift_absence_str: str

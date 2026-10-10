@@ -60,6 +60,8 @@ class CameraZone(Base):
     start_time = Column(String(10), default="00:00")    # HH:MM format
     end_time = Column(String(10), default="23:59")      # HH:MM format
     active_days = Column(JSON, default=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    absence_timeout_minutes = Column(Integer, default=2)  # Minutes of absence before alarm
+    free_times = Column(JSON, default=list)  # e.g. [{"name": "Lunch", "start_time": "12:00", "end_time": "13:00"}]
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)

@@ -329,6 +329,8 @@ class StreamProcessor:
                         "start_time": z.start_time or "00:00",
                         "end_time": z.end_time or "23:59",
                         "active_days": z.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                        "absence_timeout_minutes": getattr(z, "absence_timeout_minutes", 2) or 2,
+                        "free_times": z.free_times or [],
                     })
 
             self._zones_cache = zones_map
@@ -359,6 +361,27 @@ class StreamProcessor:
             return start <= current_hm <= end
         else:
             return current_hm >= start or current_hm <= end
+
+    @staticmethod
+    def _is_time_in_free_time(free_times: list) -> tuple[bool, str]:
+        """Check if current time is within any defined free/break time (lunch, rest, etc.)."""
+        if not free_times or not isinstance(free_times, list):
+            return False, ""
+        now = datetime.now()
+        now_hm = now.strftime("%H:%M")
+        for b in free_times:
+            if not isinstance(b, dict):
+                continue
+            start = str(b.get("start_time") or "00:00")
+            end = str(b.get("end_time") or "00:00")
+            name = str(b.get("name") or "Break")
+            if start <= end:
+                if start <= now_hm <= end:
+                    return True, name
+            else:
+                if now_hm >= start or now_hm <= end:
+                    return True, name
+        return False, ""
 
     async def _absence_watchdog_loop(self) -> None:
         """
@@ -503,18 +526,29 @@ class StreamProcessor:
                                 self._zone_last_seen[key] = now
                                 continue
 
-                            # Check if person has been missing from zone for >= 120 seconds (2 minutes)
-                            if (now - last_seen) >= 120.0:
+                            # Check if current time is within free/break time (lunch, rest, etc.)
+                            in_free, free_name = self._is_time_in_free_time(zone.get("free_times", []))
+                            if in_free:
+                                # Staff is on scheduled break — suppress absence alert
+                                self._zone_last_seen[key] = now
+                                continue
+
+                            # Check if person has been missing from zone for >= configured absence timeout
+                            timeout_mins = zone.get("absence_timeout_minutes") or 2
+                            timeout_secs = float(timeout_mins * 60)
+
+                            if (now - last_seen) >= timeout_secs:
                                 last_alert = self._zone_last_absence_alert.get(key, 0)
-                                # Throttle absence alert events to at most once every 2 minutes
-                                if (now - last_alert) >= 300.0:
+                                # Throttle absence alert events
+                                throttle_interval = max(120.0, float(timeout_secs))
+                                if (now - last_alert) >= throttle_interval:
                                     self._zone_last_absence_alert[key] = now
                                     person_name = known_persons_map.get(person_id, f"Person #{person_id}")
                                     minutes_absent = max(1, int((now - last_seen) // 60))
                                     time_desc = f"{minutes_absent} min" if minutes_absent == 1 else f"{minutes_absent} mins"
                                     message = (
                                         f"⚠️ Absence Alert: {person_name} is NOT in assigned area "
-                                        f"'{zone['name']}' (missing for {time_desc})"
+                                        f"'{zone['name']}' (missing for {time_desc}, threshold: {timeout_mins}m)"
                                     )
                                     logger.warning(message)
 
@@ -853,6 +887,9 @@ class StreamProcessor:
                 for zone in camera_zones:
                     assigned_ids = zone.get("assigned_person_ids", [])
                     if match.person_id in assigned_ids:
+                        # Skip if currently in scheduled free time / break
+                        if self._is_time_in_free_time(zone.get("free_times", []))[0]:
+                            continue
                         mode = zone.get("alert_mode", "absence")
                         if mode in ("out_of_zone", "both"):
                             if not matched_zone or matched_zone["id"] != zone["id"]:

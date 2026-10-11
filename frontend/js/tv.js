@@ -114,6 +114,7 @@ const TVBoard = {
     // ── Initialization ───────────────────────────────────────
     init() {
         this.applyLanguage();
+        this.updateSoundUI();
         this.extractToken();
         this.setupClock();
         this.setupKeyboardShortcuts();
@@ -546,14 +547,22 @@ const TVBoard = {
         }
     },
 
-    toggleSound() {
-        this._soundEnabled = !this._soundEnabled;
-        localStorage.setItem('facetrack_tv_sound', this._soundEnabled ? 'true' : 'false');
+    updateSoundUI() {
         const btn = document.getElementById('tv-btn-sound');
         if (btn) {
-            btn.innerHTML = this._soundEnabled ? '🔔 <span>' + this.t('sound_on') + '</span>' : '🔕 <span>' + this.t('sound_off') + '</span>';
+            btn.innerHTML = this._soundEnabled 
+                ? '🔔 <span>' + this.t('sound_on') + '</span>' 
+                : '🔕 <span>' + this.t('sound_off') + '</span>';
             btn.classList.toggle('active', this._soundEnabled);
         }
+    },
+
+    toggleSound() {
+        this._soundEnabled = !this._soundEnabled;
+        try {
+            localStorage.setItem('facetrack_tv_sound', this._soundEnabled ? 'true' : 'false');
+        } catch (e) {}
+        this.updateSoundUI();
         if (this._soundEnabled) {
             this.playAlertTone();
         }
@@ -614,6 +623,8 @@ const TVBoard = {
 
         const tickerTag = document.getElementById('tv-ticker-tag');
         if (tickerTag) tickerTag.textContent = this.t('ticker_title');
+
+        this.updateSoundUI();
     },
 
     // ── Keyboard Shortcuts (F for Fullscreen, S for Sound) ───

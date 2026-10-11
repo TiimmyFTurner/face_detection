@@ -63,64 +63,22 @@ const DutyPage = {
         const headerActions = document.getElementById('header-actions');
         if (headerActions) {
             headerActions.innerHTML = `
-                <div class="duty-header-toolbar" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <!-- Filter Pills -->
-                    <div class="btn-group" style="display: flex; gap: 0.35rem; background: var(--bg-card); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <button class="btn btn-sm ${DutyPage._currentFilter === 'all' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-all" onclick="DutyPage.setFilter('all')">
-                            ${I18n.t('filter_all_duty')}
-                        </button>
-                        <button class="btn btn-sm ${DutyPage._currentFilter === 'present' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-present" onclick="DutyPage.setFilter('present')">
-                            ${I18n.t('filter_present')}
-                        </button>
-                        <button class="btn btn-sm ${DutyPage._currentFilter === 'absent' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-absent" onclick="DutyPage.setFilter('absent')">
-                            ${I18n.t('filter_absent')}
-                        </button>
-                        <button class="btn btn-sm ${DutyPage._currentFilter === 'offline' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-offline" onclick="DutyPage.setFilter('offline')">
-                            🟡 ${I18n.t('filter_camera_offline')}
-                        </button>
-                        <button class="btn btn-sm ${DutyPage._currentFilter === 'break' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-break" onclick="DutyPage.setFilter('break')">
-                            ☕ ${I18n.t('status_on_break')}
-                        </button>
-                    </div>
+                <div class="duty-header-actions-group" style="display: flex; align-items: center; gap: 0.6rem;">
+                    <!-- Auto-Refresh Countdown Badge -->
+                    <span class="badge-status-pill" id="duty-timer-badge" style="font-size: 0.8rem; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 12px; display: inline-flex; align-items: center; gap: 4px;">
+                        ⏳ <span id="duty-countdown-num">${DutyPage._countdown}</span>s
+                    </span>
 
-                    <!-- Only Active Shift Toggle -->
-                    <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; user-select: none; background: var(--bg-card); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <input type="checkbox" id="toggle-only-active" ${DutyPage._onlyActive ? 'checked' : ''} onchange="DutyPage.toggleOnlyActive(this.checked)" style="accent-color: var(--accent-blue); cursor: pointer;" />
-                        <span>${I18n.t('toggle_only_active')}</span>
-                    </label>
+                    <!-- Manual Refresh Button -->
+                    <button class="btn btn-secondary btn-sm" onclick="DutyPage.fetchData()" title="${I18n.t('refresh')}" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                        🔄 <span>${I18n.t('refresh')}</span>
+                    </button>
 
-                    <!-- View Toggle Group -->
-                    <div class="view-toggle-group" role="group" aria-label="View mode">
-                        <button class="view-toggle-btn ${DutyPage._viewMode === 'grid' ? 'active' : ''}" 
-                                id="duty-view-grid" 
-                                onclick="DutyPage.setViewMode('grid')" 
-                                title="${I18n.t('view_grid')}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
-                            <span>${I18n.t('view_grid')}</span>
-                        </button>
-                        <button class="view-toggle-btn ${DutyPage._viewMode === 'list' ? 'active' : ''}" 
-                                id="duty-view-list" 
-                                onclick="DutyPage.setViewMode('list')" 
-                                title="${I18n.t('view_list')}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                            <span>${I18n.t('view_list')}</span>
-                        </button>
-                    </div>
-
-                    <!-- Refresh & Timer Badge -->
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span class="badge-status-pill" id="duty-timer-badge" style="font-size: 0.78rem; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 12px;">
-                            ⏳ <span id="duty-countdown-num">${DutyPage._countdown}</span>s
-                        </span>
-                        <button class="btn btn-secondary btn-sm" onclick="DutyPage.fetchData()" title="${I18n.t('refresh')}" style="padding: 6px 12px;">
-                            🔄 ${I18n.t('refresh')}
-                        </button>
-                        <!-- TV / Kiosk Display Mode Link -->
-                        <a href="/tv.html" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.3);" title="${I18n.t('tv_kiosk_btn')}">
-                            <span>📺</span>
-                            <span>${I18n.t('tv_kiosk_btn')}</span>
-                        </a>
-                    </div>
+                    <!-- TV / Kiosk Display Mode Link -->
+                    <a href="/tv.html" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.3);" title="${I18n.t('tv_kiosk_btn')}">
+                        <span>📺</span>
+                        <span>${I18n.t('tv_kiosk_btn')}</span>
+                    </a>
                 </div>
             `;
         }
@@ -131,6 +89,54 @@ const DutyPage = {
                 <div class="duty-page-container">
                     <div class="duty-kpi-deck" id="duty-kpi-deck">
                         <!-- KPI Cards populated dynamically -->
+                    </div>
+
+                    <!-- Duty Filter & View Controls Toolbar -->
+                    <div class="duty-filter-toolbar">
+                        <!-- Filter Pills -->
+                        <div class="btn-group" style="display: flex; gap: 0.35rem; background: var(--bg-card); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color); flex-wrap: wrap;">
+                            <button class="btn btn-sm ${DutyPage._currentFilter === 'all' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-all" onclick="DutyPage.setFilter('all')">
+                                ${I18n.t('filter_all_duty')}
+                            </button>
+                            <button class="btn btn-sm ${DutyPage._currentFilter === 'present' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-present" onclick="DutyPage.setFilter('present')">
+                                ${I18n.t('filter_present')}
+                            </button>
+                            <button class="btn btn-sm ${DutyPage._currentFilter === 'absent' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-absent" onclick="DutyPage.setFilter('absent')">
+                                ${I18n.t('filter_absent')}
+                            </button>
+                            <button class="btn btn-sm ${DutyPage._currentFilter === 'offline' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-offline" onclick="DutyPage.setFilter('offline')">
+                                🟡 ${I18n.t('filter_camera_offline')}
+                            </button>
+                            <button class="btn btn-sm ${DutyPage._currentFilter === 'break' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-break" onclick="DutyPage.setFilter('break')">
+                                ☕ ${I18n.t('status_on_break')}
+                            </button>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <!-- Only Active Shift Toggle -->
+                            <label class="duty-filter-toggle">
+                                <input type="checkbox" id="toggle-only-active" ${DutyPage._onlyActive ? 'checked' : ''} onchange="DutyPage.toggleOnlyActive(this.checked)" style="accent-color: var(--accent-blue); cursor: pointer;" />
+                                <span>${I18n.t('toggle_only_active')}</span>
+                            </label>
+
+                            <!-- View Toggle Group -->
+                            <div class="view-toggle-group" role="group" aria-label="View mode">
+                                <button class="view-toggle-btn ${DutyPage._viewMode === 'grid' ? 'active' : ''}" 
+                                        id="duty-view-grid" 
+                                        onclick="DutyPage.setViewMode('grid')" 
+                                        title="${I18n.t('view_grid')}">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                                    <span>${I18n.t('view_grid')}</span>
+                                </button>
+                                <button class="view-toggle-btn ${DutyPage._viewMode === 'list' ? 'active' : ''}" 
+                                        id="duty-view-list" 
+                                        onclick="DutyPage.setViewMode('list')" 
+                                        title="${I18n.t('view_list')}">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                                    <span>${I18n.t('view_list')}</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="duty-roster-list" class="duty-grid ${DutyPage._viewMode === 'list' ? 'list-view' : ''}">
@@ -308,8 +314,9 @@ const DutyPage = {
 
         const totalDuty = isRtl ? I18n.toPersianDigits(d.total_on_duty) : d.total_on_duty;
         const presentCount = isRtl ? I18n.toPersianDigits(d.present_count) : d.present_count;
-        const absentCount = isRtl ? I18n.toPersianDigits(d.absent_count) : d.absent_count;
-        const totalAbsenceStr = isRtl ? I18n.toPersianDigits(d.total_shift_absence_str) : d.total_shift_absence_str;
+        const totalAbsenceStr = (d.total_shift_absence_minutes !== undefined && d.total_shift_absence_minutes !== null)
+            ? (d.total_shift_absence_minutes === 0 ? (isRtl ? '۰ دقیقه' : '0 min') : I18n.formatDuration(d.total_shift_absence_minutes * 60))
+            : (isRtl ? I18n.toPersianDigits(d.total_shift_absence_str) : d.total_shift_absence_str);
         const compliancePct = isRtl ? I18n.toPersianDigits(d.avg_compliance_pct.toFixed(1)) : d.avg_compliance_pct.toFixed(1);
 
         deck.innerHTML = `

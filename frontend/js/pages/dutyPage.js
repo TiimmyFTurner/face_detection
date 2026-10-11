@@ -94,21 +94,26 @@ const DutyPage = {
                     <!-- Duty Filter & View Controls Toolbar -->
                     <div class="duty-filter-toolbar">
                         <!-- Filter Pills -->
-                        <div class="btn-group" style="display: flex; gap: 0.35rem; background: var(--bg-card); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color); flex-wrap: wrap;">
-                            <button class="btn btn-sm ${DutyPage._currentFilter === 'all' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-all" onclick="DutyPage.setFilter('all')">
-                                ${I18n.t('filter_all_duty')}
+                        <div class="duty-filter-group" id="duty-filter-group">
+                            <button class="duty-filter-btn ${DutyPage._currentFilter === 'all' ? 'active' : ''}" id="filter-duty-all" onclick="DutyPage.setFilter('all')">
+                                <span class="filter-icon">👥</span>
+                                <span class="filter-label">${I18n.t('filter_all_duty')}</span>
                             </button>
-                            <button class="btn btn-sm ${DutyPage._currentFilter === 'present' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-present" onclick="DutyPage.setFilter('present')">
-                                ${I18n.t('filter_present')}
+                            <button class="duty-filter-btn ${DutyPage._currentFilter === 'present' ? 'active' : ''}" id="filter-duty-present" onclick="DutyPage.setFilter('present')">
+                                <span class="filter-icon">🟢</span>
+                                <span class="filter-label">${I18n.t('filter_present')}</span>
                             </button>
-                            <button class="btn btn-sm ${DutyPage._currentFilter === 'absent' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-absent" onclick="DutyPage.setFilter('absent')">
-                                ${I18n.t('filter_absent')}
+                            <button class="duty-filter-btn ${DutyPage._currentFilter === 'absent' ? 'active' : ''}" id="filter-duty-absent" onclick="DutyPage.setFilter('absent')">
+                                <span class="filter-icon">🔴</span>
+                                <span class="filter-label">${I18n.t('filter_absent')}</span>
                             </button>
-                            <button class="btn btn-sm ${DutyPage._currentFilter === 'offline' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-offline" onclick="DutyPage.setFilter('offline')">
-                                🟡 ${I18n.t('filter_camera_offline')}
+                            <button class="duty-filter-btn ${DutyPage._currentFilter === 'offline' ? 'active' : ''}" id="filter-duty-offline" onclick="DutyPage.setFilter('offline')">
+                                <span class="filter-icon">🟡</span>
+                                <span class="filter-label">${I18n.t('filter_camera_offline')}</span>
                             </button>
-                            <button class="btn btn-sm ${DutyPage._currentFilter === 'break' ? 'btn-primary' : 'btn-ghost'}" id="filter-duty-break" onclick="DutyPage.setFilter('break')">
-                                ☕ ${I18n.t('status_on_break')}
+                            <button class="duty-filter-btn ${DutyPage._currentFilter === 'break' ? 'active' : ''}" id="filter-duty-break" onclick="DutyPage.setFilter('break')">
+                                <span class="filter-icon">☕</span>
+                                <span class="filter-label">${I18n.t('status_on_break')}</span>
                             </button>
                         </div>
 
@@ -177,7 +182,7 @@ const DutyPage = {
         ['all', 'present', 'absent', 'offline', 'break'].forEach(f => {
             const btn = document.getElementById(`filter-duty-${f}`);
             if (btn) {
-                btn.className = `btn btn-sm ${DutyPage._currentFilter === f ? 'btn-primary' : 'btn-ghost'}`;
+                btn.classList.toggle('active', DutyPage._currentFilter === f);
             }
         });
         DutyPage.renderRoster();

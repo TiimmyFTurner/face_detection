@@ -4,7 +4,74 @@
    Zero-scroll, 100vh lock, high contrast, industrial dark mode
    ═══════════════════════════════════════════════════════════════ */
 
+/* ── Google Fonts (CDN Fallback) ─────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;800&display=swap');
+
+/* ── Local Vazirmatn Webfonts (Offline Support) ──────────── */
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn'),
+         url('../fonts/Vazirmatn-Regular.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn Medium'),
+         local('Vazirmatn-Medium'),
+         url('../fonts/Vazirmatn-Medium.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn SemiBold'),
+         local('Vazirmatn-SemiBold'),
+         url('../fonts/Vazirmatn-SemiBold.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn Bold'),
+         local('Vazirmatn-Bold'),
+         url('../fonts/Vazirmatn-Bold.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn ExtraBold'),
+         local('Vazirmatn-ExtraBold'),
+         url('../fonts/Vazirmatn-ExtraBold.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn Black'),
+         local('Vazirmatn-Black'),
+         url('../fonts/Vazirmatn-Black.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Black.woff2') format('woff2');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+}
 
 :root {
     --tv-bg-base: #060913;
@@ -50,6 +117,10 @@
     -webkit-user-select: none;
 }
 
+button, input, select, textarea {
+    font-family: inherit;
+}
+
 html, body {
     width: 100vw;
     height: 100vh;
@@ -66,7 +137,9 @@ html, body {
     cursor: default;
 }
 
-body[dir="ltr"] {
+body[dir="ltr"],
+body[dir="ltr"] button,
+body[dir="ltr"] input {
     font-family: 'Inter', -apple-system, sans-serif;
 }
 
@@ -171,6 +244,7 @@ body[dir="ltr"] {
 }
 
 .tv-btn {
+    font-family: inherit;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--tv-border);
     color: var(--tv-text-main);
@@ -198,6 +272,7 @@ body[dir="ltr"] {
 }
 
 .tv-sync-pill {
+    font-family: inherit;
     display: inline-flex;
     align-items: center;
     gap: 6px;

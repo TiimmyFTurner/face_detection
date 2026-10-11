@@ -4,8 +4,74 @@
    and vibrant accent colors.
    ═══════════════════════════════════════════════════════════ */
 
-/* ── Google Fonts ────────────────────────────────────────── */
+/* ── Google Fonts (CDN Fallback) ─────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ── Local Vazirmatn Webfonts (Offline Support) ──────────── */
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn'),
+         url('../fonts/Vazirmatn-Regular.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn Medium'),
+         local('Vazirmatn-Medium'),
+         url('../fonts/Vazirmatn-Medium.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn SemiBold'),
+         local('Vazirmatn-SemiBold'),
+         url('../fonts/Vazirmatn-SemiBold.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn Bold'),
+         local('Vazirmatn-Bold'),
+         url('../fonts/Vazirmatn-Bold.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn ExtraBold'),
+         local('Vazirmatn-ExtraBold'),
+         url('../fonts/Vazirmatn-ExtraBold.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: local('Vazirmatn Black'),
+         local('Vazirmatn-Black'),
+         url('../fonts/Vazirmatn-Black.woff2') format('woff2'),
+         url('/fonts/Vazirmatn-Black.woff2') format('woff2');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+}
 
 /* ── CSS Custom Properties (Design Tokens) ───────────────── */
 :root {
@@ -98,12 +164,21 @@ html {
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.6;
     overflow: hidden;
     height: 100vh;
+}
+
+button, input, select, textarea, optgroup {
+    font-family: inherit;
+}
+
+html[lang="en"] body,
+body[dir="ltr"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* ── Layout Structure ────────────────────────────────────── */

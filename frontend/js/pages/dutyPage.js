@@ -115,6 +115,11 @@ const DutyPage = {
                         <button class="btn btn-secondary btn-sm" onclick="DutyPage.fetchData()" title="${I18n.t('refresh')}" style="padding: 6px 12px;">
                             🔄 ${I18n.t('refresh')}
                         </button>
+                        <!-- TV / Kiosk Display Mode Link -->
+                        <a href="/tv.html" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.3);" title="${I18n.t('tv_kiosk_btn')}">
+                            <span>📺</span>
+                            <span>${I18n.t('tv_kiosk_btn')}</span>
+                        </a>
                     </div>
                 </div>
             `;

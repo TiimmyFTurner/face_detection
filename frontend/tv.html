@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="نمایشگر سالن و وضعیت زنده شیفت و حضور پرسنل — فیس‌ترک">
+    <title>FaceTrack TV — مانیتورینگ زنده سالن تولید و شیفت</title>
+    <link rel="stylesheet" href="/css/tv.css?v=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
+</head>
+
+<body>
+    <div class="tv-layout" id="tv-layout">
+
+        <!-- ── Top Header Bar ───────────────────────────────── -->
+        <header class="tv-header">
+            <div class="tv-brand">
+                <div class="tv-brand-icon">🏭</div>
+                <div>
+                    <h1 class="tv-brand-title" id="tv-header-title">مانیتورینگ زنده سالن تولید و شیفت</h1>
+                    <div class="tv-shift-tag" id="tv-shift-tag">
+                        ⏱️ در حال بررسی شیفت جاری...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Big Live Digital Clock & Date -->
+            <div class="tv-clock-panel">
+                <div class="tv-clock-time" id="tv-clock-time">--:--:--</div>
+                <div class="tv-clock-date" id="tv-clock-date">در حال دریافت زمان...</div>
+            </div>
+
+            <!-- Right Controls: Sync status, Sound alert, Lang, Fullscreen -->
+            <div class="tv-actions">
+                <div class="tv-sync-pill">
+                    <span class="tv-sync-dot" id="tv-sync-dot"></span>
+                    <span id="tv-sync-text">متصل به سامانه</span>
+                </div>
+
+                <button class="tv-btn" id="tv-btn-sound" onclick="TVBoard.toggleSound()" title="کلید میانبر: S">
+                    🔕 <span>صدای هشدار: خاموش</span>
+                </button>
+
+                <button class="tv-btn" id="tv-btn-lang" onclick="TVBoard.toggleLanguage()" title="تغییر زبان (L)">
+                    EN
+                </button>
+
+                <button class="tv-btn active" id="tv-btn-fullscreen" onclick="TVBoard.toggleFullscreen()" title="تمام صفحه (F11 یا کلید F)">
+                    ⛶ <span>تمام صفحه</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ── KPI Ribbon (High-Impact Glowing Counters) ───── -->
+        <section class="tv-kpi-bar" aria-label="خلاصه آمار شیفت">
+            <!-- 1. Scheduled -->
+            <div class="tv-kpi-card kpi-scheduled">
+                <div class="tv-kpi-info">
+                    <span class="tv-kpi-label" id="tv-kpi-scheduled-label">کل شیفت</span>
+                    <span class="tv-kpi-value" id="tv-kpi-scheduled-val">۰</span>
+                </div>
+                <div class="tv-kpi-icon">👥</div>
+            </div>
+
+            <!-- 2. Present In Station -->
+            <div class="tv-kpi-card kpi-present">
+                <div class="tv-kpi-info">
+                    <span class="tv-kpi-label" id="tv-kpi-present-label">حاضر در پست</span>
+                    <span class="tv-kpi-value" id="tv-kpi-present-val">۰</span>
+                </div>
+                <div class="tv-kpi-icon">🟢</div>
+            </div>
+
+            <!-- 3. Absent / Missing -->
+            <div class="tv-kpi-card kpi-absent" id="tv-kpi-absent-card">
+                <div class="tv-kpi-info">
+                    <span class="tv-kpi-label" id="tv-kpi-absent-label">غایب / ترک پست</span>
+                    <span class="tv-kpi-value" id="tv-kpi-absent-val">۰</span>
+                </div>
+                <div class="tv-kpi-icon">🔴</div>
+            </div>
+
+            <!-- 4. On Break -->
+            <div class="tv-kpi-card kpi-break">
+                <div class="tv-kpi-info">
+                    <span class="tv-kpi-label" id="tv-kpi-break-label">زمان استراحت</span>
+                    <span class="tv-kpi-value" id="tv-kpi-break-val">۰</span>
+                </div>
+                <div class="tv-kpi-icon">☕</div>
+            </div>
+
+            <!-- 5. Shift Compliance -->
+            <div class="tv-kpi-card kpi-compliance">
+                <div class="tv-kpi-info">
+                    <span class="tv-kpi-label" id="tv-kpi-compliance-label">انضباط شیفت</span>
+                    <span class="tv-kpi-value" id="tv-kpi-compliance-val">۱۰۰%</span>
+                </div>
+                <div class="tv-kpi-icon">📈</div>
+            </div>
+        </section>
+
+        <!-- ── Main Zero-Scroll Roster Grid ─────────────────── -->
+        <main class="tv-grid-container">
+            <div class="tv-roster-grid" id="tv-roster-grid">
+                <!-- Dynamically rendered personnel cards -->
+                <div class="tv-empty-state" style="grid-column: 1 / -1;">
+                    <div class="tv-empty-icon">⏳</div>
+                    <div class="tv-empty-title">در حال بارگذاری لیست پرسنل و وضعیت شیفت...</div>
+                </div>
+            </div>
+
+            <!-- Pagination Dots (Shown only if workers count > page size) -->
+            <div class="tv-pagination-strip" id="tv-pagination-strip"></div>
+        </main>
+
+        <!-- ── Bottom Alert Ticker Marquee ─────────────────── -->
+        <footer class="tv-footer-ticker">
+            <div class="tv-ticker-tag" id="tv-ticker-tag">هشدار و رویداد</div>
+            <div class="tv-ticker-text">
+                <span class="tv-ticker-marquee" id="tv-ticker-marquee">
+                    در حال اتصال به سامانه و دریافت آخرین وضعیت ایستگاه‌های کاری...
+                </span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- ── TV Authentication Modal (First-time / Unattended Setup) ── -->
+    <div class="tv-login-modal" id="tv-login-modal" style="display: none;">
+        <div class="tv-login-box">
+            <div style="font-size: 3rem; margin-bottom: 12px;">🔒</div>
+            <h2 class="tv-login-title">احراز هویت نمایشگر سالن</h2>
+            <p class="tv-login-desc">برای شروع پخش وضعیت شیفت، نام کاربری و رمز سرپرست سیستم را وارد نمایید:</p>
+            <form onsubmit="TVBoard.handleLogin(event)">
+                <input type="text" class="tv-input-field" id="tv-login-username" placeholder="نام کاربری (Username)" autocomplete="username" required autofocus>
+                <input type="password" class="tv-input-field" id="tv-login-password" placeholder="کلمه عبور (Password)" autocomplete="current-password" required>
+                <div id="tv-login-error" style="color: var(--tv-rose); font-size: 0.85rem; margin-bottom: 14px; display: none;"></div>
+                <button type="submit" class="tv-submit-btn">ورود و راه‌اندازی نمایشگر</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── TV Script ────────────────────────────────────── -->
+    <script src="/js/tv.js?v=1.0"></script>
+</body>
+
+</html>

@@ -1,0 +1,785 @@
+/* ═══════════════════════════════════════════════════════════════
+   FaceTrack TV / Kiosk Display Stylesheet
+   Engineered for 1080p / 4K Factory Wall Monitors & TVs
+   Zero-scroll, 100vh lock, high contrast, industrial dark mode
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;800&display=swap');
+
+:root {
+    --tv-bg-base: #060913;
+    --tv-bg-surface: rgba(14, 21, 44, 0.75);
+    --tv-bg-card: rgba(18, 26, 54, 0.82);
+    --tv-bg-card-hover: rgba(26, 38, 76, 0.95);
+    --tv-border: rgba(255, 255, 255, 0.12);
+    --tv-border-bright: rgba(255, 255, 255, 0.22);
+
+    --tv-text-main: #f1f5f9;
+    --tv-text-muted: #94a3b8;
+    --tv-text-dim: #64748b;
+
+    /* High-contrast status colors for distance visibility */
+    --tv-emerald: #10b981;
+    --tv-emerald-glow: rgba(16, 185, 129, 0.35);
+    --tv-emerald-bg: rgba(16, 185, 129, 0.12);
+
+    --tv-rose: #f43f5e;
+    --tv-rose-glow: rgba(244, 63, 94, 0.45);
+    --tv-rose-bg: rgba(244, 63, 94, 0.14);
+
+    --tv-amber: #f59e0b;
+    --tv-amber-glow: rgba(245, 158, 11, 0.35);
+    --tv-amber-bg: rgba(245, 158, 11, 0.14);
+
+    --tv-blue: #3b82f6;
+    --tv-blue-glow: rgba(59, 130, 246, 0.35);
+    --tv-blue-bg: rgba(59, 130, 246, 0.14);
+
+    --tv-purple: #8b5cf6;
+    --tv-purple-glow: rgba(139, 92, 246, 0.35);
+
+    --tv-radius: 14px;
+    --tv-radius-sm: 8px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    background-color: var(--tv-bg-base);
+    background-image: 
+        radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(139, 92, 246, 0.06) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.4) 0%, transparent 100%);
+    color: var(--tv-text-main);
+    font-family: 'Vazirmatn', 'Inter', -apple-system, sans-serif;
+    line-height: 1.4;
+    cursor: default;
+}
+
+body[dir="ltr"] {
+    font-family: 'Inter', -apple-system, sans-serif;
+}
+
+/* ── TV Layout Framework (Strict 100vh) ───────────────────────── */
+.tv-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    padding: 14px 20px;
+    gap: 12px;
+    overflow: hidden;
+}
+
+/* ── Top Header Bar ───────────────────────────────────────────── */
+.tv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    background: var(--tv-bg-surface);
+    border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    flex: 0 0 auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.tv-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tv-brand-icon {
+    font-size: 2rem;
+    filter: drop-shadow(0 0 10px var(--tv-blue-glow));
+}
+
+.tv-brand-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tv-shift-tag {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    background: var(--tv-blue-bg);
+    border: 1px solid var(--tv-blue);
+    color: #93c5fd;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tv-clock-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.tv-clock-time {
+    font-family: 'JetBrains Mono', 'Vazirmatn', monospace;
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+    text-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+    line-height: 1;
+}
+
+.tv-clock-colon {
+    animation: blinkColon 1s infinite;
+}
+
+@keyframes blinkColon {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.2; }
+}
+
+.tv-clock-date {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--tv-text-muted);
+    margin-top: 3px;
+}
+
+.tv-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tv-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--tv-border);
+    color: var(--tv-text-main);
+    padding: 7px 12px;
+    border-radius: var(--tv-radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.tv-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: var(--tv-border-bright);
+    transform: translateY(-1px);
+}
+
+.tv-btn.active {
+    background: var(--tv-blue);
+    border-color: var(--tv-blue);
+    box-shadow: 0 0 12px var(--tv-blue-glow);
+}
+
+.tv-sync-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--tv-text-muted);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--tv-border);
+}
+
+.tv-sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--tv-emerald);
+    box-shadow: 0 0 8px var(--tv-emerald);
+}
+
+.tv-sync-dot.updating {
+    animation: pulseSync 0.6s ease;
+}
+
+@keyframes pulseSync {
+    0% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.6); filter: brightness(2); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* ── KPI Ribbon (High-Impact Counters) ────────────────────────── */
+.tv-kpi-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    flex: 0 0 auto;
+}
+
+.tv-kpi-card {
+    background: var(--tv-bg-surface);
+    border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.tv-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+}
+
+body[dir="rtl"] .tv-kpi-card::before { right: 0; }
+body[dir="ltr"] .tv-kpi-card::before { left: 0; }
+
+.tv-kpi-card.kpi-scheduled::before { background: var(--tv-blue); }
+.tv-kpi-card.kpi-present::before { background: var(--tv-emerald); }
+.tv-kpi-card.kpi-absent::before { background: var(--tv-rose); }
+.tv-kpi-card.kpi-break::before { background: var(--tv-amber); }
+.tv-kpi-card.kpi-compliance::before { background: var(--tv-purple); }
+
+.tv-kpi-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.tv-kpi-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tv-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.tv-kpi-value {
+    font-size: 2.2rem;
+    font-weight: 900;
+    line-height: 1.1;
+    color: #fff;
+    font-family: 'JetBrains Mono', 'Vazirmatn', sans-serif;
+    margin-top: 2px;
+}
+
+.tv-kpi-card.kpi-present .tv-kpi-value {
+    color: #6ee7b7;
+    text-shadow: 0 0 16px var(--tv-emerald-glow);
+}
+
+.tv-kpi-card.kpi-absent .tv-kpi-value {
+    color: #fca5a5;
+    text-shadow: 0 0 16px var(--tv-rose-glow);
+}
+
+.tv-kpi-card.kpi-absent.has-absent {
+    animation: alertBorderPulse 2s infinite ease-in-out;
+}
+
+@keyframes alertBorderPulse {
+    0%, 100% { border-color: var(--tv-border); }
+    50% { border-color: var(--tv-rose); box-shadow: 0 0 20px var(--tv-rose-glow); }
+}
+
+.tv-kpi-card.kpi-break .tv-kpi-value {
+    color: #fde68a;
+    text-shadow: 0 0 16px var(--tv-amber-glow);
+}
+
+.tv-kpi-card.kpi-compliance .tv-kpi-value {
+    color: #c4b5fd;
+    text-shadow: 0 0 16px var(--tv-purple-glow);
+}
+
+.tv-kpi-icon {
+    font-size: 2rem;
+    opacity: 0.7;
+}
+
+/* ── Main Roster Grid (Zero-Scroll Auto-Fit) ──────────────────── */
+.tv-grid-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.tv-roster-grid {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* ── Worker Status Card ───────────────────────────────────────── */
+.tv-card {
+    background: var(--tv-bg-card);
+    border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+
+/* Status side glow border */
+.tv-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+body[dir="rtl"] .tv-card::after { right: 0; }
+body[dir="ltr"] .tv-card::after { left: 0; }
+
+.tv-card.status-present {
+    border-color: rgba(16, 185, 129, 0.3);
+}
+.tv-card.status-present::after {
+    background: var(--tv-emerald);
+    box-shadow: 0 0 10px var(--tv-emerald);
+}
+
+.tv-card.status-absent {
+    border-color: rgba(244, 63, 94, 0.45);
+    background: linear-gradient(145deg, rgba(24, 18, 32, 0.9) 0%, rgba(45, 15, 25, 0.7) 100%);
+    animation: absentCardPulse 3s infinite ease-in-out;
+}
+.tv-card.status-absent::after {
+    background: var(--tv-rose);
+    box-shadow: 0 0 14px var(--tv-rose);
+}
+
+@keyframes absentCardPulse {
+    0%, 100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
+    50% { box-shadow: 0 6px 24px var(--tv-rose-glow); border-color: rgba(244, 63, 94, 0.7); }
+}
+
+.tv-card.status-on_break {
+    border-color: rgba(245, 158, 11, 0.3);
+}
+.tv-card.status-on_break::after {
+    background: var(--tv-amber);
+    box-shadow: 0 0 10px var(--tv-amber);
+}
+
+.tv-card.status-camera_offline {
+    border-color: rgba(148, 163, 184, 0.25);
+    opacity: 0.85;
+}
+.tv-card.status-camera_offline::after {
+    background: var(--tv-text-dim);
+}
+
+/* Card Header (Photo + Name + Station) */
+.tv-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tv-avatar-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: 52px;
+    height: 52px;
+}
+
+.tv-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #1e293b;
+    border: 2px solid var(--tv-border);
+}
+
+.tv-card.status-present .tv-avatar-img {
+    border-color: var(--tv-emerald);
+    box-shadow: 0 0 10px var(--tv-emerald-glow);
+}
+
+.tv-card.status-absent .tv-avatar-img {
+    border-color: var(--tv-rose);
+    box-shadow: 0 0 12px var(--tv-rose-glow);
+}
+
+.tv-card.status-on_break .tv-avatar-img {
+    border-color: var(--tv-amber);
+}
+
+.tv-avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    background: #1e293b;
+    border: 2px solid var(--tv-border);
+}
+
+.tv-status-badge-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--tv-bg-card);
+}
+
+body[dir="ltr"] .tv-status-badge-dot {
+    right: auto;
+    left: 0;
+}
+
+.status-present .tv-status-badge-dot { background: var(--tv-emerald); box-shadow: 0 0 8px var(--tv-emerald); }
+.status-absent .tv-status-badge-dot { background: var(--tv-rose); box-shadow: 0 0 8px var(--tv-rose); }
+.status-on_break .tv-status-badge-dot { background: var(--tv-amber); }
+.status-camera_offline .tv-status-badge-dot { background: var(--tv-text-dim); }
+
+.tv-card-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tv-person-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+}
+
+.tv-person-role {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--tv-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+
+.tv-zone-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.12);
+    padding: 2px 7px;
+    border-radius: 6px;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Card Body (Status Banner) */
+.tv-card-body {
+    margin: 8px 0;
+    padding: 6px 10px;
+    border-radius: var(--tv-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.status-present .tv-card-body {
+    background: var(--tv-emerald-bg);
+    color: #34d399;
+}
+
+.status-absent .tv-card-body {
+    background: var(--tv-rose-bg);
+    color: #fb7185;
+}
+
+.status-on_break .tv-card-body {
+    background: var(--tv-amber-bg);
+    color: #fcd34d;
+}
+
+.status-camera_offline .tv-card-body {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--tv-text-muted);
+}
+
+.tv-status-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tv-status-sub {
+    font-size: 0.78rem;
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+/* Card Footer (Shift Cumulative Stats & Mini Bar) */
+.tv-card-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tv-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.76rem;
+    color: var(--tv-text-muted);
+}
+
+.tv-stat-val {
+    font-weight: 700;
+    color: var(--tv-text-main);
+}
+
+.tv-progress-track {
+    width: 100%;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.tv-progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.4s ease;
+}
+
+/* ── Pagination Indicator Bar ─────────────────────────────────── */
+.tv-pagination-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 4px;
+    flex: 0 0 auto;
+}
+
+.tv-page-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.tv-page-dot.active {
+    width: 28px;
+    border-radius: 999px;
+    background: var(--tv-blue);
+    box-shadow: 0 0 10px var(--tv-blue-glow);
+}
+
+/* ── Bottom Alert Ticker Marquee ─────────────────────────────── */
+.tv-footer-ticker {
+    display: flex;
+    align-items: center;
+    background: var(--tv-bg-surface);
+    border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius);
+    padding: 8px 16px;
+    gap: 14px;
+    flex: 0 0 auto;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.tv-ticker-tag {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #fff;
+    background: var(--tv-rose);
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    letter-spacing: 0.02em;
+    animation: alertBadgeBlink 1.5s infinite;
+}
+
+@keyframes alertBadgeBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.tv-ticker-text {
+    flex: 1 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--tv-text-main);
+}
+
+.tv-ticker-marquee {
+    display: inline-block;
+    padding-left: 100%;
+    animation: marqueeScroll 25s linear infinite;
+}
+
+@keyframes marqueeScroll {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-100%, 0, 0); }
+}
+
+body[dir="rtl"] .tv-ticker-marquee {
+    padding-left: 0;
+    padding-right: 100%;
+    animation: marqueeScrollRTL 25s linear infinite;
+}
+
+@keyframes marqueeScrollRTL {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(100%, 0, 0); }
+}
+
+/* ── Login / Token Overlay (For Kiosk Display Setup) ─────────── */
+.tv-login-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 9, 19, 0.85);
+    backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.tv-login-box {
+    background: var(--tv-bg-surface);
+    border: 1px solid var(--tv-border-bright);
+    border-radius: 20px;
+    padding: 32px;
+    width: 440px;
+    max-width: 90vw;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    text-align: center;
+}
+
+.tv-login-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    color: #fff;
+}
+
+.tv-login-desc {
+    font-size: 0.85rem;
+    color: var(--tv-text-muted);
+    margin-bottom: 24px;
+}
+
+.tv-input-field {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius-sm);
+    color: #fff;
+    font-size: 1rem;
+    margin-bottom: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.tv-input-field:focus {
+    border-color: var(--tv-blue);
+    box-shadow: 0 0 12px var(--tv-blue-glow);
+}
+
+.tv-submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--tv-blue);
+    border: none;
+    border-radius: var(--tv-radius-sm);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 15px var(--tv-blue-glow);
+    transition: all 0.2s;
+}
+
+.tv-submit-btn:hover {
+    background: #2563eb;
+    transform: translateY(-2px);
+}
+
+/* ── Empty State ─────────────────────────────────────────────── */
+.tv-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--tv-text-muted);
+    text-align: center;
+    gap: 12px;
+}
+
+.tv-empty-icon {
+    font-size: 3.5rem;
+    opacity: 0.6;
+}
+
+.tv-empty-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.tv-empty-subtitle {
+    font-size: 0.95rem;
+    max-width: 420px;
+}

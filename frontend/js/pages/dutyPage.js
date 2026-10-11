@@ -319,6 +319,7 @@ const DutyPage = {
 
         const totalDuty = isRtl ? I18n.toPersianDigits(d.total_on_duty) : d.total_on_duty;
         const presentCount = isRtl ? I18n.toPersianDigits(d.present_count) : d.present_count;
+        const absentCount = isRtl ? I18n.toPersianDigits(d.absent_count) : d.absent_count;
         const totalAbsenceStr = (d.total_shift_absence_minutes !== undefined && d.total_shift_absence_minutes !== null)
             ? (d.total_shift_absence_minutes === 0 ? (isRtl ? '۰ دقیقه' : '0 min') : I18n.formatDuration(d.total_shift_absence_minutes * 60))
             : (isRtl ? I18n.toPersianDigits(d.total_shift_absence_str) : d.total_shift_absence_str);
@@ -369,7 +370,7 @@ const DutyPage = {
                 </div>
                 <div class="duty-kpi-footer" style="flex-wrap: wrap; gap: 0.35rem;">
                     <span class="duty-kpi-badge rose">
-                        ${absentCount > 0 ? '⚠️ ' + (isRtl ? 'نیازمند پیگیری' : 'Needs attention') : '✓ ' + (isRtl ? 'همه حاضر هستند' : 'All on station')}
+                        ${d.absent_count > 0 ? '⚠️ ' + (isRtl ? 'نیازمند پیگیری' : 'Needs attention') : '✓ ' + (isRtl ? 'همه حاضر هستند' : 'All on station')}
                     </span>
                     ${d.camera_offline_count > 0 ? `
                         <span class="duty-kpi-badge amber" style="background: rgba(234, 179, 8, 0.15); color: #facc15; border-color: rgba(234, 179, 8, 0.4); cursor: pointer;" onclick="DutyPage.setFilter('offline')" title="${I18n.t('filter_camera_offline')}">

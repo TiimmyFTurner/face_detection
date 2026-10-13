@@ -392,11 +392,23 @@ const TVBoard = {
         // Shift label badge
         const shiftTag = document.getElementById('tv-shift-tag');
         if (shiftTag) {
-            if (data.roster && data.roster.length > 0 && data.roster[0].shift_window) {
-                shiftTag.innerHTML = `⏱️ ${this.t('shift_active')}: <strong>${this.toDigits(data.roster[0].shift_window)}</strong>`;
+            const roster = data.roster || [];
+            const activeWorkers = roster.filter(r => r.is_in_duty_hours);
+            const pool = activeWorkers.length > 0 ? activeWorkers : roster;
+            const uniqueWindows = [...new Set(pool.map(r => r.shift_window_str || r.shift_window).filter(Boolean))];
+
+            if (uniqueWindows.length > 0) {
+                const windowText = uniqueWindows.map(w => this.toDigits(w)).join(' ، ');
+                const durText = (uniqueWindows.length === 1 && pool[0]?.shift_duration_hours)
+                    ? ` (${this.formatDurationHours(pool[0].shift_duration_hours)})`
+                    : '';
+                shiftTag.innerHTML = `⏱️ ${this.t('shift_active')}: <strong>${windowText}</strong>${durText}`;
+                shiftTag.classList.remove('no-shift');
                 shiftTag.style.display = 'inline-flex';
             } else {
                 shiftTag.innerHTML = `⏱️ ${this.t('no_active_shift')}`;
+                shiftTag.classList.add('no-shift');
+                shiftTag.style.display = 'inline-flex';
             }
         }
     },

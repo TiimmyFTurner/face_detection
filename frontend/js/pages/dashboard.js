@@ -97,7 +97,7 @@ const DashboardPage = {
         DashboardPage._displayMode = mode;
         try {
             localStorage.setItem('facetrack_view_dashboard', mode);
-        } catch (e) {}
+        } catch (e) { }
 
         const gridBtn = document.getElementById('dashboard-view-grid');
         const listBtn = document.getElementById('dashboard-view-list');
@@ -776,6 +776,7 @@ const DashboardPage = {
         const popEnd = document.getElementById('calendar-popover-end');
         if (popStart) popStart.style.display = 'none';
         if (popEnd) popEnd.style.display = 'none';
+        document.querySelectorAll('.shamsi-datetime-card').forEach(card => card.classList.remove('calendar-open'));
         DashboardPage._activeCalendarTarget = null;
     },
 
@@ -904,6 +905,8 @@ const DashboardPage = {
         `;
 
         popoverEl.style.display = 'block';
+        const parentCard = popoverEl.closest('.shamsi-datetime-card');
+        if (parentCard) parentCard.classList.add('calendar-open');
     },
 
     /**
@@ -1315,32 +1318,32 @@ const DashboardPage = {
                     ` : `
                         <div class="person-photo-gallery" style="display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; margin-bottom: 1rem; scrollbar-width: thin;">
                             ${group.events.map(ev => {
-                                EventCard._cache[ev.id] = ev;
-                                const timeLabel = I18n.formatTimestamp(ev.timestamp);
-                                const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
-                                return `
+                EventCard._cache[ev.id] = ev;
+                const timeLabel = I18n.formatTimestamp(ev.timestamp);
+                const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
+                return `
                                     <div class="gallery-item" onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 110px; cursor: pointer; text-align: center; background: var(--bg-surface-hover); border-radius: var(--radius-md); padding: 6px; border: 1px solid var(--border-subtle); transition: transform 150ms ease;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
                                         <img src="${ev.snapshot_url}" alt="${EventCard.escapeHtml(ev.person_name || I18n.t('unknown'))}" style="width: 100%; height: 90px; object-fit: cover; border-radius: var(--radius-sm); display: block; margin-bottom: 4px;" />
                                         <div style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${EventCard.escapeHtml(camName)}</div>
                                         <div style="font-size: 0.65rem; color: var(--text-tertiary);">${timeLabel}</div>
                                     </div>
                                 `;
-                            }).join('')}
+            }).join('')}
                         </div>
                     `}
 
                     <!-- History Timeline Summary -->
                     <div class="person-timeline-summary" style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
                         ${group.events.slice(0, 4).map(ev => {
-                            const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
-                            const confScore = Math.round((ev.confidence_score || 0) * 100);
-                            const confStr = I18n.isRTL() ? I18n.toPersianDigits(confScore) : confScore;
-                            return `
+                const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
+                const confScore = Math.round((ev.confidence_score || 0) * 100);
+                const confStr = I18n.isRTL() ? I18n.toPersianDigits(confScore) : confScore;
+                return `
                                 <span style="background: rgba(255, 255, 255, 0.04); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                                     📹 ${EventCard.escapeHtml(camName)} — ${I18n.formatTimestamp(ev.timestamp)} (${confStr}%)
                                 </span>
                             `;
-                        }).join('')}
+            }).join('')}
                     </div>
                 </div>
             `;

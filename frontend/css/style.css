@@ -4762,6 +4762,8 @@ html[dir="rtl"] textarea {
 
 /* ── Dashboard Advanced Filters & Search ──────────────────── */
 .dashboard-filter-card {
+    position: relative;
+    z-index: 40;
     background: var(--bg-glass);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
@@ -4909,6 +4911,8 @@ html[dir="rtl"] textarea {
 
 /* ── Modern Shamsi Date & Time Range Panel ───────────────── */
 .custom-shamsi-range-panel {
+    position: relative;
+    z-index: 50;
     background: rgba(13, 20, 36, 0.95);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -4992,6 +4996,8 @@ html[dir="rtl"] textarea {
     gap: 1rem;
     flex-wrap: wrap;
     margin-bottom: 1rem;
+    position: relative;
+    z-index: 20;
 }
 
 .shamsi-datetime-card {
@@ -5001,6 +5007,7 @@ html[dir="rtl"] textarea {
     border-radius: var(--radius-md);
     padding: 0.75rem 0.95rem;
     position: relative;
+    z-index: 10;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -5008,6 +5015,11 @@ html[dir="rtl"] textarea {
 .shamsi-datetime-card:hover {
     border-color: rgba(59, 130, 246, 0.4);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.shamsi-datetime-card.calendar-open,
+.shamsi-datetime-card:has(.shamsi-calendar-popover:not([style*="display: none"])) {
+    z-index: 100;
 }
 
 .card-tag {
@@ -5110,6 +5122,7 @@ html[dir="rtl"] textarea {
     inset-inline-start: 0;
     z-index: 1000;
     width: 290px;
+    max-width: calc(100vw - 2rem);
     background: #0b1122;
     border: 1px solid rgba(59, 130, 246, 0.4);
     border-radius: var(--radius-md);

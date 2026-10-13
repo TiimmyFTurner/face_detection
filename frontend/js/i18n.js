@@ -1700,110 +1700,265 @@ const I18n = {
         });
     },
 
+    // ── Jalali (Solar Hijri / Shamsi) Calendar Engine ─────────
+    _shamsiMonthsFa: [
+        'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+        'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+    ],
+    _shamsiMonthsEn: [
+        'Farvardin', 'Ordibehesht', 'Khordad', 'Tir', 'Mordad', 'Shahrivar',
+        'Mehr', 'Aban', 'Azar', 'Dey', 'Bahman', 'Esfand'
+    ],
+    _shamsiDaysFa: [
+        'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'
+    ],
+    _shamsiDaysEn: [
+        'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+    ],
+
     /**
-     * Format timestamp to relative human-readable format.
+     * Accurate Gregorian to Jalali (Solar Hijri / Shamsi) calendar converter.
+     * @param {number} gy - Gregorian year
+     * @param {number} gm - Gregorian month (1-12)
+     * @param {number} gd - Gregorian day of month (1-31)
+     * @returns {{jy: number, jm: number, jd: number}}
+     */
+    gregorianToJalali(gy, gm, gd) {
+        const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        let jy = 0;
+        if (gy > 1600) {
+            jy = 979;
+            gy -= 1600;
+        } else {
+            jy = 0;
+            gy -= 621;
+        }
+        const gy2 = gm > 2 ? gy : gy - 1;
+        let days = 365 * gy + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+        jy += 33 * Math.floor(days / 12053);
+        days %= 12053;
+        jy += 4 * Math.floor(days / 1461);
+        days %= 1461;
+        if (days > 365) {
+            jy += Math.floor((days - 1) / 365);
+            days = (days - 1) % 365;
+        }
+        let jm = 0;
+        let jd = 0;
+        if (days < 186) {
+            jm = 1 + Math.floor(days / 31);
+            jd = 1 + (days % 31);
+        } else {
+            jm = 7 + Math.floor((days - 186) / 30);
+            jd = 1 + ((days - 186) % 30);
+        }
+        return { jy, jm, jd };
+    },
+
+    /**
+     * Parse date/ISO string into local time and Shamsi (Jalali) components.
+     */
+    toJalali(dateOrIso) {
+        if (!dateOrIso) return null;
+        try {
+            // Case 1: Date instance
+            if (dateOrIso instanceof Date) {
+                if (isNaN(dateOrIso.getTime())) return null;
+                const gy = dateOrIso.getFullYear();
+                const gm = dateOrIso.getMonth() + 1;
+                const gd = dateOrIso.getDate();
+                const { jy, jm, jd } = I18n.gregorianToJalali(gy, gm, gd);
+                return {
+                    date: dateOrIso,
+                    jy, jm, jd,
+                    hours: dateOrIso.getHours(),
+                    minutes: dateOrIso.getMinutes(),
+                    seconds: dateOrIso.getSeconds(),
+                    dayOfWeek: dateOrIso.getDay(),
+                };
+            }
+
+            // Case 2: Number timestamp
+            if (typeof dateOrIso === 'number') {
+                const date = new Date(dateOrIso);
+                if (isNaN(date.getTime())) return null;
+                const gy = date.getFullYear();
+                const gm = date.getMonth() + 1;
+                const gd = date.getDate();
+                const { jy, jm, jd } = I18n.gregorianToJalali(gy, gm, gd);
+                return {
+                    date,
+                    jy, jm, jd,
+                    hours: date.getHours(),
+                    minutes: date.getMinutes(),
+                    seconds: date.getSeconds(),
+                    dayOfWeek: date.getDay(),
+                };
+            }
+
+            let str = String(dateOrIso).trim();
+            if (!str) return null;
+
+            // Case 3: Pure date string (YYYY-MM-DD)
+            const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+            if (dateMatch) {
+                const gy = parseInt(dateMatch[1], 10);
+                const gm = parseInt(dateMatch[2], 10);
+                const gd = parseInt(dateMatch[3], 10);
+                const { jy, jm, jd } = I18n.gregorianToJalali(gy, gm, gd);
+                const d = new Date(gy, gm - 1, gd, 12, 0, 0);
+                return {
+                    date: d,
+                    jy, jm, jd,
+                    hours: 0,
+                    minutes: 0,
+                    seconds: 0,
+                    dayOfWeek: d.getDay(),
+                };
+            }
+
+            // Case 4: Datetime string
+            let date;
+            if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(str)) {
+                // SQLite UTC timestamp without timezone indicator
+                date = new Date(str.replace(' ', 'T') + 'Z');
+            } else {
+                date = new Date(str);
+            }
+
+            if (isNaN(date.getTime())) return null;
+
+            const gy = date.getFullYear();
+            const gm = date.getMonth() + 1;
+            const gd = date.getDate();
+            const { jy, jm, jd } = I18n.gregorianToJalali(gy, gm, gd);
+
+            return {
+                date,
+                jy,
+                jm,
+                jd,
+                hours: date.getHours(),
+                minutes: date.getMinutes(),
+                seconds: date.getSeconds(),
+                dayOfWeek: date.getDay(),
+            };
+        } catch {
+            return null;
+        }
+    },
+
+    /**
+     * Format timestamp to human-readable Shamsi date and local time.
+     * Example: "۱۴۰۵/۰۷/۲۱ - ۱۰:۲۵:۳۰ (۵ دقیقه پیش)"
      */
     formatTimestamp(isoString) {
         if (!isoString) return I18n.t('unknown');
-        try {
-            let str = String(isoString).trim();
-            if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
-                str += 'Z';
-            }
-            const date = new Date(str);
-            if (isNaN(date.getTime())) return isoString;
+        const j = I18n.toJalali(isoString);
+        if (!j) return String(isoString);
 
-            const now = new Date();
-            const diffMs = now.getTime() - date.getTime();
-            const diffMins = Math.floor(diffMs / 60000);
+        const now = new Date();
+        const diffMs = now.getTime() - j.date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
 
-            let relative = I18n.t('just_now');
-            if (diffMins >= 1 && diffMins < 60) {
-                relative = I18n.t('minutes_ago', { mins: I18n.isRTL() ? I18n.toPersianDigits(diffMins) : diffMins });
-            } else if (diffMins >= 60 && diffMins < 1440) {
-                const hours = Math.floor(diffMins / 60);
-                relative = I18n.t('hours_ago', { hours: I18n.isRTL() ? I18n.toPersianDigits(hours) : hours });
-            } else if (diffMins >= 1440) {
-                const days = Math.floor(diffMins / 1440);
-                relative = I18n.t('days_ago', { days: I18n.isRTL() ? I18n.toPersianDigits(days) : days });
-            }
+        let relative = I18n.t('just_now');
+        if (diffMins >= 1 && diffMins < 60) {
+            relative = I18n.t('minutes_ago', { mins: I18n.isRTL() ? I18n.toPersianDigits(diffMins) : diffMins });
+        } else if (diffMins >= 60 && diffMins < 1440) {
+            const hours = Math.floor(diffMins / 60);
+            relative = I18n.t('hours_ago', { hours: I18n.isRTL() ? I18n.toPersianDigits(hours) : hours });
+        } else if (diffMins >= 1440) {
+            const days = Math.floor(diffMins / 1440);
+            relative = I18n.t('days_ago', { days: I18n.isRTL() ? I18n.toPersianDigits(days) : days });
+        }
 
-            const timeStr = date.toLocaleTimeString(I18n.isRTL() ? 'fa-IR' : 'en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
+        const pad = n => String(n).padStart(2, '0');
+        const jyStr = String(j.jy);
+        const jmStr = pad(j.jm);
+        const jdStr = pad(j.jd);
+        const hStr = pad(j.hours);
+        const minStr = pad(j.minutes);
+        const secStr = pad(j.seconds);
 
-            return `${timeStr} (${relative})`;
-        } catch {
-            return isoString;
+        if (I18n.isRTL()) {
+            const datePart = `${I18n.toPersianDigits(jyStr)}/${I18n.toPersianDigits(jmStr)}/${I18n.toPersianDigits(jdStr)}`;
+            const timePart = `${I18n.toPersianDigits(hStr)}:${I18n.toPersianDigits(minStr)}:${I18n.toPersianDigits(secStr)}`;
+            return `${datePart} - ${timePart} (${relative})`;
+        } else {
+            const datePart = `${jyStr}/${jmStr}/${jdStr}`;
+            const timePart = `${hStr}:${minStr}:${secStr}`;
+            return `${datePart} - ${timePart} (${relative})`;
         }
     },
 
     /**
-     * Format full date and time (using Solar Hijri / Jalali in Persian mode).
+     * Format full date and time in Shamsi (Persian) format.
+     * Example: "سه‌شنبه، ۲۱ مهر ۱۴۰۵ ساعت ۱۰:۲۵:۳۰" / "Tuesday, 21 Mehr 1405 at 10:25:30"
      */
     formatFullTimestamp(isoString) {
         if (!isoString) return I18n.t('unknown');
-        try {
-            let str = String(isoString).trim();
-            if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
-                str += 'Z';
-            }
-            const date = new Date(str);
-            if (isNaN(date.getTime())) return isoString;
+        const j = I18n.toJalali(isoString);
+        if (!j) return String(isoString);
 
-            if (I18n.isRTL()) {
-                // Persian Jalali Calendar
-                return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                }).format(date);
-            } else {
-                return new Intl.DateTimeFormat('en-US', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                }).format(date);
-            }
-        } catch {
-            return isoString;
+        const pad = n => String(n).padStart(2, '0');
+        const jyStr = String(j.jy);
+        const hStr = pad(j.hours);
+        const minStr = pad(j.minutes);
+        const secStr = pad(j.seconds);
+
+        if (I18n.isRTL()) {
+            const dayName = I18n._shamsiDaysFa[j.dayOfWeek] || '';
+            const monthName = I18n._shamsiMonthsFa[j.jm - 1] || '';
+            const dateText = `${dayName}، ${I18n.toPersianDigits(j.jd)} ${monthName} ${I18n.toPersianDigits(jyStr)}`;
+            const timeText = `${I18n.toPersianDigits(hStr)}:${I18n.toPersianDigits(minStr)}:${I18n.toPersianDigits(secStr)}`;
+            return `${dateText} ساعت ${timeText}`;
+        } else {
+            const dayName = I18n._shamsiDaysEn[j.dayOfWeek] || '';
+            const monthName = I18n._shamsiMonthsEn[j.jm - 1] || '';
+            const dateText = `${dayName}, ${j.jd} ${monthName} ${jyStr}`;
+            const timeText = `${hStr}:${minStr}:${secStr}`;
+            return `${dateText} at ${timeText}`;
         }
     },
 
     /**
-     * Format simple date.
+     * Format written date in Shamsi (Persian) format.
+     * Example: "۲۱ مهر ۱۴۰۵" / "21 Mehr 1405"
      */
     formatDate(isoString) {
         if (!isoString) return '—';
-        try {
-            const date = new Date(isoString);
-            if (isNaN(date.getTime())) return isoString;
+        const j = I18n.toJalali(isoString);
+        if (!j) return String(isoString);
 
-            if (I18n.isRTL()) {
-                return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                }).format(date);
-            } else {
-                return new Intl.DateTimeFormat('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                }).format(date);
-            }
-        } catch {
-            return isoString;
+        const jyStr = String(j.jy);
+
+        if (I18n.isRTL()) {
+            const monthName = I18n._shamsiMonthsFa[j.jm - 1] || '';
+            return `${I18n.toPersianDigits(j.jd)} ${monthName} ${I18n.toPersianDigits(jyStr)}`;
+        } else {
+            const monthName = I18n._shamsiMonthsEn[j.jm - 1] || '';
+            return `${j.jd} ${monthName} ${jyStr}`;
+        }
+    },
+
+    /**
+     * Format numeric date in Shamsi format.
+     * Example: "۱۴۰۵/۰۷/۲۱" / "1405/07/21"
+     */
+    formatDateNumeric(isoString) {
+        if (!isoString) return '—';
+        const j = I18n.toJalali(isoString);
+        if (!j) return String(isoString);
+
+        const pad = n => String(n).padStart(2, '0');
+        const jyStr = String(j.jy);
+        const jmStr = pad(j.jm);
+        const jdStr = pad(j.jd);
+
+        if (I18n.isRTL()) {
+            return `${I18n.toPersianDigits(jyStr)}/${I18n.toPersianDigits(jmStr)}/${I18n.toPersianDigits(jdStr)}`;
+        } else {
+            return `${jyStr}/${jmStr}/${jdStr}`;
         }
     },
 

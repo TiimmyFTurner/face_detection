@@ -144,7 +144,7 @@ const UsersPage = {
                 : `<span class="badge badge-danger">${I18n.t('inactive') || 'غیرفعال'}</span>`;
 
             const lastLoginStr = user.last_login
-                ? new Date(user.last_login).toLocaleString(I18n.currentLang === 'fa' ? 'fa-IR' : 'en-US')
+                ? I18n.formatFullTimestamp(user.last_login)
                 : (I18n.t('never_logged_in') || 'هنوز وارد نشده');
 
             const customPermsCount = (user.custom_permissions || []).length;

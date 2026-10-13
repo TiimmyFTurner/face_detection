@@ -232,14 +232,14 @@ const TVBoard = {
         if (dateEl) {
             try {
                 if (this._lang === 'fa') {
-                    dateEl.textContent = new Intl.DateTimeFormat('fa-IR', {
+                    dateEl.textContent = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
                         weekday: 'long',
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric'
                     }).format(now);
                 } else {
-                    dateEl.textContent = new Intl.DateTimeFormat('en-US', {
+                    dateEl.textContent = new Intl.DateTimeFormat('en-US-u-ca-persian', {
                         weekday: 'long',
                         year: 'numeric',
                         month: 'short',

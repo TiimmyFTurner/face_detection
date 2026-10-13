@@ -561,7 +561,15 @@ const DashboardPage = {
             else if (DashboardPage._timeWindow === 'today') label = I18n.t('time_window_today');
             else if (DashboardPage._timeWindow === '24h') label = I18n.t('time_window_24h');
             else if (DashboardPage._timeWindow === '7d') label = I18n.t('time_window_7d');
-            else if (DashboardPage._timeWindow === 'custom') label = I18n.t('time_window_custom');
+            else if (DashboardPage._timeWindow === 'custom') {
+                if (DashboardPage._customStartTime || DashboardPage._customEndTime) {
+                    const s = DashboardPage._customStartTime ? I18n.formatDateNumeric(DashboardPage._customStartTime) : '...';
+                    const e = DashboardPage._customEndTime ? I18n.formatDateNumeric(DashboardPage._customEndTime) : '...';
+                    label = `${s} → ${e}`;
+                } else {
+                    label = I18n.t('time_window_custom');
+                }
+            }
             chips.push(`
                 <span class="filter-chip">
                     <span>⏱️ ${I18n.t('filter_badge_time', { window: label })}</span>

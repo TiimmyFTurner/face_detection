@@ -443,19 +443,32 @@ const TVBoard = {
 
         // Dynamically compute optimal columns and rows for 100% height fit
         const count = pageItems.length;
-        let cols = 4;
-        let rows = 4;
 
-        if (count <= 2) { cols = 2; rows = 1; }
-        else if (count <= 4) { cols = 2; rows = 2; }
-        else if (count <= 6) { cols = 3; rows = 2; }
-        else if (count <= 8) { cols = 4; rows = 2; }
-        else if (count <= 12) { cols = 4; rows = 3; }
-        else if (count <= 16) { cols = 4; rows = 4; }
-        else { cols = 6; rows = 3; }
+        // Reset inline grid template styles
+        container.style.gridTemplateColumns = '';
+        container.style.gridTemplateRows = '';
 
-        container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+        if (count === 1) {
+            container.className = 'tv-roster-grid is-single-card is-few-cards';
+        } else if (count === 2) {
+            container.className = 'tv-roster-grid is-two-cards is-few-cards';
+        } else if (count === 3) {
+            container.className = 'tv-roster-grid is-three-cards is-few-cards';
+        } else if (count === 4) {
+            container.className = 'tv-roster-grid is-four-cards is-few-cards';
+        } else {
+            container.className = 'tv-roster-grid is-many-cards';
+            let cols = 4;
+            let rows = 4;
+            if (count <= 6) { cols = 3; rows = 2; }
+            else if (count <= 8) { cols = 4; rows = 2; }
+            else if (count <= 12) { cols = 4; rows = 3; }
+            else if (count <= 16) { cols = 4; rows = 4; }
+            else { cols = 6; rows = 3; }
+
+            container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+        }
 
         // Render Cards
         container.innerHTML = pageItems.map(p => this.renderWorkerCard(p)).join('');
@@ -567,21 +580,21 @@ const TVBoard = {
 
                 <div class="tv-card-footer">
                     <div class="tv-stats-grid">
-                        <div class="tv-stat-box" title="${this.t('shift_presence_total')}">
-                            <span class="tv-stat-box-label">${this.t('shift_presence_total')}</span>
+                        <div class="tv-stat-box stat-presence" title="${this.t('shift_presence_total')}">
+                            <span class="tv-stat-box-label">⏱️ ${this.t('shift_presence_total')}</span>
                             <span class="tv-stat-box-val val-presence">${presenceFormatted}</span>
                         </div>
-                        <div class="tv-stat-box" title="${this.t('shift_absence_total')}">
-                            <span class="tv-stat-box-label">${this.t('shift_absence_total')}</span>
+                        <div class="tv-stat-box stat-absence" title="${this.t('shift_absence_total')}">
+                            <span class="tv-stat-box-label">🚪 ${this.t('shift_absence_total')}</span>
                             <span class="tv-stat-box-val val-absence ${person.shift_absence_minutes > 0 ? 'alert' : ''}">${absenceFormatted}</span>
                         </div>
-                        <div class="tv-stat-box" title="${this.t('shift_incidents')}">
-                            <span class="tv-stat-box-label">${this.t('shift_incidents')}</span>
+                        <div class="tv-stat-box stat-incidents" title="${this.t('shift_incidents')}">
+                            <span class="tv-stat-box-label">⚠️ ${this.t('shift_incidents')}</span>
                             <span class="tv-stat-box-val val-incidents ${incidentsCount > 0 ? 'warning' : ''}">${this.toDigits(incidentsCount)} ${this.t('shift_incidents_unit')}</span>
                         </div>
-                        <div class="tv-stat-box" title="${this.t('kpi_compliance')}">
-                            <span class="tv-stat-box-label">${this.t('kpi_compliance')}</span>
-                            <span class="tv-stat-box-val" style="color: ${compColor};">${this.toDigits(compliance)}%</span>
+                        <div class="tv-stat-box stat-compliance" title="${this.t('kpi_compliance')}">
+                            <span class="tv-stat-box-label">📈 ${this.t('kpi_compliance')}</span>
+                            <span class="tv-stat-box-val val-compliance" style="color: ${compColor};">${this.toDigits(compliance)}%</span>
                         </div>
                     </div>
                     <div class="tv-progress-track">

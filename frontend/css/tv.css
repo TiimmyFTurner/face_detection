@@ -414,6 +414,44 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+/* ── Few-Card Centered Modes (1-4 cards) ─────────────────────── */
+.tv-roster-grid.is-few-cards {
+    align-content: center;
+    justify-content: center;
+    padding: 14px 20px;
+    box-sizing: border-box;
+}
+
+.tv-roster-grid.is-single-card {
+    grid-template-columns: minmax(380px, 860px);
+    grid-template-rows: auto;
+    gap: 0;
+}
+
+.tv-roster-grid.is-two-cards {
+    grid-template-columns: repeat(2, minmax(360px, 720px));
+    grid-template-rows: auto;
+    gap: 24px;
+}
+
+.tv-roster-grid.is-three-cards {
+    grid-template-columns: repeat(3, minmax(300px, 560px));
+    grid-template-rows: auto;
+    gap: 18px;
+}
+
+.tv-roster-grid.is-four-cards {
+    grid-template-columns: repeat(2, minmax(360px, 680px));
+    grid-template-rows: repeat(2, auto);
+    gap: 16px;
+}
+
+.tv-roster-grid.is-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ── Worker Status Card ───────────────────────────────────────── */
 .tv-card {
     background: var(--tv-bg-card);
@@ -423,10 +461,25 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    height: 100%;
     position: relative;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     overflow: hidden;
+}
+
+/* In few-card mode, cards don't stretch 100vh height and use balanced flow */
+.tv-roster-grid.is-few-cards .tv-card {
+    height: auto;
+    max-height: 100%;
+    justify-content: flex-start;
+    background: linear-gradient(155deg, rgba(19, 27, 49, 0.96) 0%, rgba(11, 16, 31, 0.98) 100%);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.tv-roster-grid.is-few-cards .tv-card-footer {
+    margin-top: auto;
 }
 
 /* Status side glow border */
@@ -473,11 +526,11 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-card.status-camera_offline {
-    border-color: rgba(148, 163, 184, 0.25);
-    opacity: 0.85;
+    border-color: rgba(234, 179, 8, 0.35);
 }
 .tv-card.status-camera_offline::after {
-    background: var(--tv-text-dim);
+    background: #eab308;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
 }
 
 /* Card Header (Photo + Name + Badges + Station) */
@@ -547,7 +600,7 @@ body[dir="ltr"] .tv-status-badge-dot {
 .status-present .tv-status-badge-dot { background: var(--tv-emerald); box-shadow: 0 0 8px var(--tv-emerald); }
 .status-absent .tv-status-badge-dot { background: var(--tv-rose); box-shadow: 0 0 8px var(--tv-rose); }
 .status-on_break .tv-status-badge-dot { background: var(--tv-amber); }
-.status-camera_offline .tv-status-badge-dot { background: var(--tv-text-dim); }
+.status-camera_offline .tv-status-badge-dot { background: #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5); }
 
 .tv-card-meta {
     flex: 1 1 auto;
@@ -730,8 +783,9 @@ body[dir="ltr"] .tv-status-badge-dot {
 }
 
 .status-camera_offline .tv-card-body {
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--tv-text-muted);
+    background: rgba(234, 179, 8, 0.12);
+    color: #fde047;
+    border: 1px solid rgba(234, 179, 8, 0.25);
 }
 
 .tv-status-text {
@@ -813,6 +867,382 @@ body[dir="ltr"] .tv-status-badge-dot {
     height: 100%;
     border-radius: 999px;
     transition: width 0.4s ease;
+}
+
+/* ── Few-Cards Dedicated Presentation Modes (Hero, Duo, Trio, Quad) ──────── */
+
+/* ── 1 Card: Executive Hero Mode ──────────────────────────────── */
+.tv-roster-grid.is-single-card .tv-card {
+    max-width: 860px;
+    width: 100%;
+    padding: 26px 32px;
+    gap: 16px;
+    border-radius: 22px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 40px rgba(59, 130, 246, 0.08);
+}
+
+.tv-roster-grid.is-single-card .tv-card.status-present {
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 45px rgba(16, 185, 129, 0.16);
+}
+
+.tv-roster-grid.is-single-card .tv-card.status-absent {
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 50px rgba(244, 63, 94, 0.25);
+}
+
+.tv-roster-grid.is-single-card .tv-card.status-on_break {
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 45px rgba(245, 158, 11, 0.16);
+}
+
+.tv-roster-grid.is-single-card .tv-card.status-camera_offline {
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 45px rgba(234, 179, 8, 0.18);
+}
+
+.tv-roster-grid.is-single-card .tv-card-header {
+    gap: 18px;
+}
+
+.tv-roster-grid.is-single-card .tv-avatar-wrap {
+    width: 84px;
+    height: 84px;
+}
+
+.tv-roster-grid.is-single-card .tv-avatar-placeholder {
+    font-size: 2.6rem;
+}
+
+.tv-roster-grid.is-single-card .tv-status-badge-dot {
+    width: 20px;
+    height: 20px;
+    border-width: 3px;
+    bottom: 0;
+    right: 0;
+}
+
+body[dir="ltr"] .tv-roster-grid.is-single-card .tv-status-badge-dot {
+    right: auto;
+    left: 0;
+}
+
+.tv-roster-grid.is-single-card .tv-person-name {
+    font-size: 1.65rem;
+    font-weight: 800;
+}
+
+.tv-roster-grid.is-single-card .tv-id-badge {
+    font-size: 0.88rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+}
+
+.tv-roster-grid.is-single-card .tv-person-role {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.tv-roster-grid.is-single-card .tv-tags-row {
+    gap: 8px;
+    margin-top: 5px;
+}
+
+.tv-roster-grid.is-single-card .tv-zone-name {
+    font-size: 0.85rem;
+    padding: 3px 10px;
+    max-width: none;
+    border-radius: 6px;
+}
+
+.tv-roster-grid.is-single-card .tv-camera-name {
+    font-size: 0.85rem;
+    padding: 3px 10px;
+    max-width: none;
+    border-radius: 6px;
+}
+
+.tv-roster-grid.is-single-card .tv-shift-strip {
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    margin: 2px 0 0 0;
+    background: rgba(8, 14, 28, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tv-roster-grid.is-single-card .tv-shift-window {
+    font-size: 0.95rem;
+    gap: 8px;
+}
+
+.tv-roster-grid.is-single-card .tv-shift-hours {
+    font-size: 0.82rem;
+}
+
+.tv-roster-grid.is-single-card .tv-shift-state-tag {
+    font-size: 0.82rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+}
+
+.tv-roster-grid.is-single-card .tv-card-body {
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 1.05rem;
+    margin: 0;
+}
+
+.tv-roster-grid.is-single-card .tv-status-text {
+    font-size: 1.15rem;
+    gap: 8px;
+}
+
+.tv-roster-grid.is-single-card .tv-status-sub {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.tv-roster-grid.is-single-card .tv-card-footer {
+    padding-top: 10px;
+    gap: 12px;
+}
+
+.tv-roster-grid.is-single-card .tv-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.tv-roster-grid.is-single-card .tv-stat-box {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 12px;
+    gap: 4px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tv-roster-grid.is-single-card .tv-stat-box-label {
+    font-size: 0.78rem;
+    color: var(--tv-text-dim);
+}
+
+.tv-roster-grid.is-single-card .tv-stat-box-val {
+    font-size: 1.22rem;
+    font-weight: 800;
+}
+
+.tv-roster-grid.is-single-card .tv-progress-track {
+    height: 7px;
+}
+
+/* ── 2 Cards: Duo Mode ────────────────────────────────────────── */
+.tv-roster-grid.is-two-cards .tv-card {
+    padding: 22px 24px;
+    gap: 14px;
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.tv-roster-grid.is-two-cards .tv-card-header {
+    gap: 14px;
+}
+
+.tv-roster-grid.is-two-cards .tv-avatar-wrap {
+    width: 68px;
+    height: 68px;
+}
+
+.tv-roster-grid.is-two-cards .tv-avatar-placeholder {
+    font-size: 2.1rem;
+}
+
+.tv-roster-grid.is-two-cards .tv-status-badge-dot {
+    width: 17px;
+    height: 17px;
+}
+
+.tv-roster-grid.is-two-cards .tv-person-name {
+    font-size: 1.35rem;
+}
+
+.tv-roster-grid.is-two-cards .tv-id-badge {
+    font-size: 0.8rem;
+}
+
+.tv-roster-grid.is-two-cards .tv-person-role {
+    font-size: 0.9rem;
+}
+
+.tv-roster-grid.is-two-cards .tv-tags-row {
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.tv-roster-grid.is-two-cards .tv-zone-name,
+.tv-roster-grid.is-two-cards .tv-camera-name {
+    font-size: 0.78rem;
+    padding: 2px 8px;
+    max-width: 220px;
+}
+
+.tv-roster-grid.is-two-cards .tv-shift-strip {
+    padding: 8px 12px;
+    font-size: 0.84rem;
+    margin: 2px 0 0 0;
+}
+
+.tv-roster-grid.is-two-cards .tv-card-body {
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+.tv-roster-grid.is-two-cards .tv-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 10px;
+    margin-bottom: 4px;
+}
+
+.tv-roster-grid.is-two-cards .tv-stat-box {
+    padding: 7px 10px;
+    border-radius: 7px;
+}
+
+.tv-roster-grid.is-two-cards .tv-stat-box-label {
+    font-size: 0.74rem;
+}
+
+.tv-roster-grid.is-two-cards .tv-stat-box-val {
+    font-size: 0.95rem;
+}
+
+.tv-roster-grid.is-two-cards .tv-progress-track {
+    height: 6px;
+}
+
+/* ── 3 Cards: Trio Mode ────────────────────────────────────────── */
+.tv-roster-grid.is-three-cards .tv-card {
+    padding: 18px 20px;
+    gap: 11px;
+    border-radius: 16px;
+}
+
+.tv-roster-grid.is-three-cards .tv-card-header {
+    gap: 12px;
+}
+
+.tv-roster-grid.is-three-cards .tv-avatar-wrap {
+    width: 58px;
+    height: 58px;
+}
+
+.tv-roster-grid.is-three-cards .tv-person-name {
+    font-size: 1.25rem;
+}
+
+.tv-roster-grid.is-three-cards .tv-shift-strip {
+    padding: 7px 10px;
+    font-size: 0.78rem;
+    margin: 0;
+}
+
+.tv-roster-grid.is-three-cards .tv-card-body {
+    padding: 8px 12px;
+    font-size: 0.88rem;
+    margin: 0;
+}
+
+.tv-roster-grid.is-three-cards .tv-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px 8px;
+}
+
+.tv-roster-grid.is-three-cards .tv-stat-box {
+    padding: 5px 8px;
+}
+
+.tv-roster-grid.is-three-cards .tv-stat-box-label {
+    font-size: 0.7rem;
+}
+
+.tv-roster-grid.is-three-cards .tv-stat-box-val {
+    font-size: 0.86rem;
+}
+
+/* ── 4 Cards: Quad Mode ────────────────────────────────────────── */
+.tv-roster-grid.is-four-cards .tv-card {
+    padding: 16px 18px;
+    gap: 9px;
+    border-radius: 14px;
+}
+
+.tv-roster-grid.is-four-cards .tv-avatar-wrap {
+    width: 52px;
+    height: 52px;
+}
+
+.tv-roster-grid.is-four-cards .tv-person-name {
+    font-size: 1.18rem;
+}
+
+.tv-roster-grid.is-four-cards .tv-shift-strip {
+    padding: 6px 10px;
+    font-size: 0.76rem;
+    margin: 0;
+}
+
+.tv-roster-grid.is-four-cards .tv-card-body {
+    padding: 7px 10px;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.tv-roster-grid.is-four-cards .tv-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 6px;
+}
+
+.tv-roster-grid.is-four-cards .tv-stat-box {
+    padding: 4px 7px;
+}
+
+/* ── Responsive & Ultra-wide Breakpoints ─────────────────────── */
+@media (max-width: 1100px) {
+    .tv-roster-grid.is-three-cards {
+        grid-template-columns: repeat(2, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .tv-roster-grid.is-single-card,
+    .tv-roster-grid.is-two-cards,
+    .tv-roster-grid.is-three-cards,
+    .tv-roster-grid.is-four-cards {
+        grid-template-columns: 1fr;
+        padding: 10px;
+        gap: 12px;
+    }
+    .tv-roster-grid.is-single-card .tv-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 2560px) {
+    .tv-roster-grid.is-single-card {
+        grid-template-columns: minmax(500px, 1100px);
+    }
+    .tv-roster-grid.is-two-cards {
+        grid-template-columns: repeat(2, minmax(450px, 950px));
+        gap: 36px;
+    }
+    .tv-roster-grid.is-three-cards {
+        grid-template-columns: repeat(3, minmax(400px, 780px));
+        gap: 28px;
+    }
+    .tv-roster-grid.is-four-cards {
+        grid-template-columns: repeat(2, minmax(450px, 900px));
+        gap: 24px;
+    }
 }
 
 /* ── Pagination Indicator Bar ─────────────────────────────────── */

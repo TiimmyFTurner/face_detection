@@ -480,18 +480,18 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     background: var(--tv-text-dim);
 }
 
-/* Card Header (Photo + Name + Station) */
+/* Card Header (Photo + Name + Badges + Station) */
 .tv-card-header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .tv-avatar-wrap {
     position: relative;
     flex: 0 0 auto;
-    width: 52px;
-    height: 52px;
+    width: 46px;
+    height: 46px;
 }
 
 .tv-avatar-img {
@@ -524,24 +524,24 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     background: #1e293b;
     border: 2px solid var(--tv-border);
 }
 
 .tv-status-badge-dot {
     position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 14px;
-    height: 14px;
+    bottom: -1px;
+    right: -1px;
+    width: 13px;
+    height: 13px;
     border-radius: 50%;
     border: 2px solid var(--tv-bg-card);
 }
 
 body[dir="ltr"] .tv-status-badge-dot {
     right: auto;
-    left: 0;
+    left: -1px;
 }
 
 .status-present .tv-status-badge-dot { background: var(--tv-emerald); box-shadow: 0 0 8px var(--tv-emerald); }
@@ -552,10 +552,20 @@ body[dir="ltr"] .tv-status-badge-dot {
 .tv-card-meta {
     flex: 1 1 auto;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tv-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
 }
 
 .tv-person-name {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 800;
     color: #fff;
     white-space: nowrap;
@@ -564,40 +574,143 @@ body[dir="ltr"] .tv-status-badge-dot {
     letter-spacing: -0.01em;
 }
 
+.tv-id-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.tv-role-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .tv-person-role {
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     font-weight: 500;
     color: var(--tv-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top: 1px;
+}
+
+.tv-tags-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-top: 2px;
 }
 
 .tv-zone-name {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.78rem;
+    gap: 3px;
+    font-size: 0.72rem;
+    font-weight: 600;
     color: #93c5fd;
     background: rgba(59, 130, 246, 0.12);
-    padding: 2px 7px;
-    border-radius: 6px;
-    margin-top: 4px;
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    padding: 1px 6px;
+    border-radius: 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 170px;
+}
+
+.tv-camera-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    padding: 1px 6px;
+    border-radius: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+/* Shift Info Strip */
+.tv-shift-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    background: rgba(10, 16, 34, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 5px 0 4px 0;
+    font-size: 0.74rem;
+}
+
+.tv-shift-window {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #93c5fd;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tv-shift-icon {
+    font-size: 0.8rem;
+}
+
+.tv-shift-hours {
+    color: var(--tv-text-dim);
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.tv-shift-state-tag {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.tv-shift-state-tag.state-duty {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tv-shift-state-tag.state-break {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.tv-shift-state-tag.state-off {
+    background: rgba(148, 163, 184, 0.12);
+    color: #94a3b8;
 }
 
 /* Card Body (Status Banner) */
 .tv-card-body {
-    margin: 8px 0;
-    padding: 6px 10px;
+    margin: 4px 0 6px 0;
+    padding: 5px 9px;
     border-radius: var(--tv-radius-sm);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 700;
 }
 
@@ -624,35 +737,68 @@ body[dir="ltr"] .tv-status-badge-dot {
 .tv-status-text {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 
 .tv-status-sub {
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 500;
-    opacity: 0.85;
+    opacity: 0.9;
+    white-space: nowrap;
 }
 
-/* Card Footer (Shift Cumulative Stats & Mini Bar) */
+/* Card Footer (4-Box Shift Stats Grid & Progress Bar) */
 .tv-card-footer {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    padding-top: 6px;
+    gap: 4px;
+    padding-top: 5px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.tv-stat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.76rem;
-    color: var(--tv-text-muted);
+.tv-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px 6px;
+    margin-bottom: 3px;
 }
 
-.tv-stat-val {
+.tv-stat-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.035);
+    padding: 3px 6px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tv-stat-box-label {
+    font-size: 0.68rem;
+    color: var(--tv-text-muted);
+    white-space: nowrap;
+}
+
+.tv-stat-box-val {
+    font-size: 0.74rem;
     font-weight: 700;
     color: var(--tv-text-main);
+    white-space: nowrap;
+}
+
+.tv-stat-box-val.val-presence {
+    color: #34d399;
+}
+
+.tv-stat-box-val.val-absence.alert {
+    color: #f87171;
+    font-weight: 800;
+}
+
+.tv-stat-box-val.val-incidents.warning {
+    color: #fbbf24;
+    font-weight: 800;
 }
 
 .tv-progress-track {

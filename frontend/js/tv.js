@@ -55,6 +55,14 @@ const TVBoard = {
             login_btn: 'ورود و شروع مانیتورینگ',
             login_err: 'نام کاربری یا رمز عبور اشتباه است.',
             page_indicator: 'صفحه {current} از {total}',
+            personnel_id: 'کد',
+            shift_on_duty: 'شیفت موظف',
+            shift_presence_total: 'حضور مفید:',
+            shift_incidents: 'دفعات خروج:',
+            shift_incidents_unit: 'بار',
+            seen_just_now: 'آخرین رویت: لحظاتی پیش',
+            not_seen_yet: 'عدم ثبت حضور تاکنون',
+            station_operator: 'اپراتور ایستگاه',
         },
         en: {
             title: 'Factory Live Shift & Attendance Monitor',
@@ -91,6 +99,14 @@ const TVBoard = {
             login_btn: 'Authenticate & Start',
             login_err: 'Invalid username or password.',
             page_indicator: 'Page {current} of {total}',
+            personnel_id: 'ID',
+            shift_on_duty: 'On Duty',
+            shift_presence_total: 'Active Duty:',
+            shift_incidents: 'Departures:',
+            shift_incidents_unit: 'x',
+            seen_just_now: 'Last seen: Just now',
+            not_seen_yet: 'Not detected yet today',
+            station_operator: 'Station Operator',
         }
     },
 
@@ -109,6 +125,33 @@ const TVBoard = {
             return String(num).replace(/\d/g, d => farsiDigits[parseInt(d, 10)]);
         }
         return String(num);
+    },
+
+    formatMinutes(mins) {
+        if (!mins || mins <= 0) {
+            return this._lang === 'fa' ? '۰ دقیقه' : '0m';
+        }
+        const h = Math.floor(mins / 60);
+        const m = Math.round(mins % 60);
+        if (this._lang === 'fa') {
+            if (h > 0 && m > 0) return `${this.toDigits(h)}س ${this.toDigits(m)}د`;
+            if (h > 0) return `${this.toDigits(h)} ساعت`;
+            return `${this.toDigits(m)} دقیقه`;
+        } else {
+            if (h > 0 && m > 0) return `${h}h ${m}m`;
+            if (h > 0) return `${h}h`;
+            return `${m}m`;
+        }
+    },
+
+    formatDurationHours(hours) {
+        if (!hours) return '';
+        const hVal = Number(hours);
+        const displayVal = (hVal % 1 === 0) ? hVal.toFixed(0) : hVal.toFixed(1);
+        if (this._lang === 'fa') {
+            return `${this.toDigits(displayVal)} ساعت`;
+        }
+        return `${displayVal}h`;
     },
 
     // ── Initialization ───────────────────────────────────────
@@ -440,19 +483,27 @@ const TVBoard = {
         const isOffline = person.status === 'camera_offline';
 
         let statusText = this.t('status_present');
-        let statusSub = person.last_seen_seconds_ago !== null 
-            ? this.t('seen_ago', { s: this.toDigits(Math.round(person.last_seen_seconds_ago)) })
-            : '';
+        let statusSub = '';
 
         if (isAbsent) {
             statusText = this.t('status_absent');
             statusSub = this.t('absent_for', { m: this.toDigits(person.current_absence_minutes || 1) });
         } else if (isOnBreak) {
             statusText = this.t('status_on_break');
-            statusSub = person.current_break_name || '';
+            statusSub = person.current_break_name || this.t('status_on_break');
         } else if (isOffline) {
             statusText = this.t('status_offline');
             statusSub = person.camera_name || '';
+        } else {
+            // Present
+            if (person.last_seen_seconds_ago !== null && person.last_seen_seconds_ago !== undefined) {
+                const s = Math.round(person.last_seen_seconds_ago);
+                statusSub = s < 5
+                    ? this.t('seen_just_now')
+                    : this.t('seen_ago', { s: this.toDigits(s) });
+            } else {
+                statusSub = this.t('not_seen_yet');
+            }
         }
 
         const avatarMarkup = person.avatar_url
@@ -462,6 +513,11 @@ const TVBoard = {
         const compliance = Math.round(person.shift_compliance_pct ?? 100);
         const compColor = compliance >= 90 ? 'var(--tv-emerald)' : (compliance >= 70 ? 'var(--tv-amber)' : 'var(--tv-rose)');
 
+        const presenceFormatted = this.formatMinutes(person.shift_presence_minutes || 0);
+        const absenceFormatted = this.formatMinutes(person.shift_absence_minutes || 0);
+        const durationFormatted = this.formatDurationHours(person.shift_duration_hours);
+        const incidentsCount = person.absence_count || 0;
+
         return `
             <div class="tv-card status-${person.status}">
                 <div class="tv-card-header">
@@ -470,11 +526,34 @@ const TVBoard = {
                         <div class="tv-status-badge-dot"></div>
                     </div>
                     <div class="tv-card-meta">
-                        <div class="tv-person-name" title="${person.person_name}">${person.person_name}</div>
-                        <div class="tv-person-role">${person.person_role || 'اپراتور ایستگاه'}</div>
-                        <div class="tv-zone-name" title="${person.zone_name}">
-                            📍 ${person.zone_name}
+                        <div class="tv-name-row">
+                            <span class="tv-person-name" title="${person.person_name}">${person.person_name}</span>
+                            ${person.person_id ? `<span class="tv-id-badge" title="${this.t('personnel_id')} ${person.person_id}">#${this.toDigits(person.person_id)}</span>` : ''}
                         </div>
+                        <div class="tv-role-row">
+                            <span class="tv-person-role">${person.person_role || this.t('station_operator')}</span>
+                        </div>
+                        <div class="tv-tags-row">
+                            <span class="tv-zone-name" title="${person.zone_name}">
+                                📍 ${person.zone_name}
+                            </span>
+                            ${person.camera_name ? `
+                                <span class="tv-camera-name" title="${person.camera_name}">
+                                    📹 ${person.camera_name}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tv-shift-strip">
+                    <div class="tv-shift-window">
+                        <span class="tv-shift-icon">⏱️</span>
+                        <span>${this.toDigits(person.shift_window_str || '--:--')}</span>
+                        ${durationFormatted ? `<span class="tv-shift-hours">(${durationFormatted})</span>` : ''}
+                    </div>
+                    <div class="tv-shift-state-tag ${person.is_in_free_time ? 'state-break' : (person.is_in_duty_hours ? 'state-duty' : 'state-off')}">
+                        ${person.is_in_free_time ? `☕ ${person.current_break_name || this.t('status_on_break')}` : (person.is_in_duty_hours ? `⚡ ${this.t('shift_on_duty')}` : `💤 ${this.t('status_off_duty')}`)}
                     </div>
                 </div>
 
@@ -487,11 +566,23 @@ const TVBoard = {
                 </div>
 
                 <div class="tv-card-footer">
-                    <div class="tv-stat-row">
-                        <span>${this.t('shift_absence_total')}</span>
-                        <span class="tv-stat-val" style="color: ${isAbsent ? '#fca5a5' : 'inherit'};">
-                            ${this.toDigits(person.shift_absence_str || '۰ دقیقه')}
-                        </span>
+                    <div class="tv-stats-grid">
+                        <div class="tv-stat-box" title="${this.t('shift_presence_total')}">
+                            <span class="tv-stat-box-label">${this.t('shift_presence_total')}</span>
+                            <span class="tv-stat-box-val val-presence">${presenceFormatted}</span>
+                        </div>
+                        <div class="tv-stat-box" title="${this.t('shift_absence_total')}">
+                            <span class="tv-stat-box-label">${this.t('shift_absence_total')}</span>
+                            <span class="tv-stat-box-val val-absence ${person.shift_absence_minutes > 0 ? 'alert' : ''}">${absenceFormatted}</span>
+                        </div>
+                        <div class="tv-stat-box" title="${this.t('shift_incidents')}">
+                            <span class="tv-stat-box-label">${this.t('shift_incidents')}</span>
+                            <span class="tv-stat-box-val val-incidents ${incidentsCount > 0 ? 'warning' : ''}">${this.toDigits(incidentsCount)} ${this.t('shift_incidents_unit')}</span>
+                        </div>
+                        <div class="tv-stat-box" title="${this.t('kpi_compliance')}">
+                            <span class="tv-stat-box-label">${this.t('kpi_compliance')}</span>
+                            <span class="tv-stat-box-val" style="color: ${compColor};">${this.toDigits(compliance)}%</span>
+                        </div>
                     </div>
                     <div class="tv-progress-track">
                         <div class="tv-progress-bar" style="width: ${compliance}%; background: ${compColor};"></div>

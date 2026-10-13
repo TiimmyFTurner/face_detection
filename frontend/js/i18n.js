@@ -123,6 +123,21 @@ const I18n = {
             time_window_24h: '۲۴ ساعت گذشته',
             time_window_7d: '۷ روز گذشته',
             time_window_custom: 'بازه دلخواه...',
+            custom_range_title: 'تعیین بازه زمانی دلخواه (به وقت محلی)',
+            quick_presets: 'میانبرهای سریع:',
+            preset_today_start: 'امروز (از ۰۰:۰۰)',
+            preset_yesterday: 'دیروز',
+            preset_past_24h: '۲۴ ساعت اخیر',
+            preset_work_shift: 'شیفت کاری (۰۸:۰۰ - ۱۶:۰۰)',
+            preset_past_7d: '۷ روز اخیر',
+            from_date_label: 'از تاریخ و ساعت:',
+            to_date_label: 'تا تاریخ و ساعت:',
+            shamsi_date: 'تاریخ شمسی',
+            time_hours_mins: 'ساعت',
+            btn_close_panel: 'بستن',
+            span_duration: 'طول بازه: {duration}',
+            go_to_today: 'امروز',
+            err_invalid_date_range: 'تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.',
             custom_start_time: 'از تاریخ و ساعت:',
             custom_end_time: 'تا تاریخ و ساعت:',
             btn_apply_filter: 'اعمال فیلتر',
@@ -857,6 +872,21 @@ const I18n = {
             time_window_24h: 'Past 24 Hours',
             time_window_7d: 'Past 7 Days',
             time_window_custom: 'Custom Window...',
+            custom_range_title: 'Custom Time Window (Local Time)',
+            quick_presets: 'Quick Presets:',
+            preset_today_start: 'Today (From 00:00)',
+            preset_yesterday: 'Yesterday',
+            preset_past_24h: 'Past 24 Hours',
+            preset_work_shift: 'Work Shift (08:00 - 16:00)',
+            preset_past_7d: 'Past 7 Days',
+            from_date_label: 'From Date & Time:',
+            to_date_label: 'To Date & Time:',
+            shamsi_date: 'Shamsi Date',
+            time_hours_mins: 'Time',
+            btn_close_panel: 'Close',
+            span_duration: 'Duration: {duration}',
+            go_to_today: 'Today',
+            err_invalid_date_range: 'Start time cannot be after end time.',
             custom_start_time: 'Start Time:',
             custom_end_time: 'End Time:',
             btn_apply_filter: 'Apply Filter',
@@ -1756,6 +1786,66 @@ const I18n = {
     },
 
     /**
+     * Accurate Jalali (Solar Hijri / Shamsi) to Gregorian calendar converter.
+     * @param {number} jy - Jalali year (e.g. 1405)
+     * @param {number} jm - Jalali month (1-12)
+     * @param {number} jd - Jalali day of month (1-31)
+     * @returns {{gy: number, gm: number, gd: number}}
+     */
+    jalaliToGregorian(jy, jm, jd) {
+        let gy = 0;
+        if (jy > 979) {
+            gy = 1600;
+            jy -= 979;
+        } else {
+            gy = 621;
+        }
+        let days = (365 * jy) + (Math.floor(jy / 33) * 8) + Math.floor(((jy % 33) + 3) / 4) + 78 + jd + ((jm < 7) ? ((jm - 1) * 31) : (((jm - 7) * 30) + 186));
+        gy += 400 * Math.floor(days / 146097);
+        days %= 146097;
+        if (days > 36524) {
+            days -= 1;
+            gy += 100 * Math.floor(days / 36524);
+            days %= 36524;
+            if (days >= 365) {
+                days += 1;
+            }
+        }
+        gy += 4 * Math.floor(days / 1461);
+        days %= 1461;
+        if (days > 365) {
+            gy += Math.floor((days - 1) / 365);
+            days = (days - 1) % 365;
+        }
+        let gd = days + 1;
+        const isLeap = ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0));
+        const sal_a = [0, 31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        let gm = 0;
+        while (gm < 13 && gd > sal_a[gm]) {
+            gd -= sal_a[gm];
+            gm += 1;
+        }
+        return { gy, gm, gd };
+    },
+
+    /**
+     * Number of days in a given Jalali month.
+     * @param {number} jy - Jalali year
+     * @param {number} jm - Jalali month (1-12)
+     * @returns {number} 29, 30, or 31
+     */
+    getJalaliDaysInMonth(jy, jm) {
+        if (jm >= 1 && jm <= 6) return 31;
+        if (jm >= 7 && jm <= 11) return 30;
+        if (jm === 12) {
+            const g = I18n.jalaliToGregorian(jy, 12, 30);
+            const j = I18n.gregorianToJalali(g.gy, g.gm, g.gd);
+            return j.jd === 30 ? 30 : 29;
+        }
+        return 30;
+    },
+
+    /**
      * Parse date/ISO string into local time and Shamsi (Jalali) components.
      */
     toJalali(dateOrIso) {
@@ -1963,11 +2053,73 @@ const I18n = {
     },
 
     /**
+     * Format time range nicely in Shamsi (Persian) format for badges/chips.
+     */
+    formatTimeRange(startIso, endIso) {
+        if (!startIso && !endIso) return I18n.t('time_window_all');
+        const sJ = startIso ? I18n.toJalali(startIso) : null;
+        const eJ = endIso ? I18n.toJalali(endIso) : null;
+        const isRtl = I18n.isRTL();
+        const pad = n => String(n).padStart(2, '0');
+
+        if (sJ && eJ) {
+            const sDate = `${sJ.jy}/${pad(sJ.jm)}/${pad(sJ.jd)}`;
+            const eDate = `${eJ.jy}/${pad(eJ.jm)}/${pad(eJ.jd)}`;
+            const sTime = `${pad(sJ.hours)}:${pad(sJ.minutes)}`;
+            const eTime = `${pad(eJ.hours)}:${pad(eJ.minutes)}`;
+
+            if (sDate === eDate) {
+                // Same day: show date once with start and end times
+                if (isRtl) {
+                    return `${I18n.toPersianDigits(sDate)} (${I18n.toPersianDigits(sTime)} تا ${I18n.toPersianDigits(eTime)})`;
+                } else {
+                    return `${sDate} (${sTime} - ${eTime})`;
+                }
+            } else {
+                if (isRtl) {
+                    return `${I18n.toPersianDigits(sDate)} ${I18n.toPersianDigits(sTime)} تا ${I18n.toPersianDigits(eDate)} ${I18n.toPersianDigits(eTime)}`;
+                } else {
+                    return `${sDate} ${sTime} → ${eDate} ${eTime}`;
+                }
+            }
+        } else if (sJ) {
+            const sDate = `${sJ.jy}/${pad(sJ.jm)}/${pad(sJ.jd)}`;
+            const sTime = `${pad(sJ.hours)}:${pad(sJ.minutes)}`;
+            if (isRtl) {
+                return `از ${I18n.toPersianDigits(sDate)} ${I18n.toPersianDigits(sTime)}`;
+            } else {
+                return `From ${sDate} ${sTime}`;
+            }
+        } else if (eJ) {
+            const eDate = `${eJ.jy}/${pad(eJ.jm)}/${pad(eJ.jd)}`;
+            const eTime = `${pad(eJ.hours)}:${pad(eJ.minutes)}`;
+            if (isRtl) {
+                return `تا ${I18n.toPersianDigits(eDate)} ${I18n.toPersianDigits(eTime)}`;
+            } else {
+                return `Until ${eDate} ${eTime}`;
+            }
+        }
+        return '—';
+    },
+
+    /**
      * Convert English digits to Persian digits.
      */
     toPersianDigits(str) {
         const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
         return String(str).replace(/\d/g, d => persianDigits[parseInt(d, 10)]);
+    },
+
+    /**
+     * Convert Persian and Arabic digits to English digits.
+     */
+    fromPersianDigits(str) {
+        if (!str) return '';
+        const map = {
+            '۰':'0', '۱':'1', '۲':'2', '۳':'3', '۴':'4', '۵':'5', '۶':'6', '۷':'7', '۸':'8', '۹':'9',
+            '٠':'0', '١':'1', '٢':'2', '٣':'3', '٤':'4', '٥':'5', '٦':'6', '٧':'7', '٨':'8', '٩':'9'
+        };
+        return String(str).replace(/[۰-۹٠-٩]/g, d => map[d] !== undefined ? map[d] : d);
     },
 
     /**

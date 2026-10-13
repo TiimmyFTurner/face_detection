@@ -10,6 +10,20 @@ const DashboardPage = {
     _timeWindow: 'all', // 'all' | '15m' | '1h' | 'today' | '24h' | '7d' | 'custom'
     _customStartTime: '',
     _customEndTime: '',
+    _customStartJy: null,
+    _customStartJm: null,
+    _customStartJd: null,
+    _customStartHour: 0,
+    _customStartMin: 0,
+    _customEndJy: null,
+    _customEndJm: null,
+    _customEndJd: null,
+    _customEndHour: 23,
+    _customEndMin: 59,
+    _activeCalendarTarget: null,
+    _calendarViewJy: null,
+    _calendarViewJm: null,
+    _popoverListenerAttached: false,
     _cameras: [],
     _searchTimeout: null,
     _events: [],
@@ -203,51 +217,54 @@ const DashboardPage = {
                         >✕</button>
                     </div>
 
-                    <!-- Camera Selector Dropdown -->
-                    <div style="display: flex; align-items: center; gap: 0.4rem;">
-                        <select 
-                            id="dashboard-camera-select" 
-                            class="dashboard-filter-select ${DashboardPage._selectedCameraId ? 'active-filter' : ''}" 
-                            onchange="DashboardPage.handleCameraChange(this.value)"
-                            title="${I18n.t('filter_camera_label')}"
-                        >
-                            <option value="">📹 ${I18n.t('filter_all_cameras')}</option>
-                        </select>
-                    </div>
+                    <!-- Filter Dropdowns & Status Group -->
+                    <div class="dashboard-filter-group">
+                        <!-- Camera Selector Dropdown -->
+                        <div class="filter-select-wrapper">
+                            <select 
+                                id="dashboard-camera-select" 
+                                class="dashboard-filter-select ${DashboardPage._selectedCameraId ? 'active-filter' : ''}" 
+                                onchange="DashboardPage.handleCameraChange(this.value)"
+                                title="${I18n.t('filter_camera_label')}"
+                            >
+                                <option value="">📹 ${I18n.t('filter_all_cameras')}</option>
+                            </select>
+                        </div>
 
-                    <!-- Time Window Preset Dropdown -->
-                    <div style="display: flex; align-items: center; gap: 0.4rem;">
-                        <select 
-                            id="dashboard-time-window-select" 
-                            class="dashboard-filter-select ${DashboardPage._timeWindow !== 'all' ? 'active-filter' : ''}" 
-                            onchange="DashboardPage.handleTimeWindowChange(this.value)"
-                            title="${I18n.t('filter_time_window')}"
-                        >
-                            <option value="all" ${DashboardPage._timeWindow === 'all' ? 'selected' : ''}>⏱️ ${I18n.t('time_window_all')}</option>
-                            <option value="15m" ${DashboardPage._timeWindow === '15m' ? 'selected' : ''}>⚡ ${I18n.t('time_window_15m')}</option>
-                            <option value="1h" ${DashboardPage._timeWindow === '1h' ? 'selected' : ''}>🕐 ${I18n.t('time_window_1h')}</option>
-                            <option value="today" ${DashboardPage._timeWindow === 'today' ? 'selected' : ''}>📅 ${I18n.t('time_window_today')}</option>
-                            <option value="24h" ${DashboardPage._timeWindow === '24h' ? 'selected' : ''}>⏳ ${I18n.t('time_window_24h')}</option>
-                            <option value="7d" ${DashboardPage._timeWindow === '7d' ? 'selected' : ''}>🗓️ ${I18n.t('time_window_7d')}</option>
-                            <option value="custom" ${DashboardPage._timeWindow === 'custom' ? 'selected' : ''}>⚙️ ${I18n.t('time_window_custom')}</option>
-                        </select>
-                    </div>
+                        <!-- Time Window Preset Dropdown -->
+                        <div class="filter-select-wrapper">
+                            <select 
+                                id="dashboard-time-window-select" 
+                                class="dashboard-filter-select ${DashboardPage._timeWindow !== 'all' ? 'active-filter' : ''}" 
+                                onchange="DashboardPage.handleTimeWindowChange(this.value)"
+                                title="${I18n.t('filter_time_window')}"
+                            >
+                                <option value="all" ${DashboardPage._timeWindow === 'all' ? 'selected' : ''}>⏱️ ${I18n.t('time_window_all')}</option>
+                                <option value="15m" ${DashboardPage._timeWindow === '15m' ? 'selected' : ''}>⚡ ${I18n.t('time_window_15m')}</option>
+                                <option value="1h" ${DashboardPage._timeWindow === '1h' ? 'selected' : ''}>🕐 ${I18n.t('time_window_1h')}</option>
+                                <option value="today" ${DashboardPage._timeWindow === 'today' ? 'selected' : ''}>📅 ${I18n.t('time_window_today')}</option>
+                                <option value="24h" ${DashboardPage._timeWindow === '24h' ? 'selected' : ''}>⏳ ${I18n.t('time_window_24h')}</option>
+                                <option value="7d" ${DashboardPage._timeWindow === '7d' ? 'selected' : ''}>🗓️ ${I18n.t('time_window_7d')}</option>
+                                <option value="custom" ${DashboardPage._timeWindow === 'custom' ? 'selected' : ''}>⚙️ ${I18n.t('time_window_custom')}</option>
+                            </select>
+                        </div>
 
-                    <!-- Known / Unknown Status Buttons -->
-                    <div class="filter-bar" id="filter-bar" style="margin-bottom: 0;">
-                        <button class="filter-btn ${DashboardPage._filter === 'all' ? 'active' : ''}" data-filter="all" onclick="DashboardPage.setFilter('all')">
-                            ${I18n.t('filter_all')}
-                        </button>
-                        <button class="filter-btn ${DashboardPage._filter === 'known' ? 'active' : ''}" data-filter="known" onclick="DashboardPage.setFilter('known')">
-                            ${I18n.t('filter_known')}
-                        </button>
-                        <button class="filter-btn ${DashboardPage._filter === 'unknown' ? 'active' : ''}" data-filter="unknown" onclick="DashboardPage.setFilter('unknown')">
-                            ${I18n.t('filter_unknown')}
-                        </button>
+                        <!-- Known / Unknown Status Buttons -->
+                        <div class="filter-bar" id="filter-bar" style="margin-bottom: 0;">
+                            <button class="filter-btn ${DashboardPage._filter === 'all' ? 'active' : ''}" data-filter="all" onclick="DashboardPage.setFilter('all')">
+                                ${I18n.t('filter_all')}
+                            </button>
+                            <button class="filter-btn ${DashboardPage._filter === 'known' ? 'active' : ''}" data-filter="known" onclick="DashboardPage.setFilter('known')">
+                                ${I18n.t('filter_known')}
+                            </button>
+                            <button class="filter-btn ${DashboardPage._filter === 'unknown' ? 'active' : ''}" data-filter="unknown" onclick="DashboardPage.setFilter('unknown')">
+                                ${I18n.t('filter_unknown')}
+                            </button>
+                        </div>
                     </div>
 
                     <!-- View Mode & Layout Toggles -->
-                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="dashboard-view-controls">
                         <div class="view-mode-toggle" style="display: flex; background: var(--bg-surface-hover); padding: 3px; border-radius: var(--radius-full); border: 1px solid var(--border-medium);">
                             <button class="filter-btn ${DashboardPage._viewMode === 'stream' ? 'active' : ''}" id="btn-mode-stream" onclick="DashboardPage.setViewMode('stream')">
                                 ${I18n.t('mode_stream')}
@@ -276,19 +293,72 @@ const DashboardPage = {
                     </div>
                 </div>
 
-                <!-- Custom Time Range Bar (Expandable) -->
-                <div class="custom-time-range-bar" id="custom-time-range-bar" style="display: ${DashboardPage._timeWindow === 'custom' ? 'flex' : 'none'};">
-                    <div class="custom-time-input-group">
-                        <span>📅 ${I18n.t('custom_start_time')}</span>
-                        <input type="datetime-local" id="filter-start-time" onchange="DashboardPage.applyCustomTimeRange()" />
+                <!-- Dedicated Shamsi Date & Time Range Panel -->
+                <div class="custom-shamsi-range-panel" id="custom-shamsi-range-panel" style="display: ${DashboardPage._timeWindow === 'custom' ? 'block' : 'none'};">
+                    <div class="shamsi-range-header">
+                        <div class="shamsi-range-title">
+                            <span class="range-clock-icon">⏱️</span>
+                            <span>${I18n.t('custom_range_title')}</span>
+                        </div>
+                        <div class="shamsi-presets-row">
+                            <span class="presets-label">${I18n.t('quick_presets')}</span>
+                            <button type="button" class="preset-pill-btn" onclick="DashboardPage.applyPresetShortcut('today_start')">⚡ ${I18n.t('preset_today_start')}</button>
+                            <button type="button" class="preset-pill-btn" onclick="DashboardPage.applyPresetShortcut('yesterday')">📅 ${I18n.t('preset_yesterday')}</button>
+                            <button type="button" class="preset-pill-btn" onclick="DashboardPage.applyPresetShortcut('past_24h')">⏳ ${I18n.t('preset_past_24h')}</button>
+                            <button type="button" class="preset-pill-btn" onclick="DashboardPage.applyPresetShortcut('work_shift')">👔 ${I18n.t('preset_work_shift')}</button>
+                            <button type="button" class="preset-pill-btn" onclick="DashboardPage.applyPresetShortcut('past_7d')">🗓️ ${I18n.t('preset_past_7d')}</button>
+                        </div>
                     </div>
-                    <div class="custom-time-input-group">
-                        <span>📅 ${I18n.t('custom_end_time')}</span>
-                        <input type="datetime-local" id="filter-end-time" onchange="DashboardPage.applyCustomTimeRange()" />
+
+                    <div class="shamsi-inputs-row">
+                        <!-- Start Datetime -->
+                        <div class="shamsi-datetime-card">
+                            <div class="card-tag start-tag">🟢 ${I18n.t('from_date_label')}</div>
+                            <div class="card-fields">
+                                <div class="shamsi-picker-trigger" id="shamsi-trigger-start" onclick="DashboardPage.toggleCalendar('start')">
+                                    <span class="calendar-icon">📅</span>
+                                    <span class="shamsi-display-text" id="start-shamsi-display">—</span>
+                                    <span class="dropdown-chevron">▼</span>
+                                </div>
+                                <div class="shamsi-time-field">
+                                    <span class="time-icon">🕐</span>
+                                    <input type="text" id="start-time-input" class="time-input-styled" maxlength="5" placeholder="00:00" onchange="DashboardPage.handleTimeInput('start', this.value)" />
+                                </div>
+                            </div>
+                            <div class="shamsi-calendar-popover" id="calendar-popover-start" style="display: none;"></div>
+                        </div>
+
+                        <div class="range-arrow-divider">${isRtl ? '←' : '→'}</div>
+
+                        <!-- End Datetime -->
+                        <div class="shamsi-datetime-card">
+                            <div class="card-tag end-tag">🔴 ${I18n.t('to_date_label')}</div>
+                            <div class="card-fields">
+                                <div class="shamsi-picker-trigger" id="shamsi-trigger-end" onclick="DashboardPage.toggleCalendar('end')">
+                                    <span class="calendar-icon">📅</span>
+                                    <span class="shamsi-display-text" id="end-shamsi-display">—</span>
+                                    <span class="dropdown-chevron">▼</span>
+                                </div>
+                                <div class="shamsi-time-field">
+                                    <span class="time-icon">🕐</span>
+                                    <input type="text" id="end-time-input" class="time-input-styled" maxlength="5" placeholder="23:59" onchange="DashboardPage.handleTimeInput('end', this.value)" />
+                                </div>
+                            </div>
+                            <div class="shamsi-calendar-popover" id="calendar-popover-end" style="display: none;"></div>
+                        </div>
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="DashboardPage.applyCustomTimeRange()">
-                        ${I18n.t('btn_apply_filter')}
-                    </button>
+
+                    <div class="shamsi-range-footer">
+                        <div class="range-summary-text" id="shamsi-range-summary"></div>
+                        <div class="range-actions-btns">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="DashboardPage.closeCustomPanel()">
+                                ${I18n.t('btn_close_panel')}
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm btn-apply-shamsi" onclick="DashboardPage.applyCustomShamsiRange()">
+                                ✓ ${I18n.t('btn_apply_filter')}
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Active Filters & Summary Strip -->
@@ -314,6 +384,20 @@ const DashboardPage = {
                 <div id="events-pagination"></div>
             </div>
         `;
+
+        // Attach outside click listener for calendar popovers if not already attached
+        if (!DashboardPage._popoverListenerAttached) {
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.shamsi-datetime-card')) {
+                    DashboardPage.closeAllCalendarPopovers();
+                }
+            });
+            DashboardPage._popoverListenerAttached = true;
+        }
+
+        if (DashboardPage._timeWindow === 'custom') {
+            DashboardPage.initCustomShamsiState();
+        }
 
         // Load data in parallel
         await Promise.all([
@@ -402,33 +486,24 @@ const DashboardPage = {
     /**
      * Handle time window preset selection change.
      */
+    /**
+     * Handle time window preset selection change.
+     */
     handleTimeWindowChange(val) {
         DashboardPage._timeWindow = val || 'all';
-        const customPanel = document.getElementById('custom-time-range-bar');
+        const panel = document.getElementById('custom-shamsi-range-panel');
         const sel = document.getElementById('dashboard-time-window-select');
         if (sel) {
             sel.classList.toggle('active-filter', DashboardPage._timeWindow !== 'all');
         }
 
         if (DashboardPage._timeWindow === 'custom') {
-            if (customPanel) customPanel.style.display = 'flex';
-            const startInput = document.getElementById('filter-start-time');
-            const endInput = document.getElementById('filter-end-time');
-            if (startInput && !startInput.value) {
-                const d = new Date();
-                d.setHours(0, 0, 0, 0);
-                startInput.value = DashboardPage.formatDatetimeLocal(d);
-                DashboardPage._customStartTime = d.toISOString();
-            }
-            if (endInput && !endInput.value) {
-                const now = new Date();
-                endInput.value = DashboardPage.formatDatetimeLocal(now);
-                DashboardPage._customEndTime = now.toISOString();
-            }
-            DashboardPage._eventPage = 1;
-            DashboardPage.loadEvents(1);
+            if (panel) panel.style.display = 'block';
+            DashboardPage.initCustomShamsiState();
+            DashboardPage._syncShamsiInputsAndDates(true);
         } else {
-            if (customPanel) customPanel.style.display = 'none';
+            if (panel) panel.style.display = 'none';
+            DashboardPage.closeAllCalendarPopovers();
             DashboardPage._customStartTime = '';
             DashboardPage._customEndTime = '';
             DashboardPage._eventPage = 1;
@@ -437,23 +512,398 @@ const DashboardPage = {
     },
 
     /**
-     * Apply custom start/end time range.
+     * Open the custom time range panel (e.g. from clicking the filter chip).
      */
-    applyCustomTimeRange() {
-        const startInput = document.getElementById('filter-start-time');
-        const endInput = document.getElementById('filter-end-time');
-        if (startInput && startInput.value) {
-            DashboardPage._customStartTime = new Date(startInput.value).toISOString();
-        } else {
-            DashboardPage._customStartTime = '';
+    openCustomPanel() {
+        DashboardPage._timeWindow = 'custom';
+        const sel = document.getElementById('dashboard-time-window-select');
+        if (sel) {
+            sel.value = 'custom';
+            sel.classList.add('active-filter');
         }
-        if (endInput && endInput.value) {
-            DashboardPage._customEndTime = new Date(endInput.value).toISOString();
-        } else {
-            DashboardPage._customEndTime = '';
+        const panel = document.getElementById('custom-shamsi-range-panel');
+        if (panel) {
+            panel.style.display = 'block';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-        DashboardPage._eventPage = 1;
-        DashboardPage.loadEvents(1);
+        DashboardPage.initCustomShamsiState();
+        DashboardPage._syncShamsiInputsAndDates(false);
+    },
+
+    /**
+     * Close custom time range panel.
+     */
+    closeCustomPanel() {
+        const panel = document.getElementById('custom-shamsi-range-panel');
+        if (panel) panel.style.display = 'none';
+        DashboardPage.closeAllCalendarPopovers();
+    },
+
+    /**
+     * Initialize default Shamsi date/time range state (Today from 00:00 to now).
+     */
+    initCustomShamsiState() {
+        const now = new Date();
+        const nowJ = I18n.toJalali(now);
+        if (!nowJ) return;
+
+        if (DashboardPage._customStartJy === null) {
+            DashboardPage._customStartJy = nowJ.jy;
+            DashboardPage._customStartJm = nowJ.jm;
+            DashboardPage._customStartJd = nowJ.jd;
+            DashboardPage._customStartHour = 0;
+            DashboardPage._customStartMin = 0;
+        }
+
+        if (DashboardPage._customEndJy === null) {
+            DashboardPage._customEndJy = nowJ.jy;
+            DashboardPage._customEndJm = nowJ.jm;
+            DashboardPage._customEndJd = nowJ.jd;
+            DashboardPage._customEndHour = nowJ.hours;
+            DashboardPage._customEndMin = nowJ.minutes;
+        }
+
+        DashboardPage._syncShamsiInputsAndDates(false);
+    },
+
+    /**
+     * Apply quick preset shortcut to the custom Shamsi time range.
+     */
+    applyPresetShortcut(preset) {
+        const now = new Date();
+        const nowJ = I18n.toJalali(now);
+        if (!nowJ) return;
+
+        if (preset === 'today_start') {
+            DashboardPage._customStartJy = nowJ.jy;
+            DashboardPage._customStartJm = nowJ.jm;
+            DashboardPage._customStartJd = nowJ.jd;
+            DashboardPage._customStartHour = 0;
+            DashboardPage._customStartMin = 0;
+
+            DashboardPage._customEndJy = nowJ.jy;
+            DashboardPage._customEndJm = nowJ.jm;
+            DashboardPage._customEndJd = nowJ.jd;
+            DashboardPage._customEndHour = nowJ.hours;
+            DashboardPage._customEndMin = nowJ.minutes;
+        } else if (preset === 'yesterday') {
+            const yesterday = new Date(Date.now() - 24 * 3600 * 1000);
+            const yJ = I18n.toJalali(yesterday);
+            if (yJ) {
+                DashboardPage._customStartJy = yJ.jy;
+                DashboardPage._customStartJm = yJ.jm;
+                DashboardPage._customStartJd = yJ.jd;
+                DashboardPage._customStartHour = 0;
+                DashboardPage._customStartMin = 0;
+
+                DashboardPage._customEndJy = yJ.jy;
+                DashboardPage._customEndJm = yJ.jm;
+                DashboardPage._customEndJd = yJ.jd;
+                DashboardPage._customEndHour = 23;
+                DashboardPage._customEndMin = 59;
+            }
+        } else if (preset === 'past_24h') {
+            const past24 = new Date(Date.now() - 24 * 3600 * 1000);
+            const pJ = I18n.toJalali(past24);
+            if (pJ) {
+                DashboardPage._customStartJy = pJ.jy;
+                DashboardPage._customStartJm = pJ.jm;
+                DashboardPage._customStartJd = pJ.jd;
+                DashboardPage._customStartHour = pJ.hours;
+                DashboardPage._customStartMin = pJ.minutes;
+
+                DashboardPage._customEndJy = nowJ.jy;
+                DashboardPage._customEndJm = nowJ.jm;
+                DashboardPage._customEndJd = nowJ.jd;
+                DashboardPage._customEndHour = nowJ.hours;
+                DashboardPage._customEndMin = nowJ.minutes;
+            }
+        } else if (preset === 'work_shift') {
+            DashboardPage._customStartJy = nowJ.jy;
+            DashboardPage._customStartJm = nowJ.jm;
+            DashboardPage._customStartJd = nowJ.jd;
+            DashboardPage._customStartHour = 8;
+            DashboardPage._customStartMin = 0;
+
+            DashboardPage._customEndJy = nowJ.jy;
+            DashboardPage._customEndJm = nowJ.jm;
+            DashboardPage._customEndJd = nowJ.jd;
+            DashboardPage._customEndHour = 16;
+            DashboardPage._customEndMin = 0;
+        } else if (preset === 'past_7d') {
+            const past7 = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+            const pJ = I18n.toJalali(past7);
+            if (pJ) {
+                DashboardPage._customStartJy = pJ.jy;
+                DashboardPage._customStartJm = pJ.jm;
+                DashboardPage._customStartJd = pJ.jd;
+                DashboardPage._customStartHour = 0;
+                DashboardPage._customStartMin = 0;
+
+                DashboardPage._customEndJy = nowJ.jy;
+                DashboardPage._customEndJm = nowJ.jm;
+                DashboardPage._customEndJd = nowJ.jd;
+                DashboardPage._customEndHour = nowJ.hours;
+                DashboardPage._customEndMin = nowJ.minutes;
+            }
+        }
+
+        DashboardPage.closeAllCalendarPopovers();
+        DashboardPage._syncShamsiInputsAndDates(true);
+    },
+
+    /**
+     * Compute ISO strings from Shamsi values and update UI fields.
+     */
+    _syncShamsiInputsAndDates(triggerSearch = true) {
+        if (DashboardPage._customStartJy === null || DashboardPage._customEndJy === null) return;
+
+        const pad = n => String(n).padStart(2, '0');
+        const isRtl = I18n.isRTL();
+
+        // Start Date & Time
+        const gStart = I18n.jalaliToGregorian(DashboardPage._customStartJy, DashboardPage._customStartJm, DashboardPage._customStartJd);
+        const startDate = new Date(gStart.gy, gStart.gm - 1, gStart.gd, DashboardPage._customStartHour, DashboardPage._customStartMin, 0, 0);
+        DashboardPage._customStartTime = startDate.toISOString();
+
+        // End Date & Time
+        const gEnd = I18n.jalaliToGregorian(DashboardPage._customEndJy, DashboardPage._customEndJm, DashboardPage._customEndJd);
+        const endDate = new Date(gEnd.gy, gEnd.gm - 1, gEnd.gd, DashboardPage._customEndHour, DashboardPage._customEndMin, 0, 0);
+        DashboardPage._customEndTime = endDate.toISOString();
+
+        // Update displays in DOM
+        const startDisp = document.getElementById('start-shamsi-display');
+        if (startDisp) {
+            const sText = `${DashboardPage._customStartJy}/${pad(DashboardPage._customStartJm)}/${pad(DashboardPage._customStartJd)}`;
+            startDisp.textContent = isRtl ? I18n.toPersianDigits(sText) : sText;
+        }
+
+        const startTimeInp = document.getElementById('start-time-input');
+        if (startTimeInp) {
+            startTimeInp.value = `${pad(DashboardPage._customStartHour)}:${pad(DashboardPage._customStartMin)}`;
+        }
+
+        const endDisp = document.getElementById('end-shamsi-display');
+        if (endDisp) {
+            const eText = `${DashboardPage._customEndJy}/${pad(DashboardPage._customEndJm)}/${pad(DashboardPage._customEndJd)}`;
+            endDisp.textContent = isRtl ? I18n.toPersianDigits(eText) : eText;
+        }
+
+        const endTimeInp = document.getElementById('end-time-input');
+        if (endTimeInp) {
+            endTimeInp.value = `${pad(DashboardPage._customEndHour)}:${pad(DashboardPage._customEndMin)}`;
+        }
+
+        // Update span summary
+        const summaryEl = document.getElementById('shamsi-range-summary');
+        if (summaryEl) {
+            const diffMs = endDate.getTime() - startDate.getTime();
+            if (diffMs < 0) {
+                summaryEl.innerHTML = `<span style="color: #fb7185;">⚠️ ${I18n.t('err_invalid_date_range')}</span>`;
+            } else {
+                const totalSec = Math.floor(diffMs / 1000);
+                const durStr = I18n.formatDuration(totalSec);
+                summaryEl.textContent = I18n.t('span_duration', { duration: durStr });
+            }
+        }
+
+        if (triggerSearch) {
+            DashboardPage._eventPage = 1;
+            DashboardPage.loadEvents(1);
+        }
+    },
+
+    /**
+     * Apply Shamsi date/time range filter button handler.
+     */
+    applyCustomShamsiRange() {
+        DashboardPage.closeAllCalendarPopovers();
+        DashboardPage._syncShamsiInputsAndDates(true);
+    },
+
+    /**
+     * Handle manual time input changes (00:00 to 23:59).
+     */
+    handleTimeInput(target, val) {
+        if (!val) return;
+        const cleanVal = I18n.fromPersianDigits(String(val)).trim();
+        const match = /^(\d{1,2})[:.]?(\d{1,2})?$/.exec(cleanVal);
+        let h = 0, m = 0;
+        if (match) {
+            h = Math.min(23, Math.max(0, parseInt(match[1], 10) || 0));
+            m = Math.min(59, Math.max(0, parseInt(match[2] || '0', 10) || 0));
+        }
+
+        if (target === 'start') {
+            DashboardPage._customStartHour = h;
+            DashboardPage._customStartMin = m;
+        } else {
+            DashboardPage._customEndHour = h;
+            DashboardPage._customEndMin = m;
+        }
+
+        DashboardPage._syncShamsiInputsAndDates(true);
+    },
+
+    /**
+     * Toggle interactive Shamsi mini-calendar popover.
+     */
+    toggleCalendar(target) {
+        if (DashboardPage._activeCalendarTarget === target) {
+            DashboardPage.closeAllCalendarPopovers();
+            return;
+        }
+
+        DashboardPage.closeAllCalendarPopovers();
+        DashboardPage._activeCalendarTarget = target;
+
+        if (target === 'start') {
+            DashboardPage._calendarViewJy = DashboardPage._customStartJy || 1405;
+            DashboardPage._calendarViewJm = DashboardPage._customStartJm || 1;
+        } else {
+            DashboardPage._calendarViewJy = DashboardPage._customEndJy || 1405;
+            DashboardPage._calendarViewJm = DashboardPage._customEndJm || 1;
+        }
+
+        DashboardPage.renderCalendarPopover(target);
+    },
+
+    /**
+     * Close all active calendar popovers.
+     */
+    closeAllCalendarPopovers() {
+        const popStart = document.getElementById('calendar-popover-start');
+        const popEnd = document.getElementById('calendar-popover-end');
+        if (popStart) popStart.style.display = 'none';
+        if (popEnd) popEnd.style.display = 'none';
+        DashboardPage._activeCalendarTarget = null;
+    },
+
+    /**
+     * Change calendar view month (next/previous).
+     */
+    changeCalendarMonth(delta) {
+        if (!DashboardPage._activeCalendarTarget) return;
+        DashboardPage._calendarViewJm += delta;
+        if (DashboardPage._calendarViewJm > 12) {
+            DashboardPage._calendarViewJm = 1;
+            DashboardPage._calendarViewJy += 1;
+        } else if (DashboardPage._calendarViewJm < 1) {
+            DashboardPage._calendarViewJm = 12;
+            DashboardPage._calendarViewJy -= 1;
+        }
+        DashboardPage.renderCalendarPopover(DashboardPage._activeCalendarTarget);
+    },
+
+    /**
+     * Jump calendar view to today.
+     */
+    goToCalendarToday() {
+        if (!DashboardPage._activeCalendarTarget) return;
+        const nowJ = I18n.toJalali(new Date());
+        if (nowJ) {
+            DashboardPage._calendarViewJy = nowJ.jy;
+            DashboardPage._calendarViewJm = nowJ.jm;
+            DashboardPage.renderCalendarPopover(DashboardPage._activeCalendarTarget);
+        }
+    },
+
+    /**
+     * Select a specific day from the calendar grid.
+     */
+    selectCalendarDay(target, jy, jm, jd) {
+        if (target === 'start') {
+            DashboardPage._customStartJy = jy;
+            DashboardPage._customStartJm = jm;
+            DashboardPage._customStartJd = jd;
+        } else {
+            DashboardPage._customEndJy = jy;
+            DashboardPage._customEndJm = jm;
+            DashboardPage._customEndJd = jd;
+        }
+
+        DashboardPage.closeAllCalendarPopovers();
+        DashboardPage._syncShamsiInputsAndDates(true);
+    },
+
+    /**
+     * Render the Shamsi calendar popover HTML.
+     */
+    renderCalendarPopover(target) {
+        const popoverEl = document.getElementById(`calendar-popover-${target}`);
+        if (!popoverEl) return;
+
+        const isRtl = I18n.isRTL();
+        const viewJy = DashboardPage._calendarViewJy;
+        const viewJm = DashboardPage._calendarViewJm;
+
+        const monthName = isRtl
+            ? (I18n._shamsiMonthsFa[viewJm - 1] || '')
+            : (I18n._shamsiMonthsEn[viewJm - 1] || '');
+        const yearDisp = isRtl ? I18n.toPersianDigits(viewJy) : viewJy;
+
+        const selJy = (target === 'start') ? DashboardPage._customStartJy : DashboardPage._customEndJy;
+        const selJm = (target === 'start') ? DashboardPage._customStartJm : DashboardPage._customEndJm;
+        const selJd = (target === 'start') ? DashboardPage._customStartJd : DashboardPage._customEndJd;
+
+        const nowJ = I18n.toJalali(new Date());
+
+        // Calculate starting weekday for day 1 of (viewJy, viewJm)
+        const gFirst = I18n.jalaliToGregorian(viewJy, viewJm, 1);
+        const dFirst = new Date(gFirst.gy, gFirst.gm - 1, gFirst.gd);
+        const startCol = (dFirst.getDay() + 1) % 7; // 0 = Shanbeh (Sat), 6 = Jomeh (Fri)
+        const totalDays = I18n.getJalaliDaysInMonth(viewJy, viewJm);
+
+        const weekdays = isRtl
+            ? ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
+            : ['Sa', 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr'];
+
+        let cellsHtml = '';
+        // Empty offset slots
+        for (let i = 0; i < startCol; i++) {
+            cellsHtml += '<div class="cal-day-cell empty"></div>';
+        }
+
+        // Days of month
+        for (let d = 1; d <= totalDays; d++) {
+            const isSelected = (selJy === viewJy && selJm === viewJm && selJd === d);
+            const isToday = nowJ && (nowJ.jy === viewJy && nowJ.jm === viewJm && nowJ.jd === d);
+            const isFriday = ((startCol + d - 1) % 7 === 6);
+            const dayNum = isRtl ? I18n.toPersianDigits(d) : d;
+
+            cellsHtml += `
+                <button 
+                    type="button" 
+                    class="cal-day-cell ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isFriday ? 'friday' : ''}" 
+                    onclick="event.stopPropagation(); DashboardPage.selectCalendarDay('${target}', ${viewJy}, ${viewJm}, ${d});"
+                >
+                    ${dayNum}
+                </button>
+            `;
+        }
+
+        popoverEl.innerHTML = `
+            <div class="cal-header">
+                <button type="button" class="cal-nav-btn" onclick="event.stopPropagation(); DashboardPage.changeCalendarMonth(${isRtl ? '1' : '-1'});" title="ماه قبل">
+                    ${isRtl ? '▶' : '◀'}
+                </button>
+                <div class="cal-title">${monthName} ${yearDisp}</div>
+                <button type="button" class="cal-today-btn" onclick="event.stopPropagation(); DashboardPage.goToCalendarToday();">
+                    ${I18n.t('go_to_today')}
+                </button>
+                <button type="button" class="cal-nav-btn" onclick="event.stopPropagation(); DashboardPage.changeCalendarMonth(${isRtl ? '-1' : '1'});" title="ماه بعد">
+                    ${isRtl ? '◀' : '▶'}
+                </button>
+            </div>
+            <div class="cal-weekdays">
+                ${weekdays.map((w, idx) => `<div class="cal-weekday ${idx === 6 ? 'friday' : ''}">${w}</div>`).join('')}
+            </div>
+            <div class="cal-days-grid">
+                ${cellsHtml}
+            </div>
+        `;
+
+        popoverEl.style.display = 'block';
     },
 
     /**
@@ -484,8 +934,9 @@ const DashboardPage = {
             timeSelect.classList.remove('active-filter');
         }
 
-        const customPanel = document.getElementById('custom-time-range-bar');
+        const customPanel = document.getElementById('custom-shamsi-range-panel');
         if (customPanel) customPanel.style.display = 'none';
+        DashboardPage.closeAllCalendarPopovers();
 
         document.querySelectorAll('#filter-bar .filter-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.filter === 'all');
@@ -562,18 +1013,12 @@ const DashboardPage = {
             else if (DashboardPage._timeWindow === '24h') label = I18n.t('time_window_24h');
             else if (DashboardPage._timeWindow === '7d') label = I18n.t('time_window_7d');
             else if (DashboardPage._timeWindow === 'custom') {
-                if (DashboardPage._customStartTime || DashboardPage._customEndTime) {
-                    const s = DashboardPage._customStartTime ? I18n.formatDateNumeric(DashboardPage._customStartTime) : '...';
-                    const e = DashboardPage._customEndTime ? I18n.formatDateNumeric(DashboardPage._customEndTime) : '...';
-                    label = `${s} → ${e}`;
-                } else {
-                    label = I18n.t('time_window_custom');
-                }
+                label = I18n.formatTimeRange(DashboardPage._customStartTime, DashboardPage._customEndTime);
             }
             chips.push(`
-                <span class="filter-chip">
+                <span class="filter-chip" ${DashboardPage._timeWindow === 'custom' ? 'onclick="DashboardPage.openCustomPanel()"' : ''} style="${DashboardPage._timeWindow === 'custom' ? 'cursor: pointer;' : ''}">
                     <span>⏱️ ${I18n.t('filter_badge_time', { window: label })}</span>
-                    <span class="filter-chip-remove" onclick="DashboardPage.removeFilter('time')" title="${I18n.t('delete')}">✕</span>
+                    <span class="filter-chip-remove" onclick="event.stopPropagation(); DashboardPage.removeFilter('time')" title="${I18n.t('delete')}">✕</span>
                 </span>
             `);
         }

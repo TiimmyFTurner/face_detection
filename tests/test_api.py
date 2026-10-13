@@ -260,6 +260,120 @@ async def test_grouped_events(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_events_search_and_time_filters(client: AsyncClient):
+    from datetime import datetime, timezone, timedelta
+    from backend.models import Camera, Event
+
+    now = datetime.now(timezone.utc)
+    t_2h_ago = now - timedelta(hours=2)
+    t_1h_ago = now - timedelta(hours=1)
+    t_10m_ago = now - timedelta(minutes=10)
+
+    async with test_session() as session:
+        cam1 = Camera(name="Front Gate Cam", rtsp_url="rtsp://localhost/cam1", location="Entrance", is_active=False)
+        cam2 = Camera(name="Warehouse Cam", rtsp_url="rtsp://localhost/cam2", location="Storage", is_active=False)
+        session.add_all([cam1, cam2])
+        await session.commit()
+        await session.refresh(cam1)
+        await session.refresh(cam2)
+
+        ev1 = Event(
+            camera_id=cam1.id,
+            person_name="Alice Smith",
+            is_known=True,
+            confidence_score=0.95,
+            snapshot_path="alice.jpg",
+            timestamp=t_2h_ago,
+        )
+        ev2 = Event(
+            camera_id=cam2.id,
+            person_name="Bob Jones",
+            is_known=True,
+            confidence_score=0.88,
+            snapshot_path="bob.jpg",
+            timestamp=t_1h_ago,
+        )
+        ev3 = Event(
+            camera_id=cam1.id,
+            person_name="Charlie Brown",
+            is_known=False,
+            confidence_score=0.45,
+            snapshot_path="charlie.jpg",
+            timestamp=t_10m_ago,
+        )
+        session.add_all([ev1, ev2, ev3])
+        await session.commit()
+        cam1_id, cam2_id = cam1.id, cam2.id
+
+    # 1. Search by person name
+    res = await client.get("/api/events?search=Alice")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["person_name"] == "Alice Smith"
+
+    # 2. Search by camera name (e.g. Warehouse)
+    res = await client.get("/api/events?search=Warehouse")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["person_name"] == "Bob Jones"
+    assert data["events"][0]["camera_id"] == cam2_id
+
+    # 3. Search by camera location (Entrance)
+    res = await client.get("/api/events?search=Entrance")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    names = {e["person_name"] for e in data["events"]}
+    assert names == {"Alice Smith", "Charlie Brown"}
+
+    # 4. Filter by specific camera_id
+    res = await client.get(f"/api/events?camera_id={cam2_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["person_name"] == "Bob Jones"
+
+    # 5. Filter by time window (past 30 mins)
+    t_30m_ago_iso = (now - timedelta(minutes=30)).isoformat()
+    now_iso = now.isoformat()
+    res = await client.get(f"/api/events?start_time={t_30m_ago_iso}&end_time={now_iso}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["person_name"] == "Charlie Brown"
+
+    # 6. Combined filter: camera1 + is_known=true
+    res = await client.get(f"/api/events?camera_id={cam1_id}&is_known=true")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["person_name"] == "Alice Smith"
+
+    # 7. Grouped events with search filter
+    res = await client.get("/api/events/grouped?search=Alice")
+    assert res.status_code == 200
+    groups = res.json()
+    assert len(groups) == 1
+    assert groups[0]["person_name"] == "Alice Smith"
+
+    # 8. Grouped events with camera filter
+    res = await client.get(f"/api/events/grouped?camera_id={cam2_id}")
+    assert res.status_code == 200
+    groups = res.json()
+    assert len(groups) == 1
+    assert groups[0]["person_name"] == "Bob Jones"
+
+    # 9. Grouped events with time window filter
+    res = await client.get(f"/api/events/grouped?start_time={t_30m_ago_iso}")
+    assert res.status_code == 200
+    groups = res.json()
+    assert len(groups) == 1
+    assert groups[0]["person_name"] == "Charlie Brown"
+
+
+@pytest.mark.asyncio
 async def test_delete_nonexistent_event(client: AsyncClient):
     response = await client.delete("/api/events/999999")
     assert response.status_code == 404

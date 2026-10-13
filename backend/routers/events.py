@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission
@@ -24,26 +24,42 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/events", tags=["events"])
 
 
-@router.get("", response_model=EventListResponse)
-async def list_events(
-    camera_id: Optional[int] = Query(None, description="Filter by camera ID"),
-    person_id: Optional[int] = Query(None, description="Filter by person ID"),
-    person_name: Optional[str] = Query(None, description="Filter by person name (partial match)"),
-    is_known: Optional[bool] = Query(None, description="Filter known (true) or unknown (false)"),
-    start_time: Optional[datetime] = Query(None, description="Start of time range (ISO 8601)"),
-    end_time: Optional[datetime] = Query(None, description="End of time range (ISO 8601)"),
-    limit: int = Query(50, ge=1, le=200, description="Max events to return"),
-    offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("dashboard:view")),
-):
-    """
-    List detection events with optional filtering.
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    """Parse ISO 8601 string safely into a timezone-aware UTC datetime."""
+    if not value:
+        return None
+    v = str(value).strip()
+    if not v:
+        return None
 
-    Supports filtering by camera, person ID, person name, known/unknown status, and time range.
-    Results are ordered newest-first with pagination.
-    """
-    # Build query with filters
+    # Handle Starlette URL decoding '+' as space in query parameters
+    if " " in v and "+" not in v:
+        parts = v.split(" ")
+        if len(parts) == 2 and (":" in parts[1] or len(parts[1]) == 5):
+            v = parts[0] + "+" + parts[1]
+    if v.endswith("Z") or v.endswith("z"):
+        v = v[:-1] + "+00:00"
+
+    try:
+        dt = datetime.fromisoformat(v)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc)
+        return dt
+    except Exception as err:
+        logger.warning("Failed to parse datetime query parameter '%s': %s", value, err)
+        return None
+
+
+def _build_event_filter_conditions(
+    camera_id: Optional[int] = None,
+    person_id: Optional[int] = None,
+    person_name: Optional[str] = None,
+    search: Optional[str] = None,
+    is_known: Optional[bool] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+) -> list:
+    """Build reusable SQLAlchemy filter conditions for event queries."""
     conditions = []
 
     if camera_id is not None:
@@ -52,12 +68,64 @@ async def list_events(
         conditions.append(Event.person_id == person_id)
     if is_known is not None:
         conditions.append(Event.is_known == is_known)
-    if person_name is not None:
-        conditions.append(Event.person_name.ilike(f"%{person_name}%"))
-    if start_time is not None:
-        conditions.append(Event.timestamp >= start_time)
-    if end_time is not None:
-        conditions.append(Event.timestamp <= end_time)
+    if person_name is not None and person_name.strip():
+        conditions.append(Event.person_name.ilike(f"%{person_name.strip()}%"))
+    if search is not None and search.strip():
+        search_term = f"%{search.strip()}%"
+        cam_subquery = select(Camera.id).where(
+            or_(
+                Camera.name.ilike(search_term),
+                Camera.location.ilike(search_term),
+            )
+        )
+        conditions.append(
+            or_(
+                Event.person_name.ilike(search_term),
+                Event.camera_id.in_(cam_subquery),
+            )
+        )
+
+    parsed_start = _parse_iso_datetime(start_time)
+    if parsed_start is not None:
+        conditions.append(Event.timestamp >= parsed_start)
+
+    parsed_end = _parse_iso_datetime(end_time)
+    if parsed_end is not None:
+        conditions.append(Event.timestamp <= parsed_end)
+
+    return conditions
+
+
+@router.get("", response_model=EventListResponse)
+async def list_events(
+    camera_id: Optional[int] = Query(None, description="Filter by camera ID"),
+    person_id: Optional[int] = Query(None, description="Filter by person ID"),
+    person_name: Optional[str] = Query(None, description="Filter by person name (partial match)"),
+    search: Optional[str] = Query(None, description="Search by person name or camera name (partial match)"),
+    is_known: Optional[bool] = Query(None, description="Filter known (true) or unknown (false)"),
+    start_time: Optional[str] = Query(None, description="Start of time range (ISO 8601)"),
+    end_time: Optional[str] = Query(None, description="End of time range (ISO 8601)"),
+    limit: int = Query(50, ge=1, le=200, description="Max events to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("dashboard:view")),
+):
+    """
+    List detection events with optional filtering.
+
+    Supports filtering by camera, person ID, person name, search term, known/unknown status, and time range.
+    Results are ordered newest-first with pagination.
+    """
+    # Build query with filters
+    conditions = _build_event_filter_conditions(
+        camera_id=camera_id,
+        person_id=person_id,
+        person_name=person_name,
+        search=search,
+        is_known=is_known,
+        start_time=start_time,
+        end_time=end_time,
+    )
 
     where_clause = and_(*conditions) if conditions else True
 
@@ -171,7 +239,13 @@ async def get_event_stats(
 
 @router.get("/grouped")
 async def get_grouped_events(
+    camera_id: Optional[int] = Query(None, description="Filter by camera ID"),
+    person_id: Optional[int] = Query(None, description="Filter by person ID"),
+    person_name: Optional[str] = Query(None, description="Filter by person name (partial match)"),
+    search: Optional[str] = Query(None, description="Search by person name or camera name (partial match)"),
     is_known: Optional[bool] = Query(None, description="Filter known/unknown events"),
+    start_time: Optional[str] = Query(None, description="Start of time range (ISO 8601)"),
+    end_time: Optional[str] = Query(None, description="End of time range (ISO 8601)"),
     limit_per_group: int = Query(15, ge=1, le=50, description="Max snapshots per person group"),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("dashboard:view")),
@@ -179,12 +253,19 @@ async def get_grouped_events(
     """
     Get detection events grouped by person identity.
 
+    Supports filtering by camera, person ID, person name, search term, known/unknown status, and time range.
     Returns a list of person groups containing detection count, latest timestamp,
     and a timeline gallery of snapshots & camera locations.
     """
-    conditions = []
-    if is_known is not None:
-        conditions.append(Event.is_known == is_known)
+    conditions = _build_event_filter_conditions(
+        camera_id=camera_id,
+        person_id=person_id,
+        person_name=person_name,
+        search=search,
+        is_known=is_known,
+        start_time=start_time,
+        end_time=end_time,
+    )
 
     where_clause = and_(*conditions) if conditions else True
 

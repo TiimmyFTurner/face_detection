@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import Union
 
-from backend.auth import require_permission
+from backend.auth import require_permission, require_any_permission
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Event
 from backend.schemas import CameraCreate, CameraBatchCreate, CameraUpdate, CameraResponse, CameraTestResult
@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/cameras", tags=["cameras"])
 @router.get("", response_model=list[CameraResponse])
 async def list_cameras(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("cameras:view")),
+    _user=Depends(require_any_permission("cameras:view", "dashboard:view")),
 ):
     """List all configured cameras with real-time streaming status."""
     result = await db.execute(select(Camera).order_by(Camera.created_at.desc()))

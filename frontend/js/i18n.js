@@ -591,6 +591,7 @@ const I18n = {
             pagination_per_page: 'تعداد در صفحه:',
             pagination_load_more: 'بارگذاری رویدادهای بیشتر...',
             pagination_all_loaded: 'تمامی رویدادها نمایش داده شده‌اند.',
+            pagination_new_events: '{count} رویداد جدید (مشاهده صفحه ۱)',
 
             // Time Relative
             just_now: 'هم‌اکنون',
@@ -1340,6 +1341,7 @@ const I18n = {
             pagination_per_page: 'Per page:',
             pagination_load_more: 'Load More Events...',
             pagination_all_loaded: 'All events have been loaded.',
+            pagination_new_events: '{count} new events (Go to page 1)',
 
             // Time Relative
             just_now: 'Just now',

@@ -32,6 +32,7 @@ const DashboardPage = {
     _eventLimit: 30,
     _eventTotal: 0,
     _eventLoading: false,
+    _unseenNewEvents: 0,
 
     escapeHtml(str) {
         if (!str) return '';
@@ -1112,6 +1113,9 @@ const DashboardPage = {
      */
     async loadEvents(page = DashboardPage._eventPage) {
         DashboardPage._eventLoading = true;
+        if (page === 1) {
+            DashboardPage._unseenNewEvents = 0;
+        }
         try {
             const { startIso, endIso } = DashboardPage.getTimeWindowRange();
 
@@ -1162,10 +1166,14 @@ const DashboardPage = {
 
     async changeEventLimit(limit) {
         DashboardPage._eventLimit = parseInt(limit, 10) || 30;
+        DashboardPage._unseenNewEvents = 0;
         await DashboardPage.loadEvents(1);
     },
 
     async goToEventPage(page) {
+        if (page === 1) {
+            DashboardPage._unseenNewEvents = 0;
+        }
         await DashboardPage.loadEvents(page);
     },
 
@@ -1174,7 +1182,6 @@ const DashboardPage = {
      */
     renderEvents() {
         const grid = document.getElementById('events-grid');
-        const pagContainer = document.getElementById('events-pagination');
         if (!grid) return;
 
         const isList = DashboardPage._displayMode === 'list';
@@ -1199,7 +1206,7 @@ const DashboardPage = {
                     </div>
                 </div>
             `;
-            if (pagContainer) pagContainer.innerHTML = '';
+            DashboardPage.renderPagination();
             return;
         }
 
@@ -1207,62 +1214,96 @@ const DashboardPage = {
             .map(event => isList ? EventCard.renderListItem(event) : EventCard.render(event))
             .join('');
 
-        if (pagContainer) {
-            const total = DashboardPage._eventTotal || DashboardPage._events.length;
-            const limit = DashboardPage._eventLimit || 30;
-            const page = DashboardPage._eventPage || 1;
-            const totalPages = Math.max(1, Math.ceil(total / limit));
-            const from = total === 0 ? 0 : (page - 1) * limit + 1;
-            const to = Math.min(total, page * limit);
+        DashboardPage.renderPagination();
+    },
 
-            const fromFormatted = I18n.isRTL() ? I18n.toPersianDigits(from) : from;
-            const toFormatted = I18n.isRTL() ? I18n.toPersianDigits(to) : to;
-            const totalFormatted = I18n.isRTL() ? I18n.toPersianDigits(total) : total;
-            const pageFormatted = I18n.isRTL() ? I18n.toPersianDigits(page) : page;
-            const totalPagesFormatted = I18n.isRTL() ? I18n.toPersianDigits(totalPages) : totalPages;
+    /**
+     * Render pagination controls bar.
+     */
+    renderPagination() {
+        const pagContainer = document.getElementById('events-pagination');
+        if (!pagContainer) return;
 
-            pagContainer.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; background: var(--bg-surface-hover); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem;">
+        if (DashboardPage._viewMode === 'grouped') {
+            pagContainer.innerHTML = '';
+            return;
+        }
+
+        const total = DashboardPage._eventTotal || DashboardPage._events.length;
+        if (total === 0) {
+            pagContainer.innerHTML = '';
+            return;
+        }
+
+        const limit = DashboardPage._eventLimit || 30;
+        const page = DashboardPage._eventPage || 1;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const from = total === 0 ? 0 : (page - 1) * limit + 1;
+        const to = Math.min(total, page * limit);
+
+        const fromFormatted = I18n.isRTL() ? I18n.toPersianDigits(from) : from;
+        const toFormatted = I18n.isRTL() ? I18n.toPersianDigits(to) : to;
+        const totalFormatted = I18n.isRTL() ? I18n.toPersianDigits(total) : total;
+        const pageFormatted = I18n.isRTL() ? I18n.toPersianDigits(page) : page;
+        const totalPagesFormatted = I18n.isRTL() ? I18n.toPersianDigits(totalPages) : totalPages;
+        const unseen = DashboardPage._unseenNewEvents || 0;
+        const unseenFormatted = I18n.isRTL() ? I18n.toPersianDigits(unseen) : unseen;
+
+        pagContainer.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; background: var(--bg-surface-hover); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                     <div style="font-size: 0.82rem; color: var(--text-secondary);">
                         ${I18n.t('pagination_showing', { from: fromFormatted, to: toFormatted, total: totalFormatted })}
                     </div>
+                    ${page > 1 && unseen > 0 ? `
+                        <button
+                            type="button"
+                            class="btn btn-primary btn-sm"
+                            style="font-size: 0.75rem; padding: 0.2rem 0.65rem; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 0.35rem; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);"
+                            onclick="DashboardPage.goToEventPage(1)"
+                            title="${I18n.isRTL() ? 'مشاهده جدیدترین رویدادها در صفحه اول' : 'View latest events on page 1'}"
+                        >
+                            <span>⚡</span>
+                            <span>${I18n.t('pagination_new_events', { count: unseenFormatted })}</span>
+                        </button>
+                    ` : ''}
+                </div>
 
-                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--text-tertiary);">
-                            <span>${I18n.t('pagination_per_page')}</span>
-                            <select class="form-input" style="padding: 0.25rem 0.5rem; font-size: 0.82rem; width: auto;" onchange="DashboardPage.changeEventLimit(this.value)">
-                                <option value="20" ${limit === 20 ? 'selected' : ''}>20</option>
-                                <option value="30" ${limit === 30 ? 'selected' : ''}>30</option>
-                                <option value="50" ${limit === 50 ? 'selected' : ''}>50</option>
-                                <option value="100" ${limit === 100 ? 'selected' : ''}>100</option>
-                            </select>
-                        </div>
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--text-tertiary);">
+                        <span>${I18n.t('pagination_per_page')}</span>
+                        <select class="form-input" style="padding: 0.25rem 0.5rem; font-size: 0.82rem; width: auto;" onchange="DashboardPage.changeEventLimit(this.value)">
+                            <option value="20" ${limit === 20 ? 'selected' : ''}>20</option>
+                            <option value="30" ${limit === 30 ? 'selected' : ''}>30</option>
+                            <option value="50" ${limit === 50 ? 'selected' : ''}>50</option>
+                            <option value="100" ${limit === 100 ? 'selected' : ''}>100</option>
+                        </select>
+                    </div>
 
-                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                            <button
-                                class="btn btn-secondary btn-sm"
-                                ${page <= 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
-                                onclick="DashboardPage.goToEventPage(${page - 1})"
-                            >
-                                ${I18n.t('pagination_prev')}
-                            </button>
-                            
-                            <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); padding: 0 0.4rem;">
-                                ${I18n.t('pagination_page_of', { page: pageFormatted, totalPages: totalPagesFormatted })}
-                            </span>
+                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                        <button
+                            class="btn btn-secondary btn-sm"
+                            ${page <= 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
+                            onclick="DashboardPage.goToEventPage(${page - 1})"
+                        >
+                            ${I18n.t('pagination_prev')}
+                        </button>
+                        
+                        <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); padding: 0 0.4rem;">
+                            ${I18n.t('pagination_page_of', { page: pageFormatted, totalPages: totalPagesFormatted })}
+                        </span>
 
-                            <button
-                                class="btn btn-secondary btn-sm"
-                                ${page >= totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
-                                onclick="DashboardPage.goToEventPage(${page + 1})"
-                            >
-                                ${I18n.t('pagination_next')}
-                            </button>
-                        </div>
+                        <button
+                            class="btn btn-secondary btn-sm"
+                            ${page >= totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}
+                            onclick="DashboardPage.goToEventPage(${page + 1})"
+                        >
+                            ${I18n.t('pagination_next')}
+                        </button>
                     </div>
                 </div>
-            `;
-        }
+            </div>
+        `;
     },
 
     /**
@@ -1408,19 +1449,27 @@ const DashboardPage = {
             if (Date.now() > end) return;
         }
 
-        // Prepend to events list
-        DashboardPage._events.unshift(eventData);
-
-        // Keep max 50
-        if (DashboardPage._events.length > 50) {
-            DashboardPage._events = DashboardPage._events.slice(0, 50);
-        }
-
+        // Total counter increases
         DashboardPage._eventTotal = (DashboardPage._eventTotal || 0) + 1;
 
         // Re-render
         if (DashboardPage._viewMode === 'stream') {
-            DashboardPage.renderEvents();
+            if (DashboardPage._eventPage === 1) {
+                // When on page 1, prepend new event and keep within limit
+                DashboardPage._events.unshift(eventData);
+
+                const limit = DashboardPage._eventLimit || 30;
+                if (DashboardPage._events.length > limit) {
+                    DashboardPage._events = DashboardPage._events.slice(0, limit);
+                }
+
+                DashboardPage.renderEvents();
+            } else {
+                // When on page > 1, do NOT insert new event into current page view
+                // Increment unseen new events and update pagination counters
+                DashboardPage._unseenNewEvents = (DashboardPage._unseenNewEvents || 0) + 1;
+                DashboardPage.renderPagination();
+            }
         } else {
             // For grouped view, reload so grouping stays correct
             DashboardPage.loadEvents(1);

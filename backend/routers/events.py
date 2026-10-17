@@ -58,6 +58,7 @@ def _build_event_filter_conditions(
     is_known: Optional[bool] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
+    has_snapshot: Optional[bool] = None,
 ) -> list:
     """Build reusable SQLAlchemy filter conditions for event queries."""
     conditions = []
@@ -68,6 +69,10 @@ def _build_event_filter_conditions(
         conditions.append(Event.person_id == person_id)
     if is_known is not None:
         conditions.append(Event.is_known == is_known)
+    if has_snapshot is True:
+        conditions.append(and_(Event.snapshot_path.isnot(None), Event.snapshot_path != ""))
+    elif has_snapshot is False:
+        conditions.append(or_(Event.snapshot_path.is_(None), Event.snapshot_path == ""))
     if person_name is not None and person_name.strip():
         conditions.append(Event.person_name.ilike(f"%{person_name.strip()}%"))
     if search is not None and search.strip():
@@ -103,6 +108,7 @@ async def list_events(
     person_name: Optional[str] = Query(None, description="Filter by person name (partial match)"),
     search: Optional[str] = Query(None, description="Search by person name or camera name (partial match)"),
     is_known: Optional[bool] = Query(None, description="Filter known (true) or unknown (false)"),
+    has_snapshot: Optional[bool] = Query(None, description="Filter events with snapshot image"),
     start_time: Optional[str] = Query(None, description="Start of time range (ISO 8601)"),
     end_time: Optional[str] = Query(None, description="End of time range (ISO 8601)"),
     limit: int = Query(50, ge=1, le=200, description="Max events to return"),
@@ -125,6 +131,7 @@ async def list_events(
         is_known=is_known,
         start_time=start_time,
         end_time=end_time,
+        has_snapshot=has_snapshot,
     )
 
     where_clause = and_(*conditions) if conditions else True

@@ -262,6 +262,21 @@ class FaceEngine:
             faces = self._app.get(img)
 
             if not faces:
+                # If face detection failed, try padding/upscaling (especially for cropped face snapshots)
+                h, w = img.shape[:2]
+                if h > 10 and w > 10 and (h < 320 or w < 320):
+                    scale = max(320.0 / h, 320.0 / w)
+                    new_w, new_h = int(w * scale), int(h * scale)
+                    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+                    faces = self._app.get(resized)
+
+                # Also try adding border padding if still not detected
+                if not faces and h > 10 and w > 10:
+                    pad = int(max(h, w) * 0.25)
+                    padded = cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_REFLECT)
+                    faces = self._app.get(padded)
+
+            if not faces:
                 logger.warning("No face detected in reference photo.")
                 return None
 

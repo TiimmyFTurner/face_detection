@@ -348,9 +348,10 @@ const PersonsPage = {
     /**
      * Show add person modal.
      */
-    showAddModal() {
+    showAddModal(options = {}) {
         PersonForm.reset();
-        App.openModal(PersonForm.renderModal());
+        App.openModal(PersonForm.renderModal(options), 'modal-lg');
+        PersonForm.initModalState(options);
     },
 
     /**

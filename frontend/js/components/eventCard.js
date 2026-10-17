@@ -140,6 +140,8 @@ const EventCard = {
         `;
     },
 
+    _currentHistoryEvents: [],
+
     /**
      * Show big event detail modal.
      */
@@ -237,7 +239,7 @@ const EventCard = {
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.5rem;">
                 <div style="display: flex; gap: 0.5rem;">
                     ${!isKnown ? `
-                        <button class="btn btn-primary btn-sm" onclick="PersonsPage.showAddModal();">
+                        <button class="btn btn-primary btn-sm" onclick="EventCard.enrollCurrentPerson(${event.id});">
                             ${I18n.t('enroll_person')}
                         </button>
                     ` : `
@@ -270,6 +272,8 @@ const EventCard = {
             const data = await App.api(url);
             const events = data.events || [];
 
+            EventCard._currentHistoryEvents = events;
+
             const historyContainer = document.getElementById('event-detail-person-history');
             if (!historyContainer || events.length <= 1) return;
 
@@ -299,6 +303,16 @@ const EventCard = {
         } catch (err) {
             console.warn('Failed to load person event history:', err);
         }
+    },
+
+    /**
+     * Launch person enrollment from current event snapshot,
+     * passing the event snapshot and the sequence history into the enrollment dialog.
+     */
+    enrollCurrentPerson(eventId) {
+        const event = EventCard._cache[eventId];
+        if (!event) return;
+        PersonForm.showEnrollFromEvents([event], EventCard._currentHistoryEvents || []);
     },
 
     /**

@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 
 from datetime import datetime, timezone, timedelta
-from typing import Any
+from typing import Any, Optional
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
@@ -239,18 +239,44 @@ async def list_persons(
 async def create_person(
     name: str = Form(...),
     role: str = Form(default=""),
-    photos: list[UploadFile] = File(...),
+    photos: list[UploadFile] = File(default=[]),
+    event_ids: Optional[str] = Form(default=None),
+    snapshot_filenames: Optional[str] = Form(default=None),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("persons:create")),
 ):
     """
-    Create a new known person by uploading one or more reference photos.
+    Create a new known person by uploading reference photos and/or selecting
+    detection snapshots from unknown event logs.
     Each photo is processed to extract a 512-d face embedding.
     """
-    if not photos:
+    parsed_event_ids: list[int] = []
+    if event_ids:
+        try:
+            import json
+            if event_ids.strip().startswith("["):
+                parsed_event_ids = [int(x) for x in json.loads(event_ids) if str(x).isdigit()]
+            else:
+                parsed_event_ids = [int(x.strip()) for x in event_ids.split(",") if x.strip().isdigit()]
+        except Exception as e:
+            logger.warning("Failed to parse event_ids '%s': %s", event_ids, e)
+
+    parsed_snapshot_files: list[str] = []
+    if snapshot_filenames:
+        try:
+            import json
+            if snapshot_filenames.strip().startswith("["):
+                parsed_snapshot_files = [str(x) for x in json.loads(snapshot_filenames) if x]
+            else:
+                parsed_snapshot_files = [x.strip() for x in snapshot_filenames.split(",") if x.strip()]
+        except Exception as e:
+            logger.warning("Failed to parse snapshot_filenames '%s': %s", snapshot_filenames, e)
+
+    valid_photos = [p for p in (photos or []) if getattr(p, "filename", None)]
+    if not valid_photos and not parsed_event_ids and not parsed_snapshot_files:
         raise HTTPException(
             status_code=400,
-            detail="At least one reference photo is required.",
+            detail="At least one reference photo or detection event is required.",
         )
 
     # Create person record
@@ -259,33 +285,82 @@ async def create_person(
     await db.commit()
     await db.refresh(person)
 
-    # Process each reference photo
     embeddings_created: list[PersonEmbedding] = []
 
-    for photo in photos:
-        image_bytes = await photo.read()
-
-        # Extract face embedding
+    # 1. Process photos from selected detection events
+    for ev_id in parsed_event_ids:
+        ev = await db.get(Event, ev_id)
+        if not ev or not ev.snapshot_path:
+            continue
+        safe_name = Path(ev.snapshot_path).name
+        snap_file = Path(settings.snapshot_dir) / safe_name
+        if not snap_file.exists():
+            continue
+        image_bytes = snap_file.read_bytes()
         embedding = face_engine.extract_embedding_from_photo(image_bytes)
-
         if embedding is None:
-            logger.warning(
-                "No face detected in photo '%s' for person '%s'. Skipping.",
-                photo.filename,
-                name,
-            )
+            logger.warning("No face detected in snapshot for event #%d", ev_id)
             continue
 
-        # Save reference photo to disk
+        ext = snap_file.suffix or ".jpg"
+        ref_filename = f"{uuid.uuid4().hex}{ext}"
+        ref_path = Path(settings.reference_photo_dir) / ref_filename
+        ref_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(ref_path, "wb") as f:
+            f.write(image_bytes)
+
+        person_emb = PersonEmbedding(
+            person_id=person.id,
+            embedding=embedding.tolist(),
+            reference_photo_path=str(ref_path),
+        )
+        db.add(person_emb)
+        embeddings_created.append(person_emb)
+
+        # Attribute the event to the newly enrolled person
+        ev.person_id = person.id
+        ev.person_name = person.name
+        ev.is_known = True
+
+    # 2. Process extra snapshot filenames if provided
+    for s_name in parsed_snapshot_files:
+        safe_name = Path(s_name).name
+        snap_file = Path(settings.snapshot_dir) / safe_name
+        if not snap_file.exists():
+            continue
+        image_bytes = snap_file.read_bytes()
+        embedding = face_engine.extract_embedding_from_photo(image_bytes)
+        if embedding is None:
+            continue
+        ext = snap_file.suffix or ".jpg"
+        ref_filename = f"{uuid.uuid4().hex}{ext}"
+        ref_path = Path(settings.reference_photo_dir) / ref_filename
+        ref_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(ref_path, "wb") as f:
+            f.write(image_bytes)
+        person_emb = PersonEmbedding(
+            person_id=person.id,
+            embedding=embedding.tolist(),
+            reference_photo_path=str(ref_path),
+        )
+        db.add(person_emb)
+        embeddings_created.append(person_emb)
+
+    # 3. Process uploaded files
+    for photo in valid_photos:
+        image_bytes = await photo.read()
+        if not image_bytes:
+            continue
+        embedding = face_engine.extract_embedding_from_photo(image_bytes)
+        if embedding is None:
+            logger.warning("No face detected in uploaded photo '%s'. Skipping.", photo.filename)
+            continue
         ext = Path(photo.filename or "photo.jpg").suffix or ".jpg"
         ref_filename = f"{uuid.uuid4().hex}{ext}"
         ref_path = Path(settings.reference_photo_dir) / ref_filename
         ref_path.parent.mkdir(parents=True, exist_ok=True)
-
         with open(ref_path, "wb") as f:
             f.write(image_bytes)
-
-        # Store embedding in database
         person_emb = PersonEmbedding(
             person_id=person.id,
             embedding=embedding.tolist(),
@@ -295,17 +370,14 @@ async def create_person(
         embeddings_created.append(person_emb)
 
     if not embeddings_created:
-        # Rollback: delete the person if no valid embeddings were created
         await db.delete(person)
         await db.commit()
         raise HTTPException(
             status_code=400,
-            detail="No faces could be detected in any of the uploaded photos.",
+            detail="No faces could be detected in any of the selected photos or events.",
         )
 
     await db.commit()
-
-    # Refresh the known persons cache in the stream processor
     await stream_processor.refresh_known_persons()
 
     logger.info(
@@ -401,33 +473,78 @@ async def delete_person(
 @router.post("/{person_id}/photos", response_model=PersonResponse)
 async def add_photos(
     person_id: int,
-    photos: list[UploadFile] = File(...),
+    photos: list[UploadFile] = File(default=[]),
+    event_ids: Optional[str] = Form(default=None),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("persons:edit")),
 ):
-    """Add additional reference photos for an existing person."""
+    """Add additional reference photos for an existing person from upload or events."""
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
+    parsed_event_ids: list[int] = []
+    if event_ids:
+        try:
+            import json
+            if event_ids.strip().startswith("["):
+                parsed_event_ids = [int(x) for x in json.loads(event_ids) if str(x).isdigit()]
+            else:
+                parsed_event_ids = [int(x.strip()) for x in event_ids.split(",") if x.strip().isdigit()]
+        except Exception as e:
+            logger.warning("Failed to parse event_ids '%s': %s", event_ids, e)
+
+    valid_photos = [p for p in (photos or []) if getattr(p, "filename", None)]
+    if not valid_photos and not parsed_event_ids:
+        raise HTTPException(status_code=400, detail="At least one photo or event is required.")
+
     added = 0
 
-    for photo in photos:
-        image_bytes = await photo.read()
+    # 1. Process from events
+    for ev_id in parsed_event_ids:
+        ev = await db.get(Event, ev_id)
+        if not ev or not ev.snapshot_path:
+            continue
+        safe_name = Path(ev.snapshot_path).name
+        snap_file = Path(settings.snapshot_dir) / safe_name
+        if not snap_file.exists():
+            continue
+        image_bytes = snap_file.read_bytes()
         embedding = face_engine.extract_embedding_from_photo(image_bytes)
+        if embedding is None:
+            continue
+        ext = snap_file.suffix or ".jpg"
+        ref_filename = f"{uuid.uuid4().hex}{ext}"
+        ref_path = Path(settings.reference_photo_dir) / ref_filename
+        ref_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(ref_path, "wb") as f:
+            f.write(image_bytes)
+        person_emb = PersonEmbedding(
+            person_id=person.id,
+            embedding=embedding.tolist(),
+            reference_photo_path=str(ref_path),
+        )
+        db.add(person_emb)
+        ev.person_id = person.id
+        ev.person_name = person.name
+        ev.is_known = True
+        added += 1
 
+    # 2. Process uploaded photos
+    for photo in valid_photos:
+        image_bytes = await photo.read()
+        if not image_bytes:
+            continue
+        embedding = face_engine.extract_embedding_from_photo(image_bytes)
         if embedding is None:
             logger.warning("No face in photo '%s', skipping.", photo.filename)
             continue
-
         ext = Path(photo.filename or "photo.jpg").suffix or ".jpg"
         ref_filename = f"{uuid.uuid4().hex}{ext}"
         ref_path = Path(settings.reference_photo_dir) / ref_filename
         ref_path.parent.mkdir(parents=True, exist_ok=True)
-
         with open(ref_path, "wb") as f:
             f.write(image_bytes)
-
         person_emb = PersonEmbedding(
             person_id=person.id,
             embedding=embedding.tolist(),
@@ -439,7 +556,7 @@ async def add_photos(
     if added == 0:
         raise HTTPException(
             status_code=400,
-            detail="No faces detected in any of the uploaded photos.",
+            detail="No faces detected in any of the uploaded photos or events.",
         )
 
     await db.commit()
@@ -449,7 +566,6 @@ async def add_photos(
         select(PersonEmbedding).where(PersonEmbedding.person_id == person.id)
     )
     embeddings = emb_result.scalars().all()
-
     return _build_person_response(person, embeddings)
 
 

@@ -106,7 +106,7 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 - **Shift Timetable Schedules:** Define active monitoring hours and active weekdays with automated absence timeout detection.
 - **Identity & Comprehensive Person Analytics:** Deep audit modal with 6 specialized tabs (Overview, Shifts, 24-Hour Timeline, 14-Day Attendance Log, Cameras, and Recent Sightings).
 - **User Management & RBAC:** Secure JWT authentication, password hashing, and role-based permissions (`admin`, `operator`, `viewer`).
-- **Security & Absence Alerts:** Real-time audio alerts and toast notifications for missing staff, unauthorized entries, and out-of-zone events.
+- **Direct Unknown Face Enrollment & Multi-Photo Picker:** Tap "Enroll Person" directly from any unidentified detection event to register the individual immediately. The enrollment dialog pre-loads the event snapshot as primary photo and provides an interactive **Unknown Logs Photo Picker** to select multiple detection angles/sightings from recent sequences or all cameras, automatically updating past detection logs to known status.
 - **Full Dual-Language Localization:** Persian (`fa`) as default with full RTL layout, Vazirmatn typography, Solar Hijri (Jalali) timestamps, and instant English (`en`) switching.
 - **Hardware Acceleration:** Out-of-the-box support for CUDA / GPU acceleration via ONNX Runtime, with automatic CPU fallback.
 
@@ -515,12 +515,12 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `GET` | `/api/zones/duty-roster` | **Live shift roster** with absence time windows, counts & camera status |
 | `GET` | `/api/zones/logs` | Security and absence violation log records |
 | `GET` | `/api/persons` | List all registered known individuals |
-| `POST` | `/api/persons` | Enroll a person with reference photo upload |
+| `POST` | `/api/persons` | Enroll a person with uploaded photos (`photos`) and/or event snapshots (`event_ids`) |
 | `DELETE` | `/api/persons/{id}` | Remove registered individual and associated embeddings |
-| `POST` | `/api/persons/{id}/photos` | Upload additional reference photos for an individual |
+| `POST` | `/api/persons/{id}/photos` | Upload additional reference photos or attach event snapshots (`event_ids`) |
 | `POST` | `/api/persons/reindex-embeddings` | **Recompute all embeddings** from photos using active InsightFace model |
 | `GET` | `/api/persons/{id}/analytics` | **Comprehensive person analytics**, punctuality & 14-day history |
-| `GET` | `/api/events` | Query detection event logs with pagination and filters |
+| `GET` | `/api/events` | Query detection event logs with pagination and filters (`camera_id`, `is_known`, `has_snapshot`, time) |
 | `GET` | `/api/events/stats` | Retrieve daily event metrics summary |
 | `GET` | `/api/events/grouped` | Retrieve detection events grouped by person identity |
 | `GET` | `/api/snapshots/{filename}` | Serve cropped snapshot images |
@@ -564,6 +564,9 @@ Run the test suite using `pytest`:
 ```bash
 # Run all tests
 python -m pytest tests/ -v
+
+# Run event photo enrollment & unknown log picker tests
+python -m pytest tests/test_enroll_from_event.py -v
 
 # Run API integration tests only
 python -m pytest tests/test_api.py -v
@@ -651,7 +654,7 @@ face_detection/
 │       ├── components/
 │       │   ├── cameraForm.js # Camera modal component
 │       │   ├── eventCard.js  # Live event card & detail modal
-│       │   ├── personForm.js # Person upload & photo dropzone modal
+│       │   ├── personForm.js # Person enrollment & unknown logs photo picker modal
 │       │   ├── personAnalyticsModal.js # 6-tab comprehensive person analytics modal
 │       │   ├── settingsModal.js # Dynamic runtime settings & storage cleanup modal
 │       │   └── zoneModal.js  # Interactive canvas zone drawer & shift modal
@@ -673,6 +676,7 @@ face_detection/
 └── tests/                    # Test Suite
     ├── __init__.py
     ├── test_api.py           # API integration test suite
+    ├── test_enroll_from_event.py # Enrollment from detection snapshots & multi-photo tests
     ├── test_face_engine.py   # AI face matcher unit tests
     └── test_snapshot_cleanup.py # Storage retention & system settings tests
 ```

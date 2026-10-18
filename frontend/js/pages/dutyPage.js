@@ -33,6 +33,53 @@ const DutyPage = {
     },
 
     /**
+     * Toggle the export format dropdown menu.
+     */
+    toggleExportMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('duty-export-menu');
+        if (!menu) return;
+        const isShown = menu.style.display === 'block';
+        menu.style.display = isShown ? 'none' : 'block';
+        if (!isShown) {
+            const closeHandler = (evt) => {
+                if (!menu.contains(evt.target)) {
+                    menu.style.display = 'none';
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeHandler), 10);
+        }
+    },
+
+    /**
+     * Download the Duty Roster report in XLSX or CSV format.
+     */
+    exportReport(format = 'xlsx') {
+        const menu = document.getElementById('duty-export-menu');
+        if (menu) menu.style.display = 'none';
+
+        const params = new URLSearchParams();
+        params.set('format', format);
+        params.set('only_active', DutyPage._onlyActive ? 'true' : 'false');
+
+        if (DutyPage._currentFilter && DutyPage._currentFilter !== 'all') {
+            const statusMap = {
+                'present': 'present',
+                'absent': 'absent',
+                'offline': 'camera_offline',
+                'break': 'on_break',
+            };
+            if (statusMap[DutyPage._currentFilter]) {
+                params.set('status', statusMap[DutyPage._currentFilter]);
+            }
+        }
+
+        const url = `/api/zones/duty-roster/export?${params.toString()}`;
+        App.downloadFile(url, `duty_roster_${format === 'csv' ? 'data.csv' : 'report.xlsx'}`);
+    },
+
+    /**
      * Entry point when user navigates to Duty page.
      */
     load() {
@@ -73,6 +120,25 @@ const DutyPage = {
                     <button class="btn btn-secondary btn-sm" onclick="DutyPage.fetchData()" title="${I18n.t('refresh')}" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
                         🔄 <span>${I18n.t('refresh')}</span>
                     </button>
+
+                    <!-- Export Dropdown -->
+                    <div class="dropdown-wrapper">
+                        <button class="btn btn-secondary btn-sm" id="duty-export-btn" onclick="DutyPage.toggleExportMenu(event)" title="${I18n.t('export_duty_title')}" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>📥</span>
+                            <span>${I18n.t('export')}</span>
+                            <span style="font-size: 0.65rem; margin-inline-start: 2px;">▼</span>
+                        </button>
+                        <div class="dropdown-menu-styled" id="duty-export-menu">
+                            <button class="dropdown-item-styled" onclick="DutyPage.exportReport('xlsx')">
+                                <span>📊</span>
+                                <span>${I18n.t('export_excel')}</span>
+                            </button>
+                            <button class="dropdown-item-styled" onclick="DutyPage.exportReport('csv')">
+                                <span>📄</span>
+                                <span>${I18n.t('export_csv')}</span>
+                            </button>
+                        </div>
+                    </div>
 
                     <!-- TV / Kiosk Display Mode Link -->
                     <a href="/tv.html" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.3);" title="${I18n.t('tv_kiosk_btn')}">

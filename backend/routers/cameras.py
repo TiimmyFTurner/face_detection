@@ -17,12 +17,12 @@ import logging
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import Union
+from typing import Union, Optional
 
 from backend.auth import require_permission, require_any_permission
 from backend.database import get_db
@@ -332,6 +332,8 @@ async def get_camera_snapshot(
 @router.get("/{camera_id}/stream")
 async def get_camera_stream(
     camera_id: int,
+    request: Request,
+    max_frames: Optional[int] = Query(None, description="Optional maximum frames to yield"),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("cameras:view")),
 ):
@@ -343,7 +345,12 @@ async def get_camera_stream(
     async def frame_generator():
         last_online = False
         offline_frame_bytes = None
+        frames_sent = 0
         while True:
+            if max_frames is not None and frames_sent >= max_frames:
+                break
+            if await request.is_disconnected():
+                break
             jpeg_bytes = stream_processor.get_latest_frame(camera_id)
             if jpeg_bytes:
                 last_online = True
@@ -351,6 +358,7 @@ async def get_camera_stream(
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n" + jpeg_bytes + b"\r\n"
                 )
+                frames_sent += 1
                 await asyncio.sleep(0.1)  # ~10 FPS
             else:
                 # Camera is offline / reconnecting: yield standby placeholder frame
@@ -361,6 +369,7 @@ async def get_camera_stream(
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n" + offline_frame_bytes + b"\r\n"
                 )
+                frames_sent += 1
                 await asyncio.sleep(1.0)  # 1 FPS standby
 
     return StreamingResponse(

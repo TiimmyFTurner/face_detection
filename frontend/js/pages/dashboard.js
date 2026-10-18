@@ -113,12 +113,82 @@ const DashboardPage = {
     },
 
     /**
+     * Toggle the export format dropdown menu.
+     */
+    toggleExportMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('dashboard-export-menu');
+        if (!menu) return;
+        const isShown = menu.style.display === 'block';
+        menu.style.display = isShown ? 'none' : 'block';
+        if (!isShown) {
+            const closeHandler = (evt) => {
+                if (!menu.contains(evt.target)) {
+                    menu.style.display = 'none';
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeHandler), 10);
+        }
+    },
+
+    /**
+     * Download the filtered events log report in XLSX or CSV format.
+     */
+    exportReport(format = 'xlsx') {
+        const menu = document.getElementById('dashboard-export-menu');
+        if (menu) menu.style.display = 'none';
+
+        const params = new URLSearchParams();
+        params.set('format', format);
+        params.set('limit', '5000');
+
+        if (DashboardPage._searchQuery) {
+            params.set('search', DashboardPage._searchQuery.trim());
+        }
+        if (DashboardPage._selectedCameraId) {
+            params.set('camera_id', DashboardPage._selectedCameraId);
+        }
+        if (DashboardPage._filter === 'known') {
+            params.set('is_known', 'true');
+        } else if (DashboardPage._filter === 'unknown') {
+            params.set('is_known', 'false');
+        }
+
+        const { startIso, endIso } = DashboardPage.getTimeWindowRange();
+        if (startIso) params.set('start_time', startIso);
+        if (endIso) params.set('end_time', endIso);
+
+        const url = `/api/events/export?${params.toString()}`;
+        App.downloadFile(url, `events_${format === 'csv' ? 'data.csv' : 'report.xlsx'}`);
+    },
+
+    /**
      * Load and render the dashboard page.
      */
     async load() {
         document.getElementById('page-title').textContent = I18n.t('dashboard_title');
         document.getElementById('header-actions').innerHTML = `
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <!-- Export Dropdown -->
+                <div class="dropdown-wrapper">
+                    <button class="btn btn-secondary btn-sm" id="dashboard-export-btn" onclick="DashboardPage.toggleExportMenu(event)" title="${I18n.t('export_events_title')}" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                        <span>📥</span>
+                        <span>${I18n.t('export')}</span>
+                        <span style="font-size: 0.65rem; margin-inline-start: 2px;">▼</span>
+                    </button>
+                    <div class="dropdown-menu-styled" id="dashboard-export-menu">
+                        <button class="dropdown-item-styled" onclick="DashboardPage.exportReport('xlsx')">
+                            <span>📊</span>
+                            <span>${I18n.t('export_excel')}</span>
+                        </button>
+                        <button class="dropdown-item-styled" onclick="DashboardPage.exportReport('csv')">
+                            <span>📄</span>
+                            <span>${I18n.t('export_csv')}</span>
+                        </button>
+                    </div>
+                </div>
+
                 <button class="btn btn-secondary btn-sm" onclick="SettingsModal.show()" title="${I18n.t('nav_settings')}" style="display: flex; align-items: center; gap: 0.35rem;">
                     <span>⚙️</span>
                     <span>${I18n.t('nav_settings')}</span>

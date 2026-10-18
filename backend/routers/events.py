@@ -10,13 +10,14 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission
 from backend.database import get_db
 from backend.models import Event, Camera
+from backend.reporting import generate_events_xlsx, generate_events_csv
 from backend.schemas import EventResponse, EventListResponse, EventStats
 
 logger = logging.getLogger(__name__)
@@ -337,6 +338,105 @@ async def get_grouped_events(
     grouped_list = list(grouped_map.values())
     grouped_list.sort(key=lambda g: g["latest_timestamp"], reverse=True)
     return grouped_list
+
+
+@router.get("/export")
+async def export_events(
+    format: str = Query("xlsx", pattern="^(xlsx|csv)$", description="Export format: xlsx or csv"),
+    camera_id: Optional[int] = Query(None, description="Filter by camera ID"),
+    person_id: Optional[int] = Query(None, description="Filter by person ID"),
+    person_name: Optional[str] = Query(None, description="Filter by person name (partial match)"),
+    search: Optional[str] = Query(None, description="Search by person name or camera name (partial match)"),
+    is_known: Optional[bool] = Query(None, description="Filter known (true) or unknown (false)"),
+    has_snapshot: Optional[bool] = Query(None, description="Filter events with snapshot image"),
+    start_time: Optional[str] = Query(None, description="Start of time range (ISO 8601)"),
+    end_time: Optional[str] = Query(None, description="End of time range (ISO 8601)"),
+    limit: int = Query(5000, ge=1, le=20000, description="Max events to export"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("dashboard:view")),
+):
+    """
+    Export detection and security alert event logs to Excel (.xlsx) or CSV.
+    """
+    conditions = _build_event_filter_conditions(
+        camera_id=camera_id,
+        person_id=person_id,
+        person_name=person_name,
+        search=search,
+        is_known=is_known,
+        start_time=start_time,
+        end_time=end_time,
+        has_snapshot=has_snapshot,
+    )
+    where_clause = and_(*conditions) if conditions else True
+
+    query = (
+        select(Event)
+        .where(where_clause)
+        .order_by(Event.timestamp.desc())
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    # Pre-fetch cameras
+    cams_res = await db.execute(select(Camera))
+    cams = {c.id: c for c in cams_res.scalars().all()}
+
+    # Build human-readable filter summary for report header
+    filter_parts = []
+    if search:
+        filter_parts.append(f"جستجو: {search}")
+    if camera_id and camera_id in cams:
+        filter_parts.append(f"دوربین: {cams[camera_id].name}")
+    if is_known is True:
+        filter_parts.append("وضعیت: پرسنل مجاز")
+    elif is_known is False:
+        filter_parts.append("وضعیت: افراد ناشناس")
+    if start_time or end_time:
+        st_txt = start_time[:16].replace("T", " ") if start_time else "ابتدا"
+        et_txt = end_time[:16].replace("T", " ") if end_time else "اکنون"
+        filter_parts.append(f"بازه زمانی: {st_txt} تا {et_txt}")
+    filter_summary = " | ".join(filter_parts) if filter_parts else None
+
+    events_data = []
+    for ev in events:
+        cam = cams.get(ev.camera_id)
+        events_data.append({
+            "id": ev.id,
+            "timestamp": ev.timestamp,
+            "person_id": ev.person_id,
+            "person_name": ev.person_name or "Unknown",
+            "is_known": bool(ev.is_known),
+            "confidence_score": ev.confidence_score or 0.0,
+            "camera_id": ev.camera_id,
+            "camera_name": cam.name if cam else (f"Camera #{ev.camera_id}" if ev.camera_id else "—"),
+            "camera_location": cam.location if cam else "",
+            "zone_id": getattr(ev, "zone_id", None),
+            "zone_name": getattr(ev, "zone_name", "") or "",
+            "alert_type": getattr(ev, "alert_type", "normal") or "normal",
+        })
+
+    now = datetime.now()
+    timestamp_slug = now.strftime("%Y%m%d_%H%M%S")
+
+    if format.lower() == "csv":
+        file_bytes = generate_events_csv(events_data, report_date=now, filter_summary=filter_summary)
+        filename = f"events_report_{timestamp_slug}.csv"
+        media_type = "text/csv; charset=utf-8"
+    else:
+        file_bytes = generate_events_xlsx(events_data, report_date=now, filter_summary=filter_summary)
+        filename = f"events_report_{timestamp_slug}.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    return Response(
+        content=file_bytes,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 @router.delete("/{event_id}")

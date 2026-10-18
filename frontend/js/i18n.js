@@ -93,6 +93,15 @@ const I18n = {
             search: 'جستجو',
             view_grid: 'نمای شبکه‌ای',
             view_list: 'نمای لیستی',
+            export: 'خروجی گزارش',
+            export_btn: 'خروجی گزارش',
+            export_excel: 'خروجی اکسل (Excel)',
+            export_csv: 'خروجی فایل متنی (CSV)',
+            export_duty_title: 'خروجی گزارش شیفت و حضور پرسنل',
+            export_events_title: 'خروجی لاگ رویدادها و هشدارها',
+            export_downloading: 'در حال آماده‌سازی و دریافت فایل گزارش...',
+            export_success: 'فایل گزارش با موفقیت دریافت شد.',
+            export_failed: 'خطا در دریافت فایل گزارش.',
 
             // Dashboard
             dashboard_title: 'پیشخوان رویدادها',
@@ -861,6 +870,15 @@ const I18n = {
             search: 'Search',
             view_grid: 'Grid View',
             view_list: 'List View',
+            export: 'Export Report',
+            export_btn: 'Export Report',
+            export_excel: 'Excel Report (.xlsx)',
+            export_csv: 'CSV Data (.csv)',
+            export_duty_title: 'Export Duty & Attendance Roster',
+            export_events_title: 'Export Detection & Alert Logs',
+            export_downloading: 'Preparing and downloading report...',
+            export_success: 'Report downloaded successfully.',
+            export_failed: 'Failed to download report.',
 
             // Dashboard
             dashboard_title: 'Dashboard',

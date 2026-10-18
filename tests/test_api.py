@@ -398,6 +398,7 @@ async def test_snapshot_path_traversal(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_camera_snapshot_and_stream(client: AsyncClient):
+    from backend.stream_processor import stream_processor
     # Create camera
     resp = await client.post("/api/cameras", json={
         "name": "Live Test Cam",
@@ -406,14 +407,23 @@ async def test_camera_snapshot_and_stream(client: AsyncClient):
     })
     cam_id = resp.json()["id"]
 
+    # Provide a mock frame so test does not block on external RTSP timeout
+    stream_processor._latest_frames[cam_id] = b"\xff\xd8\xff\xe0test_jpeg_bytes\xff\xd9"
+
     # Test camera snapshot endpoint
     snap_resp = await client.get(f"/api/cameras/{cam_id}/snapshot")
-    assert snap_resp.status_code in (200, 503)
+    assert snap_resp.status_code == 200
+    assert snap_resp.headers.get("content-type") == "image/jpeg"
 
-    # Test camera stream endpoint
-    async with client.stream("GET", f"/api/cameras/{cam_id}/stream") as stream_resp:
+    # Test camera stream endpoint - read first frame and break
+    async with client.stream("GET", f"/api/cameras/{cam_id}/stream?max_frames=1") as stream_resp:
         assert stream_resp.status_code == 200
         assert "multipart/x-mixed-replace" in stream_resp.headers.get("content-type", "")
+        async for chunk in stream_resp.aiter_bytes():
+            assert len(chunk) > 0
+
+    # Clean up mock frame
+    stream_processor._latest_frames.pop(cam_id, None)
 
     # Nonexistent camera snapshot
     bad_snap = await client.get("/api/cameras/99999/snapshot")

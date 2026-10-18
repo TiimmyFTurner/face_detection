@@ -272,6 +272,46 @@ const App = {
         return response.json();
     },
 
+    /**
+     * Download binary file (XLSX, CSV, etc.) with authentication and filename extraction.
+     */
+    async downloadFile(url, fallbackFilename = 'report.xlsx') {
+        const headers = {};
+        if (typeof Auth !== 'undefined' && Auth.getToken()) {
+            headers['Authorization'] = `Bearer ${Auth.getToken()}`;
+        }
+        App.showToast(I18n.t('export_downloading'), 'info');
+        try {
+            const response = await fetch(url, { headers });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(err.detail || 'Download failed');
+            }
+            let filename = fallbackFilename;
+            const disposition = response.headers.get('Content-Disposition') || response.headers.get('content-disposition');
+            if (disposition && disposition.includes('filename=')) {
+                const match = disposition.match(/filename="?([^";]+)"?/);
+                if (match && match[1]) filename = match[1];
+            }
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobUrl);
+                a.remove();
+            }, 1000);
+            App.showToast(I18n.t('export_success'), 'success');
+        } catch (err) {
+            console.error('Download error:', err);
+            App.showToast(I18n.t('export_failed') + (err.message ? ` (${err.message})` : ''), 'error');
+        }
+    },
+
     // ─── Modal Management ──────────────────────────────────
     _modalCloseTimer: null,
 

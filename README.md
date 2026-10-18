@@ -100,6 +100,11 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
   - Tracks detailed absence intervals (e.g. `10:30 - 11:15 (45m)`) categorized into *late arrival*, *intermediate gaps*, and *current missing status*.
   - Counts total absence incidents during the shift (`X بار غیبت در این شیفت`) and displays a roster-wide KPI.
   - Interactive expandable time windows drawer in both Grid and List views with auto-refresh state preservation.
+- **Excel (.xlsx) & CSV Shift & Attendance Reporting:**
+  - Export comprehensive duty roster attendance records and event logs directly from the UI or REST API.
+  - Generates beautifully styled Persian Excel (`.xlsx`) spreadsheets with native RTL layout, KPI summaries, and color-coded status indicators.
+  - CSV files encoded with UTF-8 BOM (`utf-8-sig`) ensuring 100% clean Persian/Farsi display across Microsoft Excel, LibreOffice, and Google Sheets.
+  - Full filter support (Shamsi date/time windows, camera, person, status, and active shift toggle).
 - **Camera Offline Safeguard:** Decouples camera disconnects from absence times; offline camera periods are displayed with a distinct yellow status (`دوربین قطع است`) and are strictly excluded from absence durations and counts.
 - **Clean Camera Deletion Cascades:** Removing a camera automatically cleans up associated zones and alerts, unlinks camera IDs on historical detection logs, and clears in-memory state to prevent phantom alerts.
 - **Spatial Zone Monitoring:** Draw designated areas directly on camera snapshots and attach staff members.
@@ -513,6 +518,7 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `DELETE` | `/api/zones/{id}` | Delete a spatial zone |
 | `GET` | `/api/zones/status` | Live presence status for all zones & attached staff |
 | `GET` | `/api/zones/duty-roster` | **Live shift roster** with absence time windows, counts & camera status |
+| `GET` | `/api/zones/duty-roster/export` | **Export Duty Roster & shift compliance** as formatted Excel (`.xlsx`) or CSV |
 | `GET` | `/api/zones/logs` | Security and absence violation log records |
 | `GET` | `/api/persons` | List all registered known individuals |
 | `POST` | `/api/persons` | Enroll a person with uploaded photos (`photos`) and/or event snapshots (`event_ids`) |
@@ -521,6 +527,7 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `POST` | `/api/persons/reindex-embeddings` | **Recompute all embeddings** from photos using active InsightFace model |
 | `GET` | `/api/persons/{id}/analytics` | **Comprehensive person analytics**, punctuality & 14-day history |
 | `GET` | `/api/events` | Query detection event logs with pagination and filters (`camera_id`, `is_known`, `has_snapshot`, time) |
+| `GET` | `/api/events/export` | **Export detection event logs** as formatted Excel (`.xlsx`) or CSV with filters |
 | `GET` | `/api/events/stats` | Retrieve daily event metrics summary |
 | `GET` | `/api/events/grouped` | Retrieve detection events grouped by person identity |
 | `GET` | `/api/snapshots/{filename}` | Serve cropped snapshot images |

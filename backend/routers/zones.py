@@ -19,13 +19,14 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy import select, desc, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding
+from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
 from backend.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
@@ -296,18 +297,12 @@ async def get_zones_status(
     return response_list
 
 
-@router.get("/api/zones/duty-roster", response_model=DutyRosterResponse)
-async def get_duty_roster(
-    only_active: bool = Query(True, description="Filter only persons currently in their active duty hours"),
-    db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("duty:view")),
-):
+async def compute_duty_roster_data(
+    db: AsyncSession,
+    only_active: bool = True,
+) -> DutyRosterResponse:
     """
-    Real-time duty roster monitoring:
-    - Lists personnel currently in scheduled duty hours (or all assigned if only_active=False)
-    - Shift time window and active days
-    - Real-time absence if not currently in the assigned zone (< 120s)
-    - Cumulative sum of absence for the active shift today
+    Compute real-time duty roster monitoring metrics and status for today.
     """
     now_ts = time.time()
     now_local = datetime.now()
@@ -637,6 +632,60 @@ async def get_duty_roster(
         total_shift_absence_str=_format_duration(total_shift_absence_minutes * 60),
         avg_compliance_pct=avg_compliance,
         roster=roster,
+    )
+
+
+@router.get("/api/zones/duty-roster", response_model=DutyRosterResponse)
+async def get_duty_roster(
+    only_active: bool = Query(True, description="Filter only persons currently in their active duty hours"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("duty:view")),
+):
+    """
+    Real-time duty roster monitoring:
+    - Lists personnel currently in scheduled duty hours (or all assigned if only_active=False)
+    - Shift time window and active days
+    - Real-time absence if not currently in the assigned zone (< 120s)
+    - Cumulative sum of absence for the active shift today
+    """
+    return await compute_duty_roster_data(db=db, only_active=only_active)
+
+
+@router.get("/api/zones/duty-roster/export")
+async def export_duty_roster(
+    format: str = Query("xlsx", pattern="^(xlsx|csv)$", description="Export format: xlsx or csv"),
+    only_active: bool = Query(True, description="Filter only persons currently in their active duty hours"),
+    status: Optional[str] = Query(None, description="Optional status filter: present, absent, camera_offline, on_break, all"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("duty:view")),
+):
+    """
+    Export live duty roster attendance records and compliance stats as Excel (.xlsx) or CSV.
+    """
+    duty_data = await compute_duty_roster_data(db=db, only_active=only_active)
+    roster = duty_data.roster
+    if status and status != "all":
+        roster = [r for r in roster if r.status == status]
+
+    now = datetime.now()
+    timestamp_slug = now.strftime("%Y%m%d_%H%M%S")
+
+    if format.lower() == "csv":
+        file_bytes = generate_duty_roster_csv(roster, report_date=now)
+        filename = f"duty_roster_{timestamp_slug}.csv"
+        media_type = "text/csv; charset=utf-8"
+    else:
+        file_bytes = generate_duty_roster_xlsx(roster, report_date=now)
+        filename = f"duty_roster_{timestamp_slug}.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    return Response(
+        content=file_bytes,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
 
 

@@ -5,6 +5,87 @@ const EventCard = {
     _cache: {},
 
     /**
+     * Compute timestamp and range info for single or consolidated event cards.
+     */
+    getTimeInfo(event) {
+        const isRTL = I18n.isRTL();
+        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
+        const isConsolidated = Boolean(event.consolidated_count && event.consolidated_count > 1);
+
+        if (!isConsolidated || !event.first_timestamp) {
+            return {
+                isConsolidated: false,
+                timestampStr: I18n.formatTimestamp(event.timestamp),
+                rangeSummary: null,
+                countBadge: '',
+                durStr: '',
+            };
+        }
+
+        const startJ = I18n.toJalali(event.first_timestamp);
+        const endJ = I18n.toJalali(event.latest_timestamp || event.timestamp);
+        const countFormatted = isRTL ? I18n.toPersianDigits(event.consolidated_count) : event.consolidated_count;
+
+        if (!startJ || !endJ) {
+            return {
+                isConsolidated: true,
+                timestampStr: I18n.formatTimestamp(event.timestamp),
+                rangeSummary: null,
+                countBadge: ` (${countFormatted})`,
+                durStr: '',
+            };
+        }
+
+        const pad = n => String(n).padStart(2, '0');
+        const startH = pad(startJ.hours);
+        const startM = pad(startJ.minutes);
+        const startS = pad(startJ.seconds);
+        const endH = pad(endJ.hours);
+        const endM = pad(endJ.minutes);
+        const endS = pad(endJ.seconds);
+
+        const diffMs = Math.max(0, new Date(event.latest_timestamp || event.timestamp).getTime() - new Date(event.first_timestamp).getTime());
+        const diffMins = Math.round(diffMs / 60000);
+        const durStr = diffMins >= 60
+            ? (isRTL ? `${I18n.toPersianDigits(Math.floor(diffMins / 60))} ساعت و ${I18n.toPersianDigits(diffMins % 60)} دقیقه` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`)
+            : (diffMins > 0 ? (isRTL ? `${I18n.toPersianDigits(diffMins)} دقیقه` : `${diffMins} min`) : (isRTL ? 'کمتر از ۱ دقیقه' : '< 1 min'));
+
+        const fromTimeShort = isRTL ? `${I18n.toPersianDigits(startH)}:${I18n.toPersianDigits(startM)}` : `${startH}:${startM}`;
+        const toTimeShort = isRTL ? `${I18n.toPersianDigits(endH)}:${I18n.toPersianDigits(endM)}` : `${endH}:${endM}`;
+        const fromTimeFull = isRTL ? `${I18n.toPersianDigits(startH)}:${I18n.toPersianDigits(startM)}:${I18n.toPersianDigits(startS)}` : `${startH}:${startM}:${startS}`;
+        const toTimeFull = isRTL ? `${I18n.toPersianDigits(endH)}:${I18n.toPersianDigits(endM)}:${I18n.toPersianDigits(endS)}` : `${endH}:${endM}:${endS}`;
+
+        const datePart = isRTL
+            ? `${I18n.toPersianDigits(startJ.jy)}/${I18n.toPersianDigits(pad(startJ.jm))}/${I18n.toPersianDigits(pad(startJ.jd))}`
+            : `${startJ.jy}/${pad(startJ.jm)}/${pad(startJ.jd)}`;
+
+        const alertLabel = event.alert_type === 'camera_disconnected'
+            ? (isRTL ? 'قطع ارتباط دوربین' : 'Camera Disconnected')
+            : (isRTL ? 'عدم حضور' : 'Absence');
+
+        const rangeSummary = isRTL
+            ? `${alertLabel}: از ${fromTimeShort} تا ${toTimeShort} (${durStr})`
+            : `${alertLabel}: from ${fromTimeShort} to ${toTimeShort} (${durStr})`;
+
+        const timestampStr = isRTL
+            ? `${datePart} - از ${fromTimeFull} تا ${toTimeFull} (${durStr} · ${countFormatted} ثبت)`
+            : `${datePart} - From ${fromTimeFull} to ${toTimeFull} (${durStr} · ${countFormatted} logs)`;
+
+        const countBadge = ` (${countFormatted} ${isRTL ? 'ثبت' : 'logs'})`;
+
+        return {
+            isConsolidated: true,
+            timestampStr,
+            rangeSummary,
+            countBadge,
+            durStr,
+            fromTimeFull,
+            toTimeFull,
+            countFormatted,
+        };
+    },
+
+    /**
      * Render an event card HTML string.
      * @param {Object} event - Event data object
      * @returns {string} HTML string
@@ -14,13 +95,15 @@ const EventCard = {
             EventCard._cache[event.id] = event;
         }
 
+        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
         const isKnown = event.is_known;
-        const statusClass = isKnown ? 'known' : 'unknown';
+        const statusClass = isWarningAlert ? 'alert-warning-card' : (isKnown ? 'known' : 'unknown');
         const badgeText = isKnown ? I18n.t('known') : I18n.t('unknown');
-        const timestamp = I18n.formatTimestamp(event.timestamp);
+        const timeInfo = EventCard.getTimeInfo(event);
+        const timestamp = timeInfo.timestampStr;
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
-        const confidenceClass = confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low';
+        const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
         const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
         const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
@@ -37,15 +120,21 @@ const EventCard = {
                 <div class="event-card-body">
                     <div class="event-card-header">
                         <span class="event-person-name">${EventCard.escapeHtml(personName)}</span>
-                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
-                            <span class="event-badge ${statusClass}">${badgeText}</span>
+                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center;">
+                            <span class="event-badge ${isWarningAlert ? 'alert-warning-badge' : statusClass}" style="${isWarningAlert ? 'background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);' : ''}">${badgeText}</span>
                             ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
                             ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
-                            ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}</span>` : ''}
-                            ${event.alert_type === 'camera_disconnected' ? `<span class="event-badge" style="background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">${I18n.t('alert_camera_disconnected')}</span>` : ''}
+                            ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}${timeInfo.countBadge}</span>` : ''}
+                            ${event.alert_type === 'camera_disconnected' ? `<span class="event-badge" style="background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">${I18n.t('alert_camera_disconnected')}${timeInfo.countBadge}</span>` : ''}
                         </div>
                     </div>
                     <div class="event-card-meta">
+                        ${timeInfo.rangeSummary ? `
+                        <div class="event-meta-row" style="color: #facc15; font-weight: 700; font-size: 0.8rem; background: rgba(234, 179, 8, 0.1); padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid rgba(234, 179, 8, 0.25);">
+                            <span class="meta-icon" style="color: #facc15;">⚠️</span>
+                            <span>${EventCard.escapeHtml(timeInfo.rangeSummary)}</span>
+                        </div>
+                        ` : ''}
                         <div class="event-meta-row">
                             <span class="meta-icon">📹</span>
                             <span>${EventCard.escapeHtml(cameraName)}</span>
@@ -58,10 +147,10 @@ const EventCard = {
                         ` : ''}
                         <div class="event-meta-row">
                             <span class="meta-icon">🕐</span>
-                            <span>${timestamp}</span>
+                            <span style="direction: ltr;">${timestamp}</span>
                         </div>
-                        <div class="event-meta-row">
-                            <span class="meta-icon">🎯</span>
+                        <div class="event-meta-row" style="${isWarningAlert ? 'color: #facc15; font-weight: 600;' : ''}">
+                            <span class="meta-icon" style="${isWarningAlert ? 'color: #facc15;' : ''}">🎯</span>
                             <span>${I18n.t('event_confidence')}: ${confidenceDisplay}%</span>
                         </div>
                     </div>
@@ -86,13 +175,15 @@ const EventCard = {
             EventCard._cache[event.id] = event;
         }
 
+        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
         const isKnown = event.is_known;
-        const statusClass = isKnown ? 'known' : 'unknown';
+        const statusClass = isWarningAlert ? 'alert-warning-card' : (isKnown ? 'known' : 'unknown');
         const badgeText = isKnown ? I18n.t('known') : I18n.t('unknown');
-        const timestamp = I18n.formatTimestamp(event.timestamp);
+        const timeInfo = EventCard.getTimeInfo(event);
+        const timestamp = timeInfo.timestampStr;
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
-        const confidenceClass = confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low';
+        const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
         const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
         const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
@@ -111,25 +202,26 @@ const EventCard = {
                         <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 2px;">
                             ${EventCard.escapeHtml(personName)}
                         </div>
-                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
-                            <span class="event-badge ${statusClass}" style="font-size: 0.65rem; padding: 1px 7px;">${badgeText}</span>
+                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center;">
+                            <span class="event-badge ${isWarningAlert ? 'alert-warning-badge' : statusClass}" style="font-size: 0.65rem; padding: 1px 7px; ${isWarningAlert ? 'background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);' : ''}">${badgeText}</span>
                             ${event.alert_type === 'out_of_zone' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_out_of_zone')}</span>` : ''}
                             ${event.alert_type === 'unauthorized_entry' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">${I18n.t('alert_unauthorized')}</span>` : ''}
-                            ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}</span>` : ''}
-                            ${event.alert_type === 'camera_disconnected' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">${I18n.t('alert_camera_disconnected')}</span>` : ''}
+                            ${event.alert_type === 'absence_timeout' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">${I18n.t('alert_absence_timeout')}${timeInfo.countBadge}</span>` : ''}
+                            ${event.alert_type === 'camera_disconnected' ? `<span class="event-badge" style="font-size: 0.65rem; padding: 1px 7px; background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);">${I18n.t('alert_camera_disconnected')}${timeInfo.countBadge}</span>` : ''}
                         </div>
                     </div>
                 </div>
 
                 <div class="event-list-meta">
+                    ${timeInfo.rangeSummary ? `<span style="color: #facc15; font-weight: 700;">⚠️ ${EventCard.escapeHtml(timeInfo.rangeSummary)}</span>` : ''}
                     <span title="${I18n.t('event_camera')}">📹 ${EventCard.escapeHtml(cameraName)}</span>
                     ${event.zone_name ? `<span style="color: var(--accent-blue);" title="${I18n.t('event_area')}">🎯 ${EventCard.escapeHtml(event.zone_name)}</span>` : ''}
-                    <span title="${I18n.t('event_timestamp')}">🕐 ${timestamp}</span>
+                    <span title="${I18n.t('event_timestamp')}" style="direction: ltr;">🕐 ${timestamp}</span>
                 </div>
 
                 <div class="event-list-confidence">
                     <div style="flex: 1; min-width: 60px;">
-                        <div style="font-size: 0.72rem; color: var(--text-tertiary); text-align: end; margin-bottom: 2px;">${confidenceDisplay}%</div>
+                        <div style="font-size: 0.72rem; ${isWarningAlert ? 'color: #facc15; font-weight: 700;' : 'color: var(--text-tertiary);'} text-align: end; margin-bottom: 2px;">${confidenceDisplay}%</div>
                         <div class="confidence-bar" style="margin-top: 0;">
                             <div class="confidence-bar-fill ${confidenceClass}" style="width: ${confidence}%"></div>
                         </div>
@@ -149,14 +241,16 @@ const EventCard = {
         const event = EventCard._cache[eventId];
         if (!event) return;
 
+        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
         const isKnown = event.is_known;
-        const statusClass = isKnown ? 'known' : 'unknown';
+        const statusClass = isWarningAlert ? 'alert-warning-card' : (isKnown ? 'known' : 'unknown');
         const badgeText = isKnown ? I18n.t('known_identity') : I18n.t('unidentified');
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
-        const confidenceClass = confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low';
+        const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
         const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
-        const fullTimeStr = I18n.formatFullTimestamp(event.timestamp);
+        const timeInfo = EventCard.getTimeInfo(event);
+        const fullTimeStr = timeInfo.isConsolidated ? timeInfo.timestampStr : I18n.formatFullTimestamp(event.timestamp);
         const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
         const eventIdStr = I18n.isRTL() ? I18n.toPersianDigits(event.id) : event.id;
@@ -165,7 +259,7 @@ const EventCard = {
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <h2 class="modal-title">${I18n.t('event_details_title', { id: eventIdStr })}</h2>
-                    <span class="event-badge ${statusClass}">${badgeText}</span>
+                    <span class="event-badge ${isWarningAlert ? 'alert-warning-badge' : statusClass}" style="${isWarningAlert ? 'background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4);' : ''}">${badgeText}</span>
                 </div>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
@@ -206,7 +300,7 @@ const EventCard = {
                                 <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem; letter-spacing: 0.05em;">${I18n.t('event_timestamp')}</div>
                                 <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
                                     <span>🕐</span>
-                                    <span>${fullTimeStr}</span>
+                                    <span style="direction: ltr;">${fullTimeStr}</span>
                                 </div>
                             </div>
                         </div>
@@ -224,7 +318,7 @@ const EventCard = {
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.95rem 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
                             <div style="display: flex; justify-content: space-between; font-size: 0.72rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.4rem; letter-spacing: 0.05em;">
                                 <span>${I18n.t('event_confidence')}</span>
-                                <span style="color: var(--text-primary); font-weight: 700;">${confidenceDisplay}%</span>
+                                <span style="${isWarningAlert ? 'color: #facc15;' : 'color: var(--text-primary);'} font-weight: 700;">${confidenceDisplay}%</span>
                             </div>
                             <div class="confidence-bar" style="height: 8px;">
                                 <div class="confidence-bar-fill ${confidenceClass}" style="width: ${confidence}%;"></div>
@@ -232,6 +326,32 @@ const EventCard = {
                         </div>
                     </div>
                 </div>
+
+                ${(event.consolidated_events && event.consolidated_events.length > 1) ? `
+                    <div style="margin-top: 1.25rem; background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: var(--radius-md); padding: 1rem 1.2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="font-weight: 700; color: #facc15; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <span>⚠️</span>
+                                <span>${timeInfo.rangeSummary || (I18n.isRTL() ? 'خلاصه رویدادهای این بازه' : 'Incident Logs Summary')}</span>
+                            </div>
+                            <span style="font-size: 0.75rem; background: rgba(234, 179, 8, 0.2); color: #facc15; padding: 2px 8px; border-radius: 4px; font-weight: 700;">
+                                ${timeInfo.countFormatted} ${I18n.isRTL() ? 'ثبت' : 'logs'}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;">
+                            ${I18n.t('incident_logs_history')} (${I18n.isRTL() ? 'تمام رخدادهای ثبت‌شده در این بازه' : 'All logs recorded during this window'}):
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 180px; overflow-y: auto; padding-inline-end: 4px;">
+                            ${event.consolidated_events.map((subEv, idx) => `
+                                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.3); padding: 5px 10px; border-radius: var(--radius-sm); font-size: 0.76rem; border: 1px solid rgba(255, 255, 255, 0.06);">
+                                    <span style="color: var(--text-tertiary); font-size: 0.72rem;">#${event.consolidated_events.length - idx}</span>
+                                    <span style="font-weight: 600; color: #facc15; direction: ltr;">${I18n.formatTimestamp(subEv.timestamp)}</span>
+                                    <span style="color: var(--text-secondary); font-size: 0.72rem;">${subEv.zone_name ? `🎯 ${EventCard.escapeHtml(subEv.zone_name)}` : ''}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
 
                 <div id="event-detail-person-history"></div>
             </div>

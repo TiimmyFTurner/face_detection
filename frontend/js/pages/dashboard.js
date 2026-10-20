@@ -1214,7 +1214,7 @@ const DashboardPage = {
                 if (endIso) url += `&end_time=${encodeURIComponent(endIso)}`;
 
                 const data = await App.api(url);
-                DashboardPage._events = data.events || [];
+                DashboardPage._events = DashboardPage.consolidateEvents(data.events || []);
                 DashboardPage._eventTotal = data.total || 0;
                 DashboardPage._eventPage = page;
                 DashboardPage.renderEvents();
@@ -1232,6 +1232,69 @@ const DashboardPage = {
         } finally {
             DashboardPage._eventLoading = false;
         }
+    },
+
+    /**
+     * Consolidate contiguous or ongoing repetitive alert events (camera disconnects, absences)
+     * so that instead of multiple duplicate cards, a single incident card with time range is shown.
+     */
+    consolidateEvents(rawEvents) {
+        if (!rawEvents || rawEvents.length === 0) return [];
+
+        const consolidated = [];
+        let currentGroup = null;
+
+        for (let i = 0; i < rawEvents.length; i++) {
+            const ev = rawEvents[i];
+            const isConsolidatable = ev.alert_type === 'camera_disconnected' || ev.alert_type === 'absence_timeout';
+
+            if (isConsolidatable) {
+                if (
+                    currentGroup &&
+                    currentGroup.alert_type === ev.alert_type &&
+                    String(currentGroup.camera_id) === String(ev.camera_id) &&
+                    String(currentGroup.person_id || currentGroup.person_name || '') === String(ev.person_id || ev.person_name || '') &&
+                    String(currentGroup.zone_id || currentGroup.zone_name || '') === String(ev.zone_id || ev.zone_name || '')
+                ) {
+                    const lastAdded = currentGroup.consolidated_events[currentGroup.consolidated_events.length - 1];
+                    const prevMs = new Date(lastAdded.timestamp).getTime();
+                    const currMs = new Date(ev.timestamp).getTime();
+                    const diffMins = Math.abs(prevMs - currMs) / 60000;
+
+                    if (diffMins <= 30) {
+                        currentGroup.consolidated_events.push(ev);
+                        currentGroup.consolidated_count += 1;
+                        // Events from API are sorted newest first, so ev is earlier in time
+                        currentGroup.first_timestamp = ev.timestamp;
+                        continue;
+                    }
+                }
+
+                if (currentGroup) {
+                    consolidated.push(currentGroup);
+                }
+
+                currentGroup = {
+                    ...ev,
+                    consolidated_count: 1,
+                    first_timestamp: ev.timestamp,
+                    latest_timestamp: ev.timestamp,
+                    consolidated_events: [ev],
+                };
+            } else {
+                if (currentGroup) {
+                    consolidated.push(currentGroup);
+                    currentGroup = null;
+                }
+                consolidated.push(ev);
+            }
+        }
+
+        if (currentGroup) {
+            consolidated.push(currentGroup);
+        }
+
+        return consolidated;
     },
 
     async changeEventLimit(limit) {
@@ -1525,15 +1588,70 @@ const DashboardPage = {
         // Re-render
         if (DashboardPage._viewMode === 'stream') {
             if (DashboardPage._eventPage === 1) {
-                // When on page 1, prepend new event and keep within limit
-                DashboardPage._events.unshift(eventData);
+                const isConsolidatable = eventData.alert_type === 'camera_disconnected' || eventData.alert_type === 'absence_timeout';
+                let mergedWithExisting = false;
 
-                const limit = DashboardPage._eventLimit || 30;
-                if (DashboardPage._events.length > limit) {
-                    DashboardPage._events = DashboardPage._events.slice(0, limit);
+                if (isConsolidatable && DashboardPage._events.length > 0) {
+                    for (let i = 0; i < Math.min(3, DashboardPage._events.length); i++) {
+                        const existing = DashboardPage._events[i];
+                        if (
+                            existing.alert_type === eventData.alert_type &&
+                            String(existing.camera_id) === String(eventData.camera_id) &&
+                            String(existing.person_id || existing.person_name || '') === String(eventData.person_id || eventData.person_name || '') &&
+                            String(existing.zone_id || existing.zone_name || '') === String(eventData.zone_id || eventData.zone_name || '')
+                        ) {
+                            const prevTimestamp = existing.latest_timestamp || existing.timestamp;
+                            const prevMs = new Date(prevTimestamp).getTime();
+                            const newMs = new Date(eventData.timestamp).getTime();
+                            const diffMins = Math.abs(newMs - prevMs) / 60000;
+
+                            if (diffMins <= 30) {
+                                existing.consolidated_events = existing.consolidated_events || [JSON.parse(JSON.stringify(existing))];
+                                existing.consolidated_events.unshift(eventData);
+                                existing.consolidated_count = (existing.consolidated_count || 1) + 1;
+                                if (!existing.first_timestamp) {
+                                    existing.first_timestamp = existing.timestamp;
+                                }
+                                existing.latest_timestamp = eventData.timestamp;
+                                existing.timestamp = eventData.timestamp;
+                                existing.id = eventData.id;
+                                EventCard._cache[eventData.id] = existing;
+                                mergedWithExisting = true;
+
+                                DashboardPage.renderEvents();
+
+                                setTimeout(() => {
+                                    const cardEl = document.querySelector(`[data-event-id="${existing.id}"]`);
+                                    if (cardEl) {
+                                        cardEl.classList.remove('pulse-update');
+                                        void cardEl.offsetWidth;
+                                        cardEl.classList.add('pulse-update');
+                                    }
+                                }, 40);
+                                break;
+                            }
+                        }
+                    }
                 }
 
-                DashboardPage.renderEvents();
+                if (!mergedWithExisting) {
+                    const entry = isConsolidatable ? {
+                        ...eventData,
+                        consolidated_count: 1,
+                        first_timestamp: eventData.timestamp,
+                        latest_timestamp: eventData.timestamp,
+                        consolidated_events: [eventData],
+                    } : eventData;
+
+                    DashboardPage._events.unshift(entry);
+
+                    const limit = DashboardPage._eventLimit || 30;
+                    if (DashboardPage._events.length > limit) {
+                        DashboardPage._events = DashboardPage._events.slice(0, limit);
+                    }
+
+                    DashboardPage.renderEvents();
+                }
             } else {
                 // When on page > 1, do NOT insert new event into current page view
                 // Increment unseen new events and update pagination counters

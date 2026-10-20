@@ -612,6 +612,18 @@ body[dir="ltr"] {
     border-left: 3px solid var(--accent-rose);
 }
 
+.event-card.alert-warning-card {
+    border-left: 3px solid #facc15 !important;
+    border-inline-start: 3px solid #facc15 !important;
+    border-color: rgba(234, 179, 8, 0.4) !important;
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.08);
+}
+
+.event-card.alert-warning-card:hover {
+    border-color: rgba(234, 179, 8, 0.7) !important;
+    box-shadow: 0 4px 20px rgba(234, 179, 8, 0.22);
+}
+
 .event-card-image {
     width: 100%;
     height: 180px;
@@ -703,6 +715,20 @@ body[dir="ltr"] {
 
 .confidence-bar-fill.low {
     background: var(--gradient-danger);
+}
+
+.confidence-bar-fill.warning {
+    background: linear-gradient(90deg, #d97706, #facc15) !important;
+}
+
+@keyframes pulseUpdate {
+    0% { transform: scale(1); box-shadow: 0 0 0 rgba(234, 179, 8, 0); }
+    40% { transform: scale(1.02); box-shadow: 0 0 22px rgba(234, 179, 8, 0.45); border-color: #facc15 !important; }
+    100% { transform: scale(1); box-shadow: 0 0 0 rgba(234, 179, 8, 0); }
+}
+
+.event-card.pulse-update {
+    animation: pulseUpdate 0.8s ease-in-out;
 }
 
 /* ── Camera Cards ────────────────────────────────────────── */

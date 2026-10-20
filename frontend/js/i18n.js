@@ -1735,6 +1735,9 @@ const I18n = {
             return I18n.t('status_in_zone_recent');
         }
         if (p.status === 'absent') {
+            if (p.last_seen_str === 'Not Seen Yet' || (p.last_seen_sec === null && p.last_seen_seconds_ago === null)) {
+                return I18n.t('status_not_seen_yet');
+            }
             if (p.minutes_absent !== null && p.minutes_absent !== undefined) {
                 const mins = Math.round(p.minutes_absent);
                 const minsDisplay = I18n.isRTL() ? I18n.toPersianDigits(mins) : mins;

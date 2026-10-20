@@ -305,13 +305,15 @@ async def get_zones_status(
         camera_name = camera_map.get(z.camera_id, f"Camera #{z.camera_id}")
         active_days = _parse_list_field(z.active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
 
-        in_schedule = is_time_in_timetable(
+        now_dt = datetime.now()
+        in_schedule, shift_start_dt, shift_end_dt, is_overnight, dur_h, elapsed_shift_mins = get_shift_window(
             z.start_time or "00:00",
             z.end_time or "23:59",
             active_days,
+            now_dt,
         )
 
-        in_free_time, break_name = is_time_in_free_time(z.free_times)
+        in_free_time, break_name = is_time_in_free_time(z.free_times, now_dt)
 
         days_str = ",".join(str(d) for d in active_days) if active_days else "All Days"
         timetable_text = f"{z.start_time or '00:00'} - {z.end_time or '23:59'} ({days_str})"
@@ -319,36 +321,44 @@ async def get_zones_status(
         assigned_status_list: list[ZonePersonStatus] = []
         raw_assigned = _parse_list_field(z.assigned_person_ids, [])
         assigned_ids = [int(x) for x in raw_assigned if str(x).isdigit()]
+        is_cam_online = stream_processor.is_camera_online(z.camera_id)
+        shift_start_ts = shift_start_dt.timestamp()
 
         for pid in assigned_ids:
             pname = person_map.get(pid, f"Person #{pid}")
             key = (z.id, pid)
             last_seen = stream_processor._zone_last_seen.get(key, 0)
+            seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
             if not in_schedule:
                 status_str = "off_duty"
                 last_seen_sec = None
                 last_seen_str = "Off Duty (Outside Timetable)"
                 minutes_absent = None
+            elif not is_cam_online:
+                status_str = "camera_offline"
+                last_seen_sec = None
+                last_seen_str = "Camera Disconnected"
+                minutes_absent = None
             elif in_free_time:
-                if last_seen > 0 and (now - last_seen) < 120.0:
+                if seen_in_shift and (now - last_seen) < 120.0:
                     status_str = "present"
                     last_seen_sec = round(now - last_seen, 1)
                     last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
                     minutes_absent = 0
                 else:
                     status_str = "on_break"
-                    last_seen_sec = round(now - last_seen, 1) if last_seen > 0 else None
+                    last_seen_sec = round(now - last_seen, 1) if seen_in_shift else None
                     last_seen_str = f"On Break ({break_name})"
                     minutes_absent = 0
-            elif last_seen > 0 and (now - last_seen) < 120.0:
+            elif seen_in_shift and (now - last_seen) < 120.0:
                 status_str = "present"
                 last_seen_sec = round(now - last_seen, 1)
                 last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
                 minutes_absent = 0
             else:
                 status_str = "absent"
-                if last_seen > 0:
+                if seen_in_shift:
                     last_seen_sec = round(now - last_seen, 1)
                     mins = max(1, int(last_seen_sec // 60))
                     last_seen_str = f"Missing for {mins}m"
@@ -356,7 +366,7 @@ async def get_zones_status(
                 else:
                     last_seen_sec = None
                     last_seen_str = "Not Seen Yet"
-                    minutes_absent = None
+                    minutes_absent = max(1, elapsed_shift_mins) if elapsed_shift_mins > 0 else 0
 
             assigned_status_list.append(
                 ZonePersonStatus(
@@ -484,6 +494,8 @@ async def compute_duty_roster_data(
                 key = (z.id, pid)
                 last_seen = stream_processor._zone_last_seen.get(key, 0)
                 is_cam_online = stream_processor.is_camera_online(z.camera_id)
+                shift_start_ts = shift_start_dt.timestamp()
+                seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
                 if not in_schedule:
                     status_str = "off_duty"
@@ -498,7 +510,7 @@ async def compute_duty_roster_data(
                     last_seen_str = "Camera Disconnected"
                     curr_absence_mins = 0
                 elif in_free_time:
-                    if last_seen > 0 and (now_ts - last_seen) < 120.0:
+                    if seen_in_shift and (now_ts - last_seen) < 120.0:
                         status_str = "present"
                         is_in_zone = True
                         last_seen_sec = round(now_ts - last_seen, 1)
@@ -507,10 +519,10 @@ async def compute_duty_roster_data(
                     else:
                         status_str = "on_break"
                         is_in_zone = False
-                        last_seen_sec = round(now_ts - last_seen, 1) if last_seen > 0 else None
+                        last_seen_sec = round(now_ts - last_seen, 1) if seen_in_shift else None
                         last_seen_str = f"On Break ({break_name})"
                         curr_absence_mins = 0
-                elif last_seen > 0 and (now_ts - last_seen) < 120.0:
+                elif seen_in_shift and (now_ts - last_seen) < 120.0:
                     status_str = "present"
                     is_in_zone = True
                     last_seen_sec = round(now_ts - last_seen, 1)
@@ -519,7 +531,7 @@ async def compute_duty_roster_data(
                 else:
                     status_str = "absent"
                     is_in_zone = False
-                    if last_seen > 0:
+                    if seen_in_shift:
                         last_seen_sec = round(now_ts - last_seen, 1)
                         curr_absence_mins = max(1, int(last_seen_sec // 60))
                         last_seen_str = f"Missing for {curr_absence_mins}m"

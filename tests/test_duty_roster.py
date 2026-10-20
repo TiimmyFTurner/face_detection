@@ -586,3 +586,139 @@ async def test_duty_roster_arrival_exceeding_grace_period(client: AsyncClient, m
     assert late_intervals[0]["duration_minutes"] == 25
     assert bob["shift_absence_minutes"] >= 25
 
+
+@pytest.mark.asyncio
+async def test_server_reset_person_not_seen_entire_shift(client: AsyncClient, monkeypatch):
+    """
+    When the server resets mid-shift and a person has never been seen during the shift:
+    - They must NOT be marked as 'In Zone (just now)' or present.
+    - Status must be 'absent' and 'Not Seen Yet'.
+    - Absence minutes must count from shift start, not from server reset.
+    """
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+    now_local = datetime.now()
+    # Shift started 2 hours ago (120 mins), ends in 2 hours
+    shift_start_dt = now_local - timedelta(minutes=120)
+    shift_end_dt = now_local + timedelta(hours=2)
+    s_start_str = shift_start_dt.strftime("%H:%M")
+    s_end_str = shift_end_dt.strftime("%H:%M")
+
+    async with test_session() as session:
+        cam = Camera(name="Gate Cam", rtsp_url="rtsp://127.0.0.1/gate", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="Siavash Reset", role="Guard")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Security Booth",
+            x=0, y=0, width=100, height=100,
+            assigned_person_ids=[p.id],
+            start_time=s_start_str,
+            end_time=s_end_str,
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            grace_period_minutes=10,
+            absence_timeout_minutes=5,
+            is_active=True,
+        )
+        session.add(zone)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+
+    # Simulate server reset: _zone_last_seen has no entries or 0 for this person
+    stream_processor._zone_last_seen.pop((zid, pid), None)
+
+    # 1. Check live status endpoint
+    resp = await client.get("/api/zones/status")
+    assert resp.status_code == 200
+    z_live = next((z for z in resp.json() if z["zone_id"] == zid), None)
+    assert z_live is not None
+    p_status = next((st for st in z_live["assigned_persons"] if st["person_id"] == pid), None)
+    assert p_status is not None
+    assert p_status["status"] == "absent"
+    assert p_status["last_seen_str"] == "Not Seen Yet"
+    assert p_status["last_seen_seconds_ago"] is None
+    # Absence minutes must be ~120 mins (from shift start), not 0
+    assert p_status["minutes_absent"] is not None
+    assert 118 <= p_status["minutes_absent"] <= 122
+
+    # 2. Check duty roster endpoint
+    resp_roster = await client.get("/api/zones/duty-roster?only_active=true")
+    assert resp_roster.status_code == 200
+    data_roster = resp_roster.json()
+    p_roster = next((r for r in data_roster["roster"] if r["person_id"] == pid), None)
+    assert p_roster is not None
+    assert p_roster["is_in_zone"] is False
+    assert p_roster["status"] == "absent"
+    assert p_roster["last_seen_str"] == "Not Seen Yet"
+    assert 118 <= p_roster["current_absence_minutes"] <= 122
+    assert p_roster["shift_absence_minutes"] >= 118
+
+
+@pytest.mark.asyncio
+async def test_server_reset_populates_last_seen_from_db_when_sighting_exists(client: AsyncClient, monkeypatch):
+    """
+    When the server resets mid-shift and a person was sighted before the restart,
+    stream_processor.refresh_zones() should restore their last sighting timestamp from DB.
+    """
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+    now_local = datetime.now()
+    shift_start_dt = now_local - timedelta(minutes=90)
+    shift_end_dt = now_local + timedelta(hours=3)
+
+    async with test_session() as session:
+        cam = Camera(name="Front Cam", rtsp_url="rtsp://127.0.0.1/front", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="Alice Seen", role="Officer")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Front Area",
+            x=0, y=0, width=100, height=100,
+            assigned_person_ids=[p.id],
+            start_time=shift_start_dt.strftime("%H:%M"),
+            end_time=shift_end_dt.strftime("%H:%M"),
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            is_active=True,
+        )
+        session.add(zone)
+        await session.flush()
+
+        # Add physical sighting event 20 minutes ago
+        seen_time = now_local - timedelta(minutes=20)
+        ev = Event(
+            camera_id=cam.id,
+            zone_id=zone.id,
+            person_id=p.id,
+            person_name=p.name,
+            timestamp=seen_time.astimezone(timezone.utc),
+            confidence_score=0.95,
+            snapshot_path="/snapshots/test_alice.jpg",
+            alert_type="normal",
+        )
+        session.add(ev)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+        expected_ts = seen_time.timestamp()
+
+    # Clear memory cache to simulate reboot
+    stream_processor._zone_last_seen.pop((zid, pid), None)
+
+    # Call refresh_zones
+    await stream_processor.refresh_zones()
+
+    # Verify last seen was restored from DB
+    restored_ts = stream_processor._zone_last_seen.get((zid, pid))
+    assert restored_ts is not None
+    assert abs(restored_ts - expected_ts) < 5.0  # within 5 seconds of the event timestamp
+
+

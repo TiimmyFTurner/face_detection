@@ -61,7 +61,10 @@ class CameraZone(Base):
     end_time = Column(String(10), default="23:59")      # HH:MM format
     active_days = Column(JSON, default=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
     absence_timeout_minutes = Column(Integer, default=2)  # Minutes of absence before alarm
+    grace_period_minutes = Column(Integer, default=10)   # Allowed arrival delay before marking late arrival
     free_times = Column(JSON, default=list)  # e.g. [{"name": "Lunch", "start_time": "12:00", "end_time": "13:00"}]
+    shift_name = Column(String(255), default="")  # e.g. "Morning Shift" / "شیفت صبح"
+    shifts = Column(JSON, default=list)  # Multi-shift rotational schedules
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
@@ -71,6 +74,27 @@ class CameraZone(Base):
 
     def __repr__(self) -> str:
         return f"<CameraZone id={self.id} camera_id={self.camera_id} name='{self.name}'>"
+
+
+class ShiftTemplate(Base):
+    """Reusable shift timetable template (Morning, Evening, Night, Office, etc.)."""
+
+    __tablename__ = "shift_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)  # e.g. "Morning Shift"
+    start_time = Column(String(10), nullable=False, default="08:00")
+    end_time = Column(String(10), nullable=False, default="16:00")
+    color = Column(String(50), default="#38bdf8")  # Hex color badge
+    active_days = Column(JSON, default=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    grace_period_minutes = Column(Integer, default=10)
+    absence_timeout_minutes = Column(Integer, default=2)
+    free_times = Column(JSON, default=list)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    def __repr__(self) -> str:
+        return f"<ShiftTemplate id={self.id} name='{self.name}' ({self.start_time}-{self.end_time})>"
 
 
 class Person(Base):

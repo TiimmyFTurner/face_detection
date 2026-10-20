@@ -206,32 +206,58 @@ const ZoneModal = {
                             </select>
                         </div>
 
-                        <!-- Absence Alarm Timer (Minutes) -->
+                        <!-- Shift Template Selector -->
                         <div class="form-group" style="margin-bottom: 0.85rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                                <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
+                            <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+                                ${I18n.t('label_shift_template')}
+                            </label>
+                            <select id="zone-shift-template" class="form-input" style="font-size: 0.82rem; padding: 0.45rem 0.75rem;" onchange="ZoneModal.onSelectShiftTemplate(this.value)">
+                                <option value="">${I18n.t('select_shift_template_placeholder')}</option>
+                                <option value="morning">${I18n.t('template_morning')}</option>
+                                <option value="evening">${I18n.t('template_evening')}</option>
+                                <option value="night">${I18n.t('template_night')}</option>
+                                <option value="office">${I18n.t('template_office')}</option>
+                            </select>
+                        </div>
+
+                        <!-- Timers Row: Absence Timeout & Arrival Grace Period -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
                                     ${I18n.t('label_absence_timer')}
                                 </label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="number" id="zone-absence-timeout" class="form-input" min="1" max="120" value="${isEditing ? (editingZone.absence_timeout_minutes || 2) : 2}" style="padding: 0.45rem 0.6rem; font-size: 0.85rem; width: 75px;" />
+                                    <span style="font-size: 0.72rem; color: var(--text-secondary);">${I18n.isRTL() ? 'دقیقه آژیر' : 'min alarm'}</span>
+                                </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 0.6rem;">
-                                <input type="number" id="zone-absence-timeout" class="form-input" min="1" max="120" value="${isEditing ? (editingZone.absence_timeout_minutes || 2) : 2}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; width: 90px;" />
-                                <span style="font-size: 0.78rem; color: var(--text-secondary);">${I18n.isRTL() ? 'دقیقه غیبت قبل از فعال شدن آژیر' : 'minutes before alarm sounds'}</span>
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+                                    ${I18n.t('label_grace_period')}
+                                </label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="number" id="zone-grace-period" class="form-input" min="0" max="120" value="${isEditing ? (editingZone.grace_period_minutes !== undefined ? editingZone.grace_period_minutes : 10) : 10}" style="padding: 0.45rem 0.6rem; font-size: 0.85rem; width: 75px;" />
+                                    <span style="font-size: 0.72rem; color: var(--text-secondary);">${I18n.isRTL() ? 'دقیقه مهلت' : 'min grace'}</span>
+                                </div>
                             </div>
-                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 0.25rem;">${I18n.t('absence_timer_hint')}</div>
                         </div>
 
                         <!-- Shift Timetable & Active Days -->
                         <div class="form-group" style="margin-bottom: 0.85rem;">
                             <label class="form-label" style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">${I18n.t('label_shift_schedule')}</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.4rem;">
                                 <div>
                                     <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block; margin-bottom: 0.2rem;">${I18n.t('label_start_time')}</span>
-                                    <input type="time" id="zone-start-time" class="form-input" value="${isEditing ? (editingZone.start_time || '08:00') : '08:00'}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
+                                    <input type="time" id="zone-start-time" class="form-input" onchange="ZoneModal.checkOvernightShift()" value="${isEditing ? (editingZone.start_time || '08:00') : '08:00'}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
                                 </div>
                                 <div>
                                     <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block; margin-bottom: 0.2rem;">${I18n.t('label_end_time')}</span>
-                                    <input type="time" id="zone-end-time" class="form-input" value="${isEditing ? (editingZone.end_time || '17:00') : '17:00'}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
+                                    <input type="time" id="zone-end-time" class="form-input" onchange="ZoneModal.checkOvernightShift()" value="${isEditing ? (editingZone.end_time || '17:00') : '17:00'}" style="padding: 0.5rem 0.75rem; font-size: 0.85rem;" />
                                 </div>
+                            </div>
+                            <!-- Overnight Shift Banner -->
+                            <div id="zone-overnight-banner" style="display: none; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 0.74rem; margin-bottom: 0.5rem; align-items: center; gap: 6px;">
+                                ${I18n.t('overnight_shift_banner')}
                             </div>
                             <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem;" id="zone-days-picker">
                                 ${weekdays.map(item => `
@@ -309,6 +335,7 @@ const ZoneModal = {
 
         App.openModal(content, 'modal-zones modal-xl');
         ZoneModal.initDrawingEvents();
+        ZoneModal.checkOvernightShift();
     },
 
     /**
@@ -806,6 +833,68 @@ const ZoneModal = {
     },
 
     /**
+     * Check if currently set start/end times constitute an overnight shift,
+     * and toggle the overnight banner accordingly.
+     */
+    checkOvernightShift() {
+        const startInput = document.getElementById('zone-start-time');
+        const endInput = document.getElementById('zone-end-time');
+        const banner = document.getElementById('zone-overnight-banner');
+        if (!startInput || !endInput || !banner) return;
+
+        const start = startInput.value || '08:00';
+        const end = endInput.value || '17:00';
+        const isOvernight = start > end;
+        banner.style.display = isOvernight ? 'flex' : 'none';
+    },
+
+    /**
+     * Apply predefined shift template values.
+     */
+    onSelectShiftTemplate(key) {
+        if (!key) return;
+        const startInput = document.getElementById('zone-start-time');
+        const endInput = document.getElementById('zone-end-time');
+        const graceInput = document.getElementById('zone-grace-period');
+        const timeoutInput = document.getElementById('zone-absence-timeout');
+
+        const templates = {
+            morning: {
+                start: '07:00', end: '15:00', grace: 10, timeout: 2,
+                breaks: [{ name: I18n.isRTL() ? 'ناهار' : 'Lunch', start_time: '12:00', end_time: '13:00' }]
+            },
+            evening: {
+                start: '15:00', end: '23:00', grace: 10, timeout: 2,
+                breaks: [{ name: I18n.isRTL() ? 'عصرانه' : 'Tea Break', start_time: '18:00', end_time: '18:30' }]
+            },
+            night: {
+                start: '23:00', end: '07:00', grace: 10, timeout: 2,
+                breaks: [{ name: I18n.isRTL() ? 'استراحت نیمه‌شب' : 'Midnight Rest', start_time: '03:00', end_time: '03:45' }]
+            },
+            office: {
+                start: '08:00', end: '17:00', grace: 15, timeout: 5,
+                breaks: [{ name: I18n.isRTL() ? 'ناهار و استراحت' : 'Lunch Break', start_time: '12:30', end_time: '13:30' }]
+            },
+        };
+
+        const t = templates[key];
+        if (!t) return;
+
+        if (startInput) startInput.value = t.start;
+        if (endInput) endInput.value = t.end;
+        if (graceInput) graceInput.value = t.grace;
+        if (timeoutInput) timeoutInput.value = t.timeout;
+
+        ZoneModal._freeTimes = [...t.breaks];
+        const container = document.getElementById('zone-free-times-list');
+        if (container) {
+            container.innerHTML = ZoneModal.renderFreeTimesListHtml();
+        }
+
+        ZoneModal.checkOvernightShift();
+    },
+
+    /**
      * Save a new camera zone or update an existing one.
      */
     async saveZone() {
@@ -828,6 +917,13 @@ const ZoneModal = {
         const absenceTimeout = document.getElementById('zone-absence-timeout')
             ? parseInt(document.getElementById('zone-absence-timeout').value, 10) || 2
             : 2;
+        const gracePeriod = document.getElementById('zone-grace-period')
+            ? parseInt(document.getElementById('zone-grace-period').value, 10) || 10
+            : 10;
+        const shiftTemplateSelect = document.getElementById('zone-shift-template');
+        const shiftName = shiftTemplateSelect && shiftTemplateSelect.value
+            ? (shiftTemplateSelect.options[shiftTemplateSelect.selectedIndex]?.text || '')
+            : '';
 
         const checkedDays = Array.from(document.querySelectorAll('#zone-days-picker input[type="checkbox"]:checked'))
             .map(cb => cb.value);
@@ -844,6 +940,8 @@ const ZoneModal = {
             end_time: endTime,
             active_days: checkedDays.length > 0 ? checkedDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
             absence_timeout_minutes: absenceTimeout,
+            grace_period_minutes: gracePeriod,
+            shift_name: shiftName,
             free_times: ZoneModal._freeTimes || [],
             is_active: true,
         };

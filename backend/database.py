@@ -72,8 +72,14 @@ async def init_db() -> None:
                         sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN active_days JSON")
                     if "absence_timeout_minutes" not in z_cols:
                         sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN absence_timeout_minutes INTEGER DEFAULT 2")
+                    if "grace_period_minutes" not in z_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN grace_period_minutes INTEGER DEFAULT 10")
                     if "free_times" not in z_cols:
                         sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN free_times JSON")
+                    if "shift_name" not in z_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN shift_name VARCHAR(255) DEFAULT ''")
+                    if "shifts" not in z_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN shifts JSON")
 
                 # Data backfill for existing records
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET start_time = '00:00' WHERE start_time IS NULL OR start_time = ''")
@@ -82,7 +88,10 @@ async def init_db() -> None:
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET assigned_person_ids = '[]' WHERE assigned_person_ids IS NULL")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET alert_mode = 'absence' WHERE alert_mode IS NULL OR alert_mode = ''")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET absence_timeout_minutes = 2 WHERE absence_timeout_minutes IS NULL")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET grace_period_minutes = 10 WHERE grace_period_minutes IS NULL")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET free_times = '[]' WHERE free_times IS NULL")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET shift_name = '' WHERE shift_name IS NULL")
+                sync_conn.exec_driver_sql("UPDATE camera_zones SET shifts = '[]' WHERE shifts IS NULL")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET is_active = 1 WHERE is_active IS NULL")
                 sync_conn.exec_driver_sql("UPDATE events SET alert_type = 'normal' WHERE alert_type IS NULL OR alert_type = ''")
                 sync_conn.exec_driver_sql("UPDATE events SET zone_name = '' WHERE zone_name IS NULL")
@@ -193,6 +202,67 @@ async def _seed_defaults() -> None:
                 is_active=True,
             )
             session.add(admin_user)
+            await session.commit()
+
+        # Check / Seed default Shift Templates
+        from backend.models import ShiftTemplate
+        shift_res = await session.execute(select(ShiftTemplate))
+        existing_shifts = shift_res.scalars().all()
+        if not existing_shifts:
+            default_shifts_data = [
+                {
+                    "name": "شیفت صبح (Morning)",
+                    "start_time": "07:00",
+                    "end_time": "15:00",
+                    "color": "#38bdf8",
+                    "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu"],
+                    "grace_period_minutes": 10,
+                    "absence_timeout_minutes": 2,
+                    "free_times": [{"name": "ناهار (Lunch)", "start_time": "12:00", "end_time": "13:00"}],
+                },
+                {
+                    "name": "شیفت عصر (Evening)",
+                    "start_time": "15:00",
+                    "end_time": "23:00",
+                    "color": "#f59e0b",
+                    "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu"],
+                    "grace_period_minutes": 10,
+                    "absence_timeout_minutes": 2,
+                    "free_times": [{"name": "عصرانه (Tea Break)", "start_time": "18:00", "end_time": "18:30"}],
+                },
+                {
+                    "name": "شیفت شب (Night / Overnight)",
+                    "start_time": "23:00",
+                    "end_time": "07:00",
+                    "color": "#a855f7",
+                    "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"],
+                    "grace_period_minutes": 10,
+                    "absence_timeout_minutes": 2,
+                    "free_times": [{"name": "استراحت نیمه‌شب (Midnight Rest)", "start_time": "03:00", "end_time": "03:45"}],
+                },
+                {
+                    "name": "شیفت اداری (Office Hours)",
+                    "start_time": "08:00",
+                    "end_time": "17:00",
+                    "color": "#10b981",
+                    "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed"],
+                    "grace_period_minutes": 15,
+                    "absence_timeout_minutes": 5,
+                    "free_times": [{"name": "ناهار و استراحت (Lunch)", "start_time": "12:30", "end_time": "13:30"}],
+                },
+            ]
+            for sdata in default_shifts_data:
+                st = ShiftTemplate(
+                    name=sdata["name"],
+                    start_time=sdata["start_time"],
+                    end_time=sdata["end_time"],
+                    color=sdata["color"],
+                    active_days=sdata["active_days"],
+                    grace_period_minutes=sdata["grace_period_minutes"],
+                    absence_timeout_minutes=sdata["absence_timeout_minutes"],
+                    free_times=sdata["free_times"],
+                )
+                session.add(st)
             await session.commit()
 
 async def get_db() -> AsyncSession:

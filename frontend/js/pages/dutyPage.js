@@ -594,6 +594,15 @@ const DutyPage = {
             // Time Window display
             const windowStr = isRtl ? I18n.toPersianDigits(person.shift_window_str) : person.shift_window_str;
             const shiftDurHours = isRtl ? I18n.toPersianDigits(person.shift_duration_hours) : person.shift_duration_hours;
+            const overnightBadgeHtml = person.is_overnight
+                ? `<span style="background: rgba(168, 85, 247, 0.18); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">🌙 ${I18n.t('overnight_badge')}</span>`
+                : '';
+            const graceBadgeHtml = person.is_within_grace_period
+                ? `<span style="background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;" title="${I18n.t('status_on_time_grace', { mins: person.grace_period_minutes || 10 })}">✓ ${I18n.t('within_grace_period_tag')}</span>`
+                : '';
+            const shiftNameHtml = person.shift_name
+                ? `<span style="color: var(--accent-cyan); font-weight: 700; font-size: 0.75rem;">${DutyPage.escapeHtml(person.shift_name)}</span>`
+                : '';
 
             // Current Absence & Sum of Absence strings
             const currAbsenceDisplay = isOnBreak
@@ -630,6 +639,7 @@ const DutyPage = {
                                         ${person.person_name}
                                     </h4>
                                     ${statusBadgeHtml}
+                                    ${graceBadgeHtml}
                                 </div>
                                 <div class="duty-list-meta">
                                     <span>💼 ${person.person_role || I18n.t('no_role_assigned')}</span>
@@ -643,8 +653,10 @@ const DutyPage = {
                         <div class="duty-list-metrics">
                             <div class="duty-metric-pill" title="${I18n.t('shift_time')}">
                                 <span>🕐</span>
+                                ${shiftNameHtml ? `${shiftNameHtml} · ` : ''}
                                 <strong>${windowStr}</strong>
                                 <span style="color: var(--text-tertiary); font-size: 0.72rem;">(${shiftDurHours} ${isRtl ? 'ساعت' : 'hrs'})</span>
+                                ${overnightBadgeHtml}
                             </div>
 
                             <div class="duty-metric-pill" style="${isAbsent ? 'border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);' : (isOffline ? 'border-color: rgba(234, 179, 8, 0.4); background: rgba(234, 179, 8, 0.1); color: #facc15;' : '')}" title="${isOffline ? I18n.t('status_camera_offline') : I18n.t('today_absence')}">
@@ -694,7 +706,10 @@ const DutyPage = {
                                 <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${DutyPage.escapeAttr(person.person_name)}">
                                     ${person.person_name}
                                 </h4>
-                                ${statusBadgeHtml}
+                                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                    ${statusBadgeHtml}
+                                    ${graceBadgeHtml}
+                                </div>
                             </div>
                             <div style="font-size: 0.78rem; color: var(--text-tertiary); margin-bottom: 0.35rem;">
                                 💼 ${person.person_role || I18n.t('no_role_assigned')}
@@ -707,8 +722,11 @@ const DutyPage = {
 
                     <!-- Shift Time Window Badge -->
                     <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border: 1px solid rgba(255, 255, 255, 0.1);">
-                        <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
-                            🕐 <strong>${I18n.t('th_shift_hours')}:</strong>
+                        <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                            <span>🕐</span>
+                            <strong>${I18n.t('th_shift_hours')}:</strong>
+                            ${shiftNameHtml ? `${shiftNameHtml}` : ''}
+                            ${overnightBadgeHtml}
                         </span>
                         <span style="font-weight: 700; color: #38bdf8; direction: ltr;">
                             ${windowStr} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 0.75rem;">(${shiftDurHours}h)</span>

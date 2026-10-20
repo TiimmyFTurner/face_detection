@@ -25,12 +25,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission
 from backend.database import get_db
-from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding
+from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
 from backend.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
     CameraZoneResponse,
+    ShiftTemplateCreate,
+    ShiftTemplateUpdate,
+    ShiftTemplateResponse,
     ZoneStatusResponse,
     ZonePersonStatus,
     PersonDutyStatus,
@@ -47,12 +50,12 @@ router = APIRouter(tags=["zones"])
 
 
 def _to_local_dt(dt: datetime) -> datetime:
-    """Convert UTC or naive datetime to local timezone datetime."""
+    """Convert UTC or naive datetime to local timezone datetime (naive representation for direct comparisons)."""
     if dt is None:
         return datetime.now()
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone()
+    return dt.astimezone().replace(tzinfo=None)
 
 
 def _format_duration(seconds: int) -> str:
@@ -84,44 +87,130 @@ def _parse_list_field(val: Any, default: list) -> list:
     return default
 
 
-def is_time_in_timetable(start_time: Any, end_time: Any, active_days: Any) -> bool:
-    """Check if the current local time and day falls within a timetable."""
-    now = datetime.now()
-    day_name = now.strftime("%a")  # e.g. "Mon", "Tue"
+def get_shift_window(
+    start_time: Any,
+    end_time: Any,
+    active_days: Any,
+    ref_dt: Optional[datetime] = None,
+) -> tuple[bool, datetime, datetime, bool, float, int]:
+    """
+    Calculate active status and exact local start & end datetimes for a shift,
+    with full support for overnight / midnight-crossing shifts.
+
+    Returns:
+      (is_active_now, shift_start_dt, shift_end_dt, is_overnight, shift_duration_hours, elapsed_minutes)
+    """
+    if ref_dt is None:
+        ref_dt = datetime.now()
 
     days_list = _parse_list_field(active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    start_str = str(start_time).strip() if start_time else "00:00"
+    end_str = str(end_time).strip() if end_time else "23:59"
 
-    if days_list and day_name not in days_list:
-        return False
+    try:
+        sh, sm = map(int, start_str.split(":"))
+    except Exception:
+        sh, sm = 0, 0
+    try:
+        eh, em = map(int, end_str.split(":"))
+    except Exception:
+        eh, em = 23, 59
 
-    current_hm = now.strftime("%H:%M")
-    start = str(start_time) if start_time else "00:00"
-    end = str(end_time) if end_time else "23:59"
+    start_mins = sh * 60 + sm
+    end_mins = eh * 60 + em
+    is_overnight = start_mins > end_mins
+    ref_hm_mins = ref_dt.hour * 60 + ref_dt.minute
 
-    if start <= end:
-        return start <= current_hm <= end
+    if not is_overnight:
+        # Standard intra-day shift (e.g. 08:00 - 17:00 or 00:00 - 23:59)
+        day_name = ref_dt.strftime("%a")
+        shift_start = ref_dt.replace(hour=sh, minute=sm, second=0, microsecond=0)
+        shift_end = ref_dt.replace(hour=eh, minute=em, second=0, microsecond=0)
+        total_duration_hours = max(0.1, round((shift_end - shift_start).total_seconds() / 3600.0, 1))
+
+        is_active = (day_name in days_list) and (shift_start <= ref_dt <= shift_end)
+        if is_active:
+            elapsed_minutes = max(0, int((ref_dt - shift_start).total_seconds() // 60))
+        else:
+            elapsed_minutes = 0
+
+        return is_active, shift_start, shift_end, False, total_duration_hours, elapsed_minutes
+
     else:
-        # Overnight shift (e.g. 22:00 to 06:00)
-        return current_hm >= start or current_hm <= end
+        # Cross-midnight overnight shift (e.g. 22:00 - 06:00)
+        total_shift_mins = (24 * 60 - start_mins) + end_mins
+        total_duration_hours = max(0.1, round(total_shift_mins / 60.0, 1))
+
+        if ref_hm_mins >= start_mins:
+            # Shift started today (before midnight) and will end tomorrow morning
+            origin_day_name = ref_dt.strftime("%a")
+            shift_start = ref_dt.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            shift_end = (ref_dt + timedelta(days=1)).replace(hour=eh, minute=em, second=0, microsecond=0)
+            is_active = origin_day_name in days_list
+            elapsed_minutes = max(0, int((ref_dt - shift_start).total_seconds() // 60)) if is_active else 0
+            return is_active, shift_start, shift_end, True, total_duration_hours, elapsed_minutes
+
+        elif ref_hm_mins <= end_mins:
+            # Shift started yesterday (before midnight) and ends today morning
+            yesterday = ref_dt - timedelta(days=1)
+            origin_day_name = yesterday.strftime("%a")
+            shift_start = yesterday.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            shift_end = ref_dt.replace(hour=eh, minute=em, second=0, microsecond=0)
+            is_active = origin_day_name in days_list
+            elapsed_minutes = max(0, int((ref_dt - shift_start).total_seconds() // 60)) if is_active else 0
+            return is_active, shift_start, shift_end, True, total_duration_hours, elapsed_minutes
+
+        else:
+            # Outside active shift hours (e.g. 14:00 when shift is 22:00 - 06:00)
+            yesterday = ref_dt - timedelta(days=1)
+            shift_start = yesterday.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            shift_end = ref_dt.replace(hour=eh, minute=em, second=0, microsecond=0)
+            return False, shift_start, shift_end, True, total_duration_hours, 0
 
 
-def is_time_in_free_time(free_times: Any) -> tuple[bool, Optional[str]]:
-    """Check if the current local time falls within any defined free time / break interval (lunch, tea, rest)."""
+def is_time_in_timetable(
+    start_time: Any,
+    end_time: Any,
+    active_days: Any,
+    current_dt: Optional[datetime] = None,
+) -> bool:
+    """Check if the current local time and day falls within a timetable."""
+    is_active, _, _, _, _, _ = get_shift_window(start_time, end_time, active_days, current_dt)
+    return is_active
+
+
+def is_time_in_free_time(
+    free_times: Any,
+    current_dt: Optional[datetime] = None,
+) -> tuple[bool, Optional[str]]:
+    """Check if current local time falls within any defined free/break time interval (lunch, tea, rest)."""
     parsed_breaks = _parse_list_field(free_times, [])
     if not parsed_breaks:
         return False, None
-    now_hm = datetime.now().strftime("%H:%M")
+    if current_dt is None:
+        current_dt = datetime.now()
+    now_hm_mins = current_dt.hour * 60 + current_dt.minute
+
     for b in parsed_breaks:
         if not isinstance(b, dict):
             continue
-        start = str(b.get("start_time") or "00:00")
-        end = str(b.get("end_time") or "00:00")
+        start_str = str(b.get("start_time") or "00:00")
+        end_str = str(b.get("end_time") or "00:00")
         name = str(b.get("name") or "Break")
-        if start <= end:
-            if start <= now_hm <= end:
+        try:
+            sh, sm = map(int, start_str.split(":"))
+            eh, em = map(int, end_str.split(":"))
+            s_mins = sh * 60 + sm
+            e_mins = eh * 60 + em
+        except Exception:
+            continue
+
+        if s_mins <= e_mins:
+            if s_mins <= now_hm_mins <= e_mins:
                 return True, name
         else:
-            if now_hm >= start or now_hm <= end:
+            # Overnight break interval
+            if now_hm_mins >= s_mins or now_hm_mins <= e_mins:
                 return True, name
     return False, None
 
@@ -172,7 +261,10 @@ async def create_camera_zone(
         end_time=data.end_time or "23:59",
         active_days=data.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         absence_timeout_minutes=data.absence_timeout_minutes if data.absence_timeout_minutes is not None else 2,
+        grace_period_minutes=data.grace_period_minutes if data.grace_period_minutes is not None else 10,
         free_times=data.free_times or [],
+        shift_name=data.shift_name or "",
+        shifts=data.shifts or [],
         is_active=data.is_active,
     )
     db.add(zone)
@@ -306,8 +398,7 @@ async def compute_duty_roster_data(
     """
     now_ts = time.time()
     now_local = datetime.now()
-    today_date = now_local.date()
-    today_start_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    events_start_utc = datetime.now(timezone.utc) - timedelta(hours=36)
     current_hm_mins = now_local.hour * 60 + now_local.minute
 
     # 1. Fetch active zones
@@ -332,277 +423,278 @@ async def compute_duty_roster_data(
         if e.person_id not in avatar_map and e.reference_photo_path:
             avatar_map[e.person_id] = f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
 
-    # 5. Today's events
+    # 5. Events from past 36 hours (ensures cross-midnight overnight shift events are included)
     events_result = await db.execute(
         select(Event)
-        .where(Event.timestamp >= today_start_utc)
+        .where(Event.timestamp >= events_start_utc)
         .order_by(Event.timestamp.asc())
     )
-    today_events = events_result.scalars().all()
+    recent_events = events_result.scalars().all()
 
     roster: list[PersonDutyStatus] = []
 
     for z in zones:
         camera_name = camera_map.get(z.camera_id, f"Camera #{z.camera_id}")
-        start_str = z.start_time or "00:00"
-        end_str = z.end_time or "23:59"
-        active_days = _parse_list_field(z.active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
-        in_schedule = is_time_in_timetable(start_str, end_str, active_days)
 
-        try:
-            sh, sm = map(int, start_str.split(":"))
-            eh, em = map(int, end_str.split(":"))
-            start_mins = sh * 60 + sm
-            end_mins = eh * 60 + em
-            if end_mins >= start_mins:
-                dur_h = round((end_mins - start_mins) / 60.0, 1)
-                total_shift_mins = end_mins - start_mins
-            else:
-                dur_h = round(((24 * 60 - start_mins) + end_mins) / 60.0, 1)
-                total_shift_mins = (24 * 60 - start_mins) + end_mins
-        except Exception:
-            dur_h = 8.0
-            start_mins = 8 * 60
-            end_mins = 16 * 60
-            total_shift_mins = 480
-
-        shift_window_str = f"{start_str} - {end_str}"
-
-        in_free_time, break_name = is_time_in_free_time(z.free_times)
-
-        # Elapsed minutes of current shift so far today
-        if in_schedule:
-            if current_hm_mins >= start_mins:
-                elapsed_shift_mins = min(total_shift_mins, current_hm_mins - start_mins)
-            else:
-                elapsed_shift_mins = min(total_shift_mins, (24 * 60 - start_mins) + current_hm_mins)
+        # Check if zone defines multiple rotational shifts or a single shift
+        zone_shifts = _parse_list_field(z.shifts, [])
+        if not zone_shifts:
+            sub_shifts = [{
+                "name": getattr(z, "shift_name", "") or "",
+                "start_time": z.start_time or "00:00",
+                "end_time": z.end_time or "23:59",
+                "active_days": _parse_list_field(z.active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+                "assigned_person_ids": _parse_list_field(z.assigned_person_ids, []),
+                "absence_timeout_minutes": getattr(z, "absence_timeout_minutes", 2) or 2,
+                "grace_period_minutes": getattr(z, "grace_period_minutes", 10) or 10,
+                "free_times": _parse_list_field(z.free_times, []),
+            }]
         else:
-            elapsed_shift_mins = 0
+            sub_shifts = zone_shifts
 
-        raw_assigned = _parse_list_field(z.assigned_person_ids, [])
-        assigned_ids = [int(x) for x in raw_assigned if str(x).isdigit()]
+        for s in sub_shifts:
+            start_str = str(s.get("start_time") or z.start_time or "00:00").strip()
+            end_str = str(s.get("end_time") or z.end_time or "23:59").strip()
+            s_days = _parse_list_field(s.get("active_days", z.active_days), ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+            s_name = s.get("name") or getattr(z, "shift_name", "") or ""
+            s_grace = s.get("grace_period_minutes") if s.get("grace_period_minutes") is not None else (getattr(z, "grace_period_minutes", 10) or 10)
+            s_timeout = s.get("absence_timeout_minutes") if s.get("absence_timeout_minutes") is not None else (getattr(z, "absence_timeout_minutes", 2) or 2)
+            s_free = _parse_list_field(s.get("free_times", z.free_times), [])
 
-        for pid in assigned_ids:
-            if only_active and not in_schedule:
-                continue
+            in_schedule, shift_start_dt, shift_end_dt, is_overnight, dur_h, elapsed_shift_mins = get_shift_window(
+                start_str, end_str, s_days, now_local
+            )
 
-            person = persons.get(pid)
-            person_name = person.name if person else f"Person #{pid}"
-            person_role = person.role if person else None
-            avatar_url = avatar_map.get(pid)
+            shift_window_str = f"{start_str} - {end_str}"
+            in_free_time, break_name = is_time_in_free_time(s_free, now_local)
 
-            # Check live presence via stream processor
-            key = (z.id, pid)
-            last_seen = stream_processor._zone_last_seen.get(key, 0)
-            is_cam_online = stream_processor.is_camera_online(z.camera_id)
+            raw_assigned = _parse_list_field(s.get("assigned_person_ids", z.assigned_person_ids), [])
+            assigned_ids = [int(x) for x in raw_assigned if str(x).isdigit()]
 
-            if not in_schedule:
-                status_str = "off_duty"
-                is_in_zone = False
-                last_seen_sec = None
-                last_seen_str = "Off Duty (Outside Shift)"
-                curr_absence_mins = 0
-            elif not is_cam_online:
-                status_str = "camera_offline"
-                is_in_zone = False
-                last_seen_sec = None
-                last_seen_str = "Camera Disconnected"
-                curr_absence_mins = 0
-            elif in_free_time:
-                if last_seen > 0 and (now_ts - last_seen) < 120.0:
+            for pid in assigned_ids:
+                if only_active and not in_schedule:
+                    continue
+
+                person = persons.get(pid)
+                person_name = person.name if person else f"Person #{pid}"
+                person_role = person.role if person else None
+                avatar_url = avatar_map.get(pid)
+
+                # Check live presence via stream processor
+                key = (z.id, pid)
+                last_seen = stream_processor._zone_last_seen.get(key, 0)
+                is_cam_online = stream_processor.is_camera_online(z.camera_id)
+
+                if not in_schedule:
+                    status_str = "off_duty"
+                    is_in_zone = False
+                    last_seen_sec = None
+                    last_seen_str = "Off Duty (Outside Shift)"
+                    curr_absence_mins = 0
+                elif not is_cam_online:
+                    status_str = "camera_offline"
+                    is_in_zone = False
+                    last_seen_sec = None
+                    last_seen_str = "Camera Disconnected"
+                    curr_absence_mins = 0
+                elif in_free_time:
+                    if last_seen > 0 and (now_ts - last_seen) < 120.0:
+                        status_str = "present"
+                        is_in_zone = True
+                        last_seen_sec = round(now_ts - last_seen, 1)
+                        last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                        curr_absence_mins = 0
+                    else:
+                        status_str = "on_break"
+                        is_in_zone = False
+                        last_seen_sec = round(now_ts - last_seen, 1) if last_seen > 0 else None
+                        last_seen_str = f"On Break ({break_name})"
+                        curr_absence_mins = 0
+                elif last_seen > 0 and (now_ts - last_seen) < 120.0:
                     status_str = "present"
                     is_in_zone = True
                     last_seen_sec = round(now_ts - last_seen, 1)
                     last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
                     curr_absence_mins = 0
                 else:
-                    status_str = "on_break"
+                    status_str = "absent"
                     is_in_zone = False
-                    last_seen_sec = round(now_ts - last_seen, 1) if last_seen > 0 else None
-                    last_seen_str = f"On Break ({break_name})"
-                    curr_absence_mins = 0
-            elif last_seen > 0 and (now_ts - last_seen) < 120.0:
-                status_str = "present"
-                is_in_zone = True
-                last_seen_sec = round(now_ts - last_seen, 1)
-                last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
-                curr_absence_mins = 0
-            else:
-                status_str = "absent"
-                is_in_zone = False
-                if last_seen > 0:
-                    last_seen_sec = round(now_ts - last_seen, 1)
-                    curr_absence_mins = max(1, int(last_seen_sec // 60))
-                    last_seen_str = f"Missing for {curr_absence_mins}m"
-                else:
-                    last_seen_sec = None
-                    curr_absence_mins = max(1, elapsed_shift_mins) if elapsed_shift_mins > 0 else 0
-                    last_seen_str = "Not Seen Yet"
-
-            # Compute cumulative absence during this shift today
-            # Filter ONLY actual face detection sightings (NOT alert logs like absence_timeout or camera_disconnected)
-            p_events = [
-                ev for ev in today_events
-                if ev.person_id == pid and ev.alert_type not in ("absence_timeout", "camera_disconnected")
-            ]
-
-            shift_events = []
-            for ev in p_events:
-                ev_loc = _to_local_dt(ev.timestamp)
-                if ev_loc.date() == today_date:
-                    ev_mins = ev_loc.hour * 60 + ev_loc.minute
-                    if start_mins <= end_mins:
-                        if start_mins <= ev_mins <= min(current_hm_mins, end_mins):
-                            shift_events.append(ev)
+                    if last_seen > 0:
+                        last_seen_sec = round(now_ts - last_seen, 1)
+                        curr_absence_mins = max(1, int(last_seen_sec // 60))
+                        last_seen_str = f"Missing for {curr_absence_mins}m"
                     else:
-                        if (ev_mins >= start_mins or ev_mins <= end_mins) and ev_mins <= current_hm_mins:
+                        last_seen_sec = None
+                        curr_absence_mins = max(1, elapsed_shift_mins) if elapsed_shift_mins > 0 else 0
+                        last_seen_str = "Not Seen Yet"
+
+                # Filter ONLY actual face detection sightings for this shift (from shift_start_dt to min(now_local, shift_end_dt))
+                shift_events = []
+                for ev in recent_events:
+                    if ev.person_id == pid and ev.alert_type not in ("absence_timeout", "camera_disconnected"):
+                        ev_loc = _to_local_dt(ev.timestamp)
+                        if shift_start_dt <= ev_loc <= min(now_local, shift_end_dt):
                             shift_events.append(ev)
 
-            absence_intervals: list[AbsenceInterval] = []
+                absence_intervals: list[AbsenceInterval] = []
+                raw_arrival_delay = 0
+                is_within_grace = False
 
-            if in_schedule and elapsed_shift_mins > 0:
-                if not shift_events:
-                    # No actual face sightings today
-                    if not is_cam_online or in_free_time:
-                        # Camera is offline or on free time
-                        shift_absence_mins = 0
-                        shift_presence_mins = 0
-                        compliance = 100.0
+                if in_schedule and elapsed_shift_mins > 0:
+                    if not shift_events:
+                        # No actual face sightings during shift
+                        if not is_cam_online or in_free_time:
+                            shift_absence_mins = 0
+                            shift_presence_mins = 0
+                            compliance = 100.0
+                        else:
+                            # If elapsed time is still within the arrival grace period:
+                            if elapsed_shift_mins <= s_grace:
+                                is_within_grace = True
+                                shift_absence_mins = 0
+                                shift_presence_mins = elapsed_shift_mins
+                                compliance = 100.0
+                            else:
+                                shift_absence_mins = elapsed_shift_mins
+                                shift_presence_mins = 0
+                                compliance = 0.0
+                                if elapsed_shift_mins >= 3:
+                                    curr_t_str = now_local.strftime("%H:%M")
+                                    absence_intervals.append(
+                                        AbsenceInterval(
+                                            start_time=start_str,
+                                            end_time=curr_t_str,
+                                            duration_minutes=elapsed_shift_mins,
+                                            duration_str=_format_duration(elapsed_shift_mins * 60),
+                                            interval_type="unseen",
+                                        )
+                                    )
                     else:
-                        # Camera is online and operating, but person was never seen
-                        shift_absence_mins = elapsed_shift_mins
-                        shift_presence_mins = 0
-                        compliance = 0.0
-                        if elapsed_shift_mins >= 3:
-                            curr_t_str = now_local.strftime("%H:%M")
+                        first_ev_loc = _to_local_dt(shift_events[0].timestamp)
+                        raw_delay = max(0, int((first_ev_loc - shift_start_dt).total_seconds() // 60)) if is_cam_online else 0
+                        raw_arrival_delay = raw_delay
+
+                        if 0 < raw_delay <= s_grace:
+                            is_within_grace = True
+
+                        # Log late arrival ONLY if person exceeded the configured grace period:
+                        if is_cam_online and raw_delay > s_grace and raw_delay >= 3:
+                            first_t_str = first_ev_loc.strftime("%H:%M")
                             absence_intervals.append(
                                 AbsenceInterval(
                                     start_time=start_str,
-                                    end_time=curr_t_str,
-                                    duration_minutes=elapsed_shift_mins,
-                                    duration_str=_format_duration(elapsed_shift_mins * 60),
-                                    interval_type="unseen",
+                                    end_time=first_t_str,
+                                    duration_minutes=raw_delay,
+                                    duration_str=_format_duration(raw_delay * 60),
+                                    interval_type="late_arrival",
                                 )
                             )
-                else:
-                    first_ev_loc = _to_local_dt(shift_events[0].timestamp)
-                    first_ev_mins = first_ev_loc.hour * 60 + first_ev_loc.minute
-                    
-                    # If camera is online and person arrived >= 3 mins late:
-                    arrival_delay = max(0, first_ev_mins - start_mins) if is_cam_online else 0
-                    if is_cam_online and arrival_delay >= 3:
-                        first_t_str = first_ev_loc.strftime("%H:%M")
-                        absence_intervals.append(
-                            AbsenceInterval(
-                                start_time=start_str,
-                                end_time=first_t_str,
-                                duration_minutes=arrival_delay,
-                                duration_str=_format_duration(arrival_delay * 60),
-                                interval_type="late_arrival",
-                            )
-                        )
+                            effective_delay = raw_delay
+                        else:
+                            effective_delay = 0
 
-                    # Disconnect events for this camera today
-                    cam_disc_events = [
-                        ev for ev in today_events
-                        if ev.camera_id == z.camera_id and ev.alert_type == "camera_disconnected"
-                    ]
+                        # Disconnect events for this camera
+                        cam_disc_events = [
+                            ev for ev in recent_events
+                            if ev.camera_id == z.camera_id and ev.alert_type == "camera_disconnected"
+                        ]
 
-                    # Gaps between detections inside shift (excluding camera downtime)
-                    gaps_mins = 0
-                    for idx in range(len(shift_events) - 1):
-                        t1 = shift_events[idx].timestamp
-                        t2 = shift_events[idx + 1].timestamp
-                        gap_sec = (t2 - t1).total_seconds()
-                        if gap_sec >= 180:
-                            # If camera was disconnected during this gap, DO NOT add to absence!
-                            was_offline = any(t1 <= dev.timestamp <= t2 for dev in cam_disc_events)
-                            if not was_offline:
-                                gap_m = int((gap_sec - 60) // 60)
-                                gaps_mins += gap_m
-                                t1_loc = _to_local_dt(t1).strftime("%H:%M")
-                                t2_loc = _to_local_dt(t2).strftime("%H:%M")
+                        # Gaps between detections inside shift (excluding camera downtime)
+                        gaps_mins = 0
+                        for idx in range(len(shift_events) - 1):
+                            t1 = shift_events[idx].timestamp
+                            t2 = shift_events[idx + 1].timestamp
+                            gap_sec = (t2 - t1).total_seconds()
+                            if gap_sec >= 180:
+                                was_offline = any(t1 <= dev.timestamp <= t2 for dev in cam_disc_events)
+                                if not was_offline:
+                                    gap_m = int((gap_sec - 60) // 60)
+                                    gaps_mins += gap_m
+                                    t1_loc = _to_local_dt(t1).strftime("%H:%M")
+                                    t2_loc = _to_local_dt(t2).strftime("%H:%M")
+                                    absence_intervals.append(
+                                        AbsenceInterval(
+                                            start_time=t1_loc,
+                                            end_time=t2_loc,
+                                            duration_minutes=gap_m,
+                                            duration_str=_format_duration(gap_m * 60),
+                                            interval_type="gap",
+                                        )
+                                    )
+
+                        # Trailing absence from last sighting to now
+                        if is_in_zone or not is_cam_online or in_free_time:
+                            trailing_absence = 0
+                        else:
+                            last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
+                            trailing_absence = max(0, int((now_local - last_ev_loc).total_seconds() // 60))
+                            if trailing_absence >= 3:
+                                last_t_str = last_ev_loc.strftime("%H:%M")
+                                curr_t_str = now_local.strftime("%H:%M")
                                 absence_intervals.append(
                                     AbsenceInterval(
-                                        start_time=t1_loc,
-                                        end_time=t2_loc,
-                                        duration_minutes=gap_m,
-                                        duration_str=_format_duration(gap_m * 60),
-                                        interval_type="gap",
+                                        start_time=last_t_str,
+                                        end_time=curr_t_str,
+                                        duration_minutes=trailing_absence,
+                                        duration_str=_format_duration(trailing_absence * 60),
+                                        interval_type="current",
                                     )
                                 )
 
-                    # Trailing absence from last sighting to now
-                    # CRITICAL: If camera is disconnected or currently on free time/break, trailing time is NOT absence!
-                    if is_in_zone or not is_cam_online or in_free_time:
-                        trailing_absence = 0
-                    else:
-                        last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
-                        last_ev_mins = last_ev_loc.hour * 60 + last_ev_loc.minute
-                        trailing_absence = max(0, current_hm_mins - last_ev_mins)
-                        if trailing_absence >= 3:
-                            last_t_str = last_ev_loc.strftime("%H:%M")
-                            curr_t_str = now_local.strftime("%H:%M")
-                            absence_intervals.append(
-                                AbsenceInterval(
-                                    start_time=last_t_str,
-                                    end_time=curr_t_str,
-                                    duration_minutes=trailing_absence,
-                                    duration_str=_format_duration(trailing_absence * 60),
-                                    interval_type="current",
-                                )
-                            )
+                        if not is_cam_online:
+                            shift_absence_mins = min(elapsed_shift_mins, gaps_mins)
+                        else:
+                            shift_absence_mins = min(elapsed_shift_mins, effective_delay + gaps_mins + trailing_absence)
 
-                    if not is_cam_online:
-                        # Camera offline: only count verified gaps between actual sightings during online hours
-                        shift_absence_mins = min(elapsed_shift_mins, gaps_mins)
-                    else:
-                        shift_absence_mins = min(elapsed_shift_mins, arrival_delay + gaps_mins + trailing_absence)
+                        shift_presence_mins = max(0, elapsed_shift_mins - shift_absence_mins)
+                        compliance = round((shift_presence_mins / elapsed_shift_mins) * 100, 1) if elapsed_shift_mins > 0 else 100.0
+                else:
+                    shift_absence_mins = 0
+                    shift_presence_mins = 0
+                    compliance = 100.0
 
-                    shift_presence_mins = max(0, elapsed_shift_mins - shift_absence_mins)
-                    compliance = round((shift_presence_mins / elapsed_shift_mins) * 100, 1) if elapsed_shift_mins > 0 else 100.0
-            else:
-                shift_absence_mins = 0
-                shift_presence_mins = 0
-                compliance = 100.0
-
-            roster.append(
-                PersonDutyStatus(
-                    person_id=pid,
-                    person_name=person_name,
-                    person_role=person_role,
-                    avatar_url=avatar_url,
-                    zone_id=z.id,
-                    zone_name=z.name,
-                    camera_id=z.camera_id,
-                    camera_name=camera_name,
-                    shift_start_time=start_str,
-                    shift_end_time=end_str,
-                    shift_window_str=shift_window_str,
-                    shift_duration_hours=dur_h,
-                    active_days=active_days,
-                    absence_timeout_minutes=getattr(z, "absence_timeout_minutes", 2) or 2,
-                    free_times=_parse_list_field(z.free_times, []),
-                    is_in_duty_hours=in_schedule,
-                    is_in_free_time=in_free_time,
-                    current_break_name=break_name if in_free_time else None,
-                    status=status_str,
-                    camera_online=is_cam_online,
-                    is_in_zone=is_in_zone,
-                    last_seen_seconds_ago=last_seen_sec,
-                    last_seen_str=last_seen_str,
-                    current_absence_minutes=curr_absence_mins,
-                    current_absence_str=_format_duration(curr_absence_mins * 60),
-                    shift_elapsed_minutes=elapsed_shift_mins,
-                    shift_presence_minutes=shift_presence_mins,
-                    shift_presence_str=_format_duration(shift_presence_mins * 60),
-                    shift_absence_minutes=shift_absence_mins,
-                    shift_absence_str=_format_duration(shift_absence_mins * 60),
-                    shift_compliance_pct=compliance,
-                    absence_count=len(absence_intervals),
-                    absence_intervals=absence_intervals,
+                roster.append(
+                    PersonDutyStatus(
+                        person_id=pid,
+                        person_name=person_name,
+                        person_role=person_role,
+                        avatar_url=avatar_url,
+                        zone_id=z.id,
+                        zone_name=z.name,
+                        camera_id=z.camera_id,
+                        camera_name=camera_name,
+                        shift_start_time=start_str,
+                        shift_end_time=end_str,
+                        shift_window_str=shift_window_str,
+                        shift_duration_hours=dur_h,
+                        active_days=s_days,
+                        absence_timeout_minutes=s_timeout,
+                        grace_period_minutes=s_grace,
+                        free_times=s_free,
+                        shift_name=s_name if s_name else None,
+                        is_overnight=is_overnight,
+                        is_in_duty_hours=in_schedule,
+                        is_in_free_time=in_free_time,
+                        current_break_name=break_name if in_free_time else None,
+                        status=status_str,
+                        camera_online=is_cam_online,
+                        is_in_zone=is_in_zone,
+                        last_seen_seconds_ago=last_seen_sec,
+                        last_seen_str=last_seen_str,
+                        current_absence_minutes=curr_absence_mins,
+                        current_absence_str=_format_duration(curr_absence_mins * 60),
+                        shift_elapsed_minutes=elapsed_shift_mins,
+                        shift_presence_minutes=shift_presence_mins,
+                        shift_presence_str=_format_duration(shift_presence_mins * 60),
+                        shift_absence_minutes=shift_absence_mins,
+                        shift_absence_str=_format_duration(shift_absence_mins * 60),
+                        shift_compliance_pct=compliance,
+                        absence_count=len(absence_intervals),
+                        absence_intervals=absence_intervals,
+                        arrival_delay_minutes=raw_arrival_delay,
+                        is_within_grace_period=is_within_grace,
+                    )
                 )
-            )
 
     # Sort: absent first, then camera_offline, then present, then on_break, then off_duty
     roster.sort(key=lambda r: (
@@ -813,8 +905,14 @@ async def update_zone(
         zone.active_days = data.active_days
     if data.absence_timeout_minutes is not None:
         zone.absence_timeout_minutes = data.absence_timeout_minutes
+    if data.grace_period_minutes is not None:
+        zone.grace_period_minutes = data.grace_period_minutes
     if data.free_times is not None:
         zone.free_times = data.free_times
+    if data.shift_name is not None:
+        zone.shift_name = data.shift_name
+    if data.shifts is not None:
+        zone.shifts = data.shifts
     if data.is_active is not None:
         zone.is_active = data.is_active
 
@@ -845,3 +943,100 @@ async def delete_zone(
     await stream_processor.refresh_zones()
 
     logger.info("Camera zone deleted: id=%d", zone_id)
+
+
+# ── Shift Templates Endpoints ─────────────────────────────
+
+@router.get("/api/shift-templates", response_model=list[ShiftTemplateResponse])
+async def list_shift_templates(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:view")),
+):
+    """List all available shift timetable templates."""
+    result = await db.execute(select(ShiftTemplate).order_by(ShiftTemplate.id.asc()))
+    return result.scalars().all()
+
+
+@router.post("/api/shift-templates", response_model=ShiftTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def create_shift_template(
+    data: ShiftTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:create")),
+):
+    """Create a new reusable shift template."""
+    tmpl = ShiftTemplate(
+        name=data.name,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        color=data.color or "#38bdf8",
+        active_days=data.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        grace_period_minutes=data.grace_period_minutes,
+        absence_timeout_minutes=data.absence_timeout_minutes,
+        free_times=data.free_times or [],
+    )
+    db.add(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
+    return tmpl
+
+
+@router.get("/api/shift-templates/{template_id}", response_model=ShiftTemplateResponse)
+async def get_shift_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:view")),
+):
+    """Get a specific shift template by ID."""
+    tmpl = await db.get(ShiftTemplate, template_id)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Shift template not found")
+    return tmpl
+
+
+@router.put("/api/shift-templates/{template_id}", response_model=ShiftTemplateResponse)
+async def update_shift_template(
+    template_id: int,
+    data: ShiftTemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:edit")),
+):
+    """Update an existing shift template."""
+    tmpl = await db.get(ShiftTemplate, template_id)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Shift template not found")
+
+    if data.name is not None:
+        tmpl.name = data.name
+    if data.start_time is not None:
+        tmpl.start_time = data.start_time
+    if data.end_time is not None:
+        tmpl.end_time = data.end_time
+    if data.color is not None:
+        tmpl.color = data.color
+    if data.active_days is not None:
+        tmpl.active_days = data.active_days
+    if data.grace_period_minutes is not None:
+        tmpl.grace_period_minutes = data.grace_period_minutes
+    if data.absence_timeout_minutes is not None:
+        tmpl.absence_timeout_minutes = data.absence_timeout_minutes
+    if data.free_times is not None:
+        tmpl.free_times = data.free_times
+
+    await db.commit()
+    await db.refresh(tmpl)
+    return tmpl
+
+
+@router.delete("/api/shift-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_shift_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("zones:delete")),
+):
+    """Delete a shift template."""
+    tmpl = await db.get(ShiftTemplate, template_id)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Shift template not found")
+
+    await db.delete(tmpl)
+    await db.commit()

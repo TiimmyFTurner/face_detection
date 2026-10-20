@@ -303,13 +303,20 @@ def generate_duty_roster_xlsx(
         act_days = getattr(r, "active_days", []) or []
         days_str = ", ".join(DAY_NAMES_FA.get(d, d) for d in act_days)
 
+        shift_w_str = getattr(r, "shift_window_str", "")
+        if getattr(r, "is_overnight", False):
+            shift_w_str = f"🌙 {shift_w_str} (شیفت شب)"
+        s_name = getattr(r, "shift_name", None)
+        if s_name:
+            shift_w_str = f"{s_name} ({shift_w_str})"
+
         row_values = [
             idx,
             getattr(r, "person_name", f"Person #{getattr(r, 'person_id', '')}"),
             getattr(r, "person_role", "") or "—",
             getattr(r, "zone_name", ""),
             getattr(r, "camera_name", ""),
-            getattr(r, "shift_window_str", ""),
+            shift_w_str,
             getattr(r, "shift_duration_hours", 8.0),
             status_text,
             pres_str,
@@ -415,13 +422,20 @@ def generate_duty_roster_csv(
         days_str = ", ".join(DAY_NAMES_FA.get(d, d) for d in act_days)
         is_in_zone = bool(getattr(r, "is_in_zone", False))
 
+        shift_w_str = getattr(r, "shift_window_str", "")
+        if getattr(r, "is_overnight", False):
+            shift_w_str = f"🌙 {shift_w_str} (شیفت شب)"
+        s_name = getattr(r, "shift_name", None)
+        if s_name:
+            shift_w_str = f"{s_name} ({shift_w_str})"
+
         writer.writerow([
             idx,
             getattr(r, "person_name", f"Person #{getattr(r, 'person_id', '')}"),
             getattr(r, "person_role", "") or "",
             getattr(r, "zone_name", ""),
             getattr(r, "camera_name", ""),
-            getattr(r, "shift_window_str", ""),
+            shift_w_str,
             getattr(r, "shift_duration_hours", 8.0),
             status_text,
             "بله" if is_in_zone else "خیر",

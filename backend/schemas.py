@@ -255,6 +255,51 @@ class FreeTimeInterval(BaseModel):
     end_time: str = Field(..., description="End time HH:MM")
 
 
+# ═══════════════════════════════════════════════════════════
+# Shift Template Schemas
+# ═══════════════════════════════════════════════════════════
+
+class ShiftTemplateCreate(BaseModel):
+    """Schema for creating a reusable shift template."""
+    name: str = Field(..., min_length=1, max_length=255, examples=["Morning Shift"])
+    start_time: str = Field(default="08:00", description="Shift start time HH:MM")
+    end_time: str = Field(default="16:00", description="Shift end time HH:MM")
+    color: str = Field(default="#38bdf8", description="Hex badge color")
+    active_days: list[str] = Field(default_factory=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    grace_period_minutes: int = Field(default=10, ge=0, le=120, description="Allowed arrival delay in minutes")
+    absence_timeout_minutes: int = Field(default=2, ge=1, le=1440, description="Absence alarm timer in minutes")
+    free_times: list[dict[str, Any]] = Field(default_factory=list, description="Scheduled breaks")
+
+
+class ShiftTemplateUpdate(BaseModel):
+    """Schema for updating a shift template."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    color: Optional[str] = None
+    active_days: Optional[list[str]] = None
+    grace_period_minutes: Optional[int] = Field(None, ge=0, le=120)
+    absence_timeout_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    free_times: Optional[list[dict[str, Any]]] = None
+
+
+class ShiftTemplateResponse(BaseModel):
+    """Schema for shift template response."""
+    id: int
+    name: str
+    start_time: str = "08:00"
+    end_time: str = "16:00"
+    color: str = "#38bdf8"
+    active_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    grace_period_minutes: int = 10
+    absence_timeout_minutes: int = 2
+    free_times: list[dict[str, Any]] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
 class CameraZoneCreate(BaseModel):
     """Schema for creating a camera important area."""
     name: str = Field(..., min_length=1, max_length=255, examples=["Work Desk"])
@@ -268,7 +313,10 @@ class CameraZoneCreate(BaseModel):
     end_time: str = Field(default="23:59", description="Shift end time HH:MM")
     active_days: list[str] = Field(default_factory=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
     absence_timeout_minutes: int = Field(default=2, ge=1, le=1440, description="Absence alarm timer in minutes")
+    grace_period_minutes: int = Field(default=10, ge=0, le=120, description="Allowed arrival delay in minutes")
     free_times: list[dict[str, Any]] = Field(default_factory=list, description="Free times e.g. lunch/rest intervals")
+    shift_name: Optional[str] = Field(default="", description="Optional shift template name e.g. Morning Shift")
+    shifts: list[dict[str, Any]] = Field(default_factory=list, description="Multi-shift rotation schedule entries")
     is_active: bool = Field(default=True)
 
 
@@ -285,7 +333,10 @@ class CameraZoneUpdate(BaseModel):
     end_time: Optional[str] = None
     active_days: Optional[list[str]] = None
     absence_timeout_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    grace_period_minutes: Optional[int] = Field(None, ge=0, le=120)
     free_times: Optional[list[dict[str, Any]]] = None
+    shift_name: Optional[str] = None
+    shifts: Optional[list[dict[str, Any]]] = None
     is_active: Optional[bool] = None
 
 
@@ -304,7 +355,10 @@ class CameraZoneResponse(BaseModel):
     end_time: str = "23:59"
     active_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     absence_timeout_minutes: int = 2
+    grace_period_minutes: int = 10
     free_times: list[dict[str, Any]] = []
+    shift_name: Optional[str] = ""
+    shifts: list[dict[str, Any]] = []
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -433,7 +487,10 @@ class PersonDutyStatus(BaseModel):
     shift_duration_hours: float
     active_days: list[str] = []
     absence_timeout_minutes: int = 2
+    grace_period_minutes: int = 10
     free_times: list[dict[str, Any]] = []
+    shift_name: Optional[str] = None
+    is_overnight: bool = False
     is_in_duty_hours: bool
     is_in_free_time: bool = False
     current_break_name: Optional[str] = None
@@ -452,6 +509,8 @@ class PersonDutyStatus(BaseModel):
     shift_compliance_pct: float = 100.0
     absence_count: int = 0
     absence_intervals: list[AbsenceInterval] = []
+    arrival_delay_minutes: int = 0
+    is_within_grace_period: bool = False
 
 
 class DutyRosterResponse(BaseModel):

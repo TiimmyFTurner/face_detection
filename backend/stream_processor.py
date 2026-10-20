@@ -330,7 +330,10 @@ class StreamProcessor:
                         "end_time": z.end_time or "23:59",
                         "active_days": z.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
                         "absence_timeout_minutes": getattr(z, "absence_timeout_minutes", 2) or 2,
+                        "grace_period_minutes": getattr(z, "grace_period_minutes", 10) or 10,
                         "free_times": z.free_times or [],
+                        "shift_name": getattr(z, "shift_name", "") or "",
+                        "shifts": getattr(z, "shifts", []) or [],
                     })
 
             self._zones_cache = zones_map
@@ -346,21 +349,26 @@ class StreamProcessor:
 
     @staticmethod
     def _is_zone_in_schedule(start_time: str, end_time: str, active_days: list[str]) -> bool:
-        """Check if current time is within active shift hours and days."""
+        """Check if current time is within active shift hours and days (supports overnight cross-midnight shifts)."""
         now = datetime.now()
         day_name = now.strftime("%a")
-
-        if active_days and day_name not in active_days:
-            return False
 
         current_hm = now.strftime("%H:%M")
         start = start_time or "00:00"
         end = end_time or "23:59"
 
         if start <= end:
+            if active_days and day_name not in active_days:
+                return False
             return start <= current_hm <= end
         else:
-            return current_hm >= start or current_hm <= end
+            # Overnight shift (e.g. 22:00 to 06:00)
+            if current_hm >= start:
+                return not active_days or (day_name in active_days)
+            elif current_hm <= end:
+                prev_day = (now - timedelta(days=1)).strftime("%a")
+                return not active_days or (prev_day in active_days)
+            return False
 
     @staticmethod
     def _is_time_in_free_time(free_times: list) -> tuple[bool, str]:
@@ -536,6 +544,23 @@ class StreamProcessor:
                             # Check if person has been missing from zone for >= configured absence timeout
                             timeout_mins = zone.get("absence_timeout_minutes") or 2
                             timeout_secs = float(timeout_mins * 60)
+
+                            # Arrival grace period check: suppress absence alerts if shift started recently
+                            grace_mins = zone.get("grace_period_minutes", 10) or 10
+                            start_str = zone.get("start_time", "00:00")
+                            try:
+                                sh, sm = map(int, str(start_str).split(":"))
+                                now_dt = datetime.now()
+                                if now_dt.hour > sh or (now_dt.hour == sh and now_dt.minute >= sm):
+                                    shift_start_dt = now_dt.replace(hour=sh, minute=sm, second=0, microsecond=0)
+                                else:
+                                    shift_start_dt = (now_dt - timedelta(days=1)).replace(hour=sh, minute=sm, second=0, microsecond=0)
+                                elapsed_since_start = (now_dt - shift_start_dt).total_seconds()
+                                if 0 <= elapsed_since_start < (grace_mins * 60):
+                                    # Within arrival grace period — suppress absence alert
+                                    continue
+                            except Exception:
+                                pass
 
                             if (now - last_seen) >= timeout_secs:
                                 last_alert = self._zone_last_absence_alert.get(key, 0)

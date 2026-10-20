@@ -63,6 +63,8 @@ const TVBoard = {
             seen_just_now: 'آخرین رویت: لحظاتی پیش',
             not_seen_yet: 'عدم ثبت حضور تاکنون',
             station_operator: 'اپراتور ایستگاه',
+            shift_night: 'شیفت شب',
+            grace_period: 'مهلت ورود',
         },
         en: {
             title: 'Factory Live Shift & Attendance Monitor',
@@ -107,6 +109,8 @@ const TVBoard = {
             seen_just_now: 'Last seen: Just now',
             not_seen_yet: 'Not detected yet today',
             station_operator: 'Station Operator',
+            shift_night: 'Night Shift',
+            grace_period: 'Grace Period',
         }
     },
 
@@ -399,10 +403,12 @@ const TVBoard = {
 
             if (uniqueWindows.length > 0) {
                 const windowText = uniqueWindows.map(w => this.toDigits(w)).join(' ، ');
+                const hasOvernight = pool.some(r => r.is_overnight);
                 const durText = (uniqueWindows.length === 1 && pool[0]?.shift_duration_hours)
                     ? ` (${this.formatDurationHours(pool[0].shift_duration_hours)})`
                     : '';
-                shiftTag.innerHTML = `⏱️ ${this.t('shift_active')}: <strong>${windowText}</strong>${durText}`;
+                const shiftIcon = hasOvernight ? '🌙' : '⏱️';
+                shiftTag.innerHTML = `${shiftIcon} ${this.t('shift_active')}: <strong>${windowText}</strong>${durText}`;
                 shiftTag.classList.remove('no-shift');
                 shiftTag.style.display = 'inline-flex';
             } else {
@@ -573,12 +579,14 @@ const TVBoard = {
 
                 <div class="tv-shift-strip">
                     <div class="tv-shift-window">
-                        <span class="tv-shift-icon">⏱️</span>
+                        <span class="tv-shift-icon">${person.is_overnight ? '🌙' : '⏱️'}</span>
+                        ${person.shift_name ? `<span class="tv-shift-name" style="color: var(--tv-cyan, #38bdf8); font-weight: 700; margin-inline-end: 4px;">${person.shift_name}</span>` : ''}
                         <span>${this.toDigits(person.shift_window_str || '--:--')}</span>
                         ${durationFormatted ? `<span class="tv-shift-hours">(${durationFormatted})</span>` : ''}
+                        ${person.is_overnight ? `<span class="tv-overnight-badge" style="font-size: 0.65rem; background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); padding: 1px 5px; border-radius: 4px; margin-inline-start: 4px; font-weight: 600;">🌙 ${this.t('shift_night')}</span>` : ''}
                     </div>
-                    <div class="tv-shift-state-tag ${person.is_in_free_time ? 'state-break' : (person.is_in_duty_hours ? 'state-duty' : 'state-off')}">
-                        ${person.is_in_free_time ? `☕ ${person.current_break_name || this.t('status_on_break')}` : (person.is_in_duty_hours ? `⚡ ${this.t('shift_on_duty')}` : `💤 ${this.t('status_off_duty')}`)}
+                    <div class="tv-shift-state-tag ${person.is_in_free_time ? 'state-break' : (person.is_within_grace_period ? 'state-break' : (person.is_in_duty_hours ? 'state-duty' : 'state-off'))}">
+                        ${person.is_in_free_time ? `☕ ${person.current_break_name || this.t('status_on_break')}` : (person.is_within_grace_period ? `✓ ${this.t('grace_period')}` : (person.is_in_duty_hours ? `⚡ ${this.t('shift_on_duty')}` : `💤 ${this.t('status_off_duty')}`))}
                     </div>
                 </div>
 

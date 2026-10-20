@@ -51,7 +51,7 @@ const I18n = {
             sum_shift_absence_desc: '{absent} غیبت از {elapsed} سپری شده',
             absence_count_badge: '{count} بار غیبت در این شیفت',
             absence_count_short: '{count} بار غیبت',
-            absence_windows_btn: 'بازه‌های زمانی غیبت ({count})',
+            absence_windows_btn: 'بازه‌های زمانی غیبت',
             absence_windows_title: 'بازه‌های زمانی عدم حضور در منطقه',
             no_absence_intervals: 'بدون ثبت غیبت در این شیفت',
             interval_type_late_arrival: 'تاخیر در ورود',
@@ -296,7 +296,7 @@ const I18n = {
             no_role_assigned: 'بدون سمت مشخص',
 
             // Person Analytics & Summary Modal (Shift-Aware)
-            btn_person_analytics: '📊 آمار و خلاصه عملکرد',
+            btn_person_analytics: 'آمار و خلاصه عملکرد',
             person_analytics_title: '📊 آمار، حضور و خلاصه عملکرد — {name}',
             tab_overview: '📊 خلاصه و شاخص‌ها',
             tab_shifts: '⏰ شیفت‌ها و انضباط کاری',
@@ -846,7 +846,7 @@ const I18n = {
             sum_shift_absence_desc: '{absent} absent of {elapsed} elapsed',
             absence_count_badge: '{count} absence incidents this shift',
             absence_count_short: '{count} absence times',
-            absence_windows_btn: 'Absence Windows ({count})',
+            absence_windows_btn: 'Absence Windows',
             absence_windows_title: 'Absence Time Windows',
             no_absence_intervals: 'No absence incidents in this shift',
             interval_type_late_arrival: 'Late Arrival',
@@ -1091,7 +1091,7 @@ const I18n = {
             no_role_assigned: 'No role assigned',
 
             // Person Analytics & Summary Modal (Shift-Aware)
-            btn_person_analytics: '📊 Analytics & Summary',
+            btn_person_analytics: 'Analytics & Summary',
             person_analytics_title: '📊 Analytics, Attendance & Summary — {name}',
             tab_overview: '📊 Overview & KPIs',
             tab_shifts: '⏰ Shifts & Punctuality',

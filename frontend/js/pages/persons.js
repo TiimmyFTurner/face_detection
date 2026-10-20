@@ -328,7 +328,7 @@ const PersonsPage = {
                     <!-- Actions -->
                     <div class="person-actions" style="display: flex; flex-direction: column; gap: 0.4rem;">
                         <button class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.show(${person.id})" style="width: 100%; justify-content: center;">
-                            ${I18n.t('btn_person_analytics')}
+                            📊 <span>${I18n.t('btn_person_analytics')}</span>
                         </button>
                         <div style="display: flex; gap: 0.4rem; width: 100%;">
                             <button class="btn btn-secondary btn-sm" style="flex: 1; justify-content: center;" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')">

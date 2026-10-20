@@ -5,6 +5,29 @@ const EventCard = {
     _cache: {},
 
     /**
+     * Get valid snapshot URL or SVG placeholder without triggering 404 network requests.
+     */
+    getSnapshotUrl(event) {
+        if (!event) return EventCard.getNoImagePlaceholder();
+        const url = (event.snapshot_url || '').trim();
+        if (url && url !== '/api/snapshots/' && url !== '/api/snapshots/undefined' && url !== '/api/snapshots/null') {
+            return url;
+        }
+        const path = (event.snapshot_path || '').trim();
+        if (path && path !== 'undefined' && path !== 'null' && path !== '') {
+            return `/api/snapshots/${encodeURIComponent(path)}`;
+        }
+        return EventCard.getNoImagePlaceholder();
+    },
+
+    getNoImagePlaceholder(size = 'card') {
+        if (size === 'thumb') {
+            return `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 50 50%22><rect fill=%22%230c1020%22 width=%2250%22 height=%2250%22/><text x=%2225%22 y=%2228%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2210%22>${encodeURIComponent(I18n.t('no_image'))}</text></svg>`;
+        }
+        return `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 180%22><rect fill=%22%230c1020%22 width=%22300%22 height=%22180%22/><text x=%22150%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23545d78%22 font-size=%2214%22>${encodeURIComponent(I18n.t('no_image'))}</text></svg>`;
+    },
+
+    /**
      * Compute timestamp and range info for single or consolidated event cards.
      */
     getTimeInfo(event) {
@@ -104,7 +127,7 @@ const EventCard = {
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
-        const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
+        const snapshotUrl = EventCard.getSnapshotUrl(event);
         const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
 
@@ -184,7 +207,7 @@ const EventCard = {
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
-        const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
+        const snapshotUrl = EventCard.getSnapshotUrl(event);
         const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
 
@@ -248,7 +271,7 @@ const EventCard = {
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
-        const snapshotUrl = event.snapshot_url || `/api/snapshots/${event.snapshot_path}`;
+        const snapshotUrl = EventCard.getSnapshotUrl(event);
         const timeInfo = EventCard.getTimeInfo(event);
         const fullTimeStr = timeInfo.isConsolidated ? timeInfo.timestampStr : I18n.formatFullTimestamp(event.timestamp);
         const personName = event.person_name || I18n.t('unknown');
@@ -412,7 +435,7 @@ const EventCard = {
                             const isActive = ev.id === event.id;
                             return `
                                 <div onclick="EventCard.showDetailModal(${ev.id})" style="flex: 0 0 auto; width: 88px; cursor: pointer; opacity: ${isActive ? '1' : '0.7'}; border: ${isActive ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface-hover); transition: transform 0.15s ease, opacity 0.15s ease;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
-                                    <img src="${ev.snapshot_url || '/api/snapshots/' + ev.snapshot_path}" style="width: 100%; height: 70px; object-fit: cover; display: block;" />
+                                    <img src="${EventCard.getSnapshotUrl(ev)}" style="width: 100%; height: 70px; object-fit: cover; display: block;" onerror="this.src=EventCard.getNoImagePlaceholder('thumb')" />
                                     <div style="font-size: 0.62rem; text-align: center; background: rgba(0,0,0,0.7); color: #fff; padding: 3px 0; font-weight: 600;">${I18n.formatTimestamp(ev.timestamp)}</div>
                                 </div>
                             `;

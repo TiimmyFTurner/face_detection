@@ -729,7 +729,7 @@ const ZonesPage = {
             alert_type: data.alert_type || 'out_of_zone',
             snapshot_url: data.snapshot_url || (data.snapshot_path ? '/api/snapshots/' + data.snapshot_path : ''),
             snapshot_path: data.snapshot_path || '',
-            confidence_score: data.confidence_score || 1.0,
+            confidence_score: (data.alert_type === 'absence_timeout' || data.alert_type === 'camera_disconnected') ? 0.0 : (data.confidence_score || 0.0),
             duration_seconds: data.duration_seconds || null,
             duration_str: data.duration_str || null,
             is_known: true

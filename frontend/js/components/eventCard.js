@@ -172,17 +172,27 @@ const EventCard = {
                             <span class="meta-icon">🕐</span>
                             <span style="direction: ltr;">${timestamp}</span>
                         </div>
-                        <div class="event-meta-row" style="${isWarningAlert ? 'color: #facc15; font-weight: 600;' : ''}">
-                            <span class="meta-icon" style="${isWarningAlert ? 'color: #facc15;' : ''}">🎯</span>
+                        ${(event.alert_type === 'absence_timeout' && (event.duration_seconds || event.duration_str)) ? `
+                        <div class="event-meta-row" style="color: #fbbf24; font-weight: 600;">
+                            <span class="meta-icon">⏱️</span>
+                            <span>${I18n.isRTL() ? 'مدت عدم حضور' : 'Absence Duration'}: ${event.duration_seconds ? I18n.formatDuration(event.duration_seconds) : event.duration_str}</span>
+                        </div>
+                        ` : ''}
+                        ${!isWarningAlert ? `
+                        <div class="event-meta-row">
+                            <span class="meta-icon">🎯</span>
                             <span>${I18n.t('event_confidence')}: ${confidenceDisplay}%</span>
                         </div>
+                        ` : ''}
                     </div>
+                    ${!isWarningAlert ? `
                     <div class="confidence-bar">
                         <div
                             class="confidence-bar-fill ${confidenceClass}"
                             style="width: ${confidence}%"
                         ></div>
                     </div>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -243,12 +253,18 @@ const EventCard = {
                 </div>
 
                 <div class="event-list-confidence">
+                    ${!isWarningAlert ? `
                     <div style="flex: 1; min-width: 60px;">
-                        <div style="font-size: 0.72rem; ${isWarningAlert ? 'color: #facc15; font-weight: 700;' : 'color: var(--text-tertiary);'} text-align: end; margin-bottom: 2px;">${confidenceDisplay}%</div>
+                        <div style="font-size: 0.72rem; color: var(--text-tertiary); text-align: end; margin-bottom: 2px;">${confidenceDisplay}%</div>
                         <div class="confidence-bar" style="margin-top: 0;">
                             <div class="confidence-bar-fill ${confidenceClass}" style="width: ${confidence}%"></div>
                         </div>
                     </div>
+                    ` : ((event.alert_type === 'absence_timeout' && (event.duration_seconds || event.duration_str)) ? `
+                    <div style="font-size: 0.75rem; font-weight: 700; color: #fbbf24; white-space: nowrap; margin-inline-end: 4px;">
+                        ⏱️ ${event.duration_seconds ? I18n.formatDuration(event.duration_seconds) : event.duration_str}
+                    </div>
+                    ` : '')}
                     <span style="color: var(--text-tertiary); font-size: 0.85rem;">🔍</span>
                 </div>
             </div>
@@ -338,15 +354,17 @@ const EventCard = {
                             </div>
                         ` : ''}
 
+                        ${!isWarningAlert ? `
                         <div class="info-block" style="background: var(--bg-surface-hover); padding: 0.95rem 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
                             <div style="display: flex; justify-content: space-between; font-size: 0.72rem; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.4rem; letter-spacing: 0.05em;">
                                 <span>${I18n.t('event_confidence')}</span>
-                                <span style="${isWarningAlert ? 'color: #facc15;' : 'color: var(--text-primary);'} font-weight: 700;">${confidenceDisplay}%</span>
+                                <span style="color: var(--text-primary); font-weight: 700;">${confidenceDisplay}%</span>
                             </div>
                             <div class="confidence-bar" style="height: 8px;">
                                 <div class="confidence-bar-fill ${confidenceClass}" style="width: ${confidence}%;"></div>
                             </div>
                         </div>
+                        ` : ''}
                     </div>
                 </div>
 

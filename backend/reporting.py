@@ -536,11 +536,14 @@ def generate_events_xlsx(
 
         is_known = bool(ev.get("is_known", False))
         identity_type = "پرسنل مجاز (Known)" if is_known else "فرد ناشناس (Unknown)"
-        conf_score = float(ev.get("confidence_score") or 0.0)
-        conf_str = f"{round(conf_score * 100, 1)}%" if conf_score > 0 else "—"
-
         raw_alert = str(ev.get("alert_type") or "normal")
         alert_label = ALERT_TYPE_LABELS_FA.get(raw_alert, raw_alert)
+
+        conf_score = float(ev.get("confidence_score") or 0.0)
+        if raw_alert in ("absence_timeout", "camera_disconnected"):
+            conf_str = "—"
+        else:
+            conf_str = f"{round(conf_score * 100, 1)}%" if conf_score > 0 else "—"
 
         row_values = [
             idx,
@@ -635,11 +638,14 @@ def generate_events_csv(
 
         is_known = bool(ev.get("is_known", False))
         identity_type = "شناخته شده" if is_known else "ناشناس"
-        conf_score = float(ev.get("confidence_score") or 0.0)
-        conf_str = f"{round(conf_score * 100, 1)}%" if conf_score > 0 else "—"
-
         raw_alert = str(ev.get("alert_type") or "normal")
         alert_label = ALERT_TYPE_LABELS_FA.get(raw_alert, raw_alert)
+
+        conf_score = float(ev.get("confidence_score") or 0.0)
+        if raw_alert in ("absence_timeout", "camera_disconnected"):
+            conf_str = "—"
+        else:
+            conf_str = f"{round(conf_score * 100, 1)}%" if conf_score > 0 else "—"
 
         writer.writerow([
             idx,

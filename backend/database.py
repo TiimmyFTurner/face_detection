@@ -95,6 +95,7 @@ async def init_db() -> None:
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET is_active = 1 WHERE is_active IS NULL")
                 sync_conn.exec_driver_sql("UPDATE events SET alert_type = 'normal' WHERE alert_type IS NULL OR alert_type = ''")
                 sync_conn.exec_driver_sql("UPDATE events SET zone_name = '' WHERE zone_name IS NULL")
+                sync_conn.exec_driver_sql("UPDATE events SET confidence_score = 0.0 WHERE alert_type IN ('camera_disconnected', 'absence_timeout') AND confidence_score > 0")
                 sync_conn.exec_driver_sql("UPDATE cameras SET rtsp_url = replace(rtsp_url, '%40', '@') WHERE instr(rtsp_url, '%40') > 0")
 
                 # Clean up orphan camera zones whose camera was previously deleted

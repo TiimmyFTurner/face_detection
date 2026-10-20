@@ -172,3 +172,62 @@ async def test_events_export_with_filters(client: AsyncClient):
     assert "Unknown Intruder" in csv_str
     assert "Arman Askari" not in csv_str
     assert "ورود غیرمجاز" in csv_str
+
+
+@pytest.mark.asyncio
+async def test_events_export_absence_and_disconnected_no_confidence(client: AsyncClient):
+    """Test that absence_timeout and camera_disconnected events export with '—' for confidence, not 100%."""
+    now = datetime.now(timezone.utc)
+
+    async with test_session() as session:
+        cam = Camera(name="Station Cam", rtsp_url="rtsp://localhost/cam-station", location="Station", is_active=True)
+        session.add(cam)
+        await session.commit()
+        await session.refresh(cam)
+
+        ev_absence = Event(
+            camera_id=cam.id,
+            person_name="Guard Reza",
+            is_known=True,
+            confidence_score=0.0,
+            snapshot_path="absence.jpg",
+            timestamp=now,
+            zone_name="Station Area",
+            alert_type="absence_timeout",
+            duration_seconds=300,
+        )
+        ev_disc = Event(
+            camera_id=cam.id,
+            person_name="Guard Reza",
+            is_known=True,
+            confidence_score=0.0,
+            snapshot_path="disc.jpg",
+            timestamp=now,
+            zone_name="Station Area",
+            alert_type="camera_disconnected",
+        )
+        session.add_all([ev_absence, ev_disc])
+        await session.commit()
+
+    # 1. Excel export check
+    res_xlsx = await client.get("/api/events/export?format=xlsx&search=Guard Reza")
+    assert res_xlsx.status_code == 200
+    wb = openpyxl.load_workbook(io.BytesIO(res_xlsx.content))
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    # Find data rows (skipping title and header rows)
+    data_rows = [r for r in rows if r and len(r) >= 11 and "Guard Reza" in str(r[5])]
+    assert len(data_rows) == 2
+    for r in data_rows:
+        conf_cell_val = str(r[7])  # Column 8 is confidence
+        assert conf_cell_val == "—"
+        assert "100" not in conf_cell_val
+
+    # 2. CSV export check
+    res_csv = await client.get("/api/events/export?format=csv&search=Guard Reza")
+    assert res_csv.status_code == 200
+    csv_str = res_csv.content.decode("utf-8")
+    assert "Guard Reza" in csv_str
+    # Confidence in CSV should be "—" and not "100%" or "100.0%"
+    assert "100.0%" not in csv_str
+    assert "100%" not in csv_str

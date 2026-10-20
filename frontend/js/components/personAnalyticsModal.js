@@ -857,6 +857,7 @@ const PersonAnalyticsModal = {
                         const fullTime = I18n.formatTimestamp(ev.timestamp);
                         const confPct = Math.round((ev.confidence_score || 0) * 100);
                         const confDisp = I18n.isRTL() ? I18n.toPersianDigits(confPct) : confPct;
+                        const isWarning = ev.alert_type === 'absence_timeout' || ev.alert_type === 'camera_disconnected';
 
                         return `
                             <div class="recent-snapshot-card" onclick="EventCard.showDetailModal(${ev.id})" style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; cursor: pointer; transition: transform 0.2s, border-color 0.2s;" title="${PersonAnalyticsModal.escapeAttr(I18n.t('click_to_view'))}">
@@ -866,7 +867,7 @@ const PersonAnalyticsModal = {
                                 <div style="padding: 0.6rem;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
                                         <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📹 ${PersonAnalyticsModal.escapeHtml(ev.camera_name)}</span>
-                                        <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue);">${confDisp}%</span>
+                                        ${!isWarning ? `<span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue);">${confDisp}%</span>` : ''}
                                     </div>
                                     <div style="font-size: 0.7rem; color: var(--text-secondary);">🕐 ${fullTime}</div>
                                     ${ev.zone_name ? `<div style="font-size: 0.7rem; color: var(--accent-violet); margin-top: 0.2rem;">🎯 ${PersonAnalyticsModal.escapeHtml(ev.zone_name)}</div>` : ''}

@@ -1510,11 +1510,13 @@ const DashboardPage = {
                     <div class="person-timeline-summary" style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
                         ${group.events.slice(0, 4).map(ev => {
                 const camName = ev.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(ev.camera_id) : ev.camera_id));
+                const isWarning = ev.alert_type === 'absence_timeout' || ev.alert_type === 'camera_disconnected';
                 const confScore = Math.round((ev.confidence_score || 0) * 100);
                 const confStr = I18n.isRTL() ? I18n.toPersianDigits(confScore) : confScore;
+                const confPart = isWarning ? '' : ` (${confStr}%)`;
                 return `
                                 <span style="background: rgba(255, 255, 255, 0.04); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                                    📹 ${EventCard.escapeHtml(camName)} — ${I18n.formatTimestamp(ev.timestamp)} (${confStr}%)
+                                    📹 ${EventCard.escapeHtml(camName)} — ${I18n.formatTimestamp(ev.timestamp)}${confPart}
                                 </span>
                             `;
             }).join('')}

@@ -391,6 +391,26 @@ async def _seed_defaults() -> None:
                 session.add(Section(name=s["name"], description=s["description"]))
             await session.commit()
 
+        # Check / Seed default Break Presets
+        from backend.models import BreakPreset
+        bp_res = await session.execute(select(BreakPreset))
+        if not bp_res.scalars().all():
+            default_presets = [
+                {"name": "ناهار (Lunch)", "start_time": "12:00", "end_time": "13:00", "category": "lunch", "icon": "🍽️"},
+                {"name": "ناهار و نماز (Lunch & Prayer)", "start_time": "12:30", "end_time": "13:30", "category": "lunch", "icon": "🍱"},
+                {"name": "عصرانه و چای (Tea Break)", "start_time": "16:00", "end_time": "16:30", "category": "rest", "icon": "☕"},
+                {"name": "استراحت شبانه (Midnight Rest)", "start_time": "03:00", "end_time": "03:45", "category": "rest", "icon": "🌙"},
+            ]
+            for p in default_presets:
+                session.add(BreakPreset(
+                    name=p["name"],
+                    start_time=p["start_time"],
+                    end_time=p["end_time"],
+                    category=p["category"],
+                    icon=p["icon"],
+                ))
+            await session.commit()
+
 async def get_db() -> AsyncSession:
     """Yield an async database session for request-scoped use."""
     async with async_session() as session:

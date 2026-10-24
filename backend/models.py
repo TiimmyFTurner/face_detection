@@ -115,6 +115,24 @@ class ShiftTemplate(Base):
         return f"<ShiftTemplate id={self.id} name='{self.name}' ({self.start_time}-{self.end_time})>"
 
 
+class BreakPreset(Base):
+    """Reusable preset for lunch and free times (breaks)."""
+
+    __tablename__ = "break_presets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    start_time = Column(String(10), nullable=False, default="12:00")
+    end_time = Column(String(10), nullable=False, default="13:00")
+    category = Column(String(50), default="lunch")  # "lunch", "rest", "prayer", "other"
+    icon = Column(String(20), default="🍽️")
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    def __repr__(self) -> str:
+        return f"<BreakPreset id={self.id} name='{self.name}' ({self.start_time}-{self.end_time})>"
+
+
 class Person(Base):
     """A known individual enrolled in the system."""
 

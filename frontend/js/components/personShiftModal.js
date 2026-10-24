@@ -14,6 +14,7 @@ const PersonShiftModal = {
     _selectedTemplateId: null,
     _isCustomShift: false,
     _customSubtype: 'rotational', // 'rotational' | 'fixed'
+    _freeTimes: [],
     _rotationPattern: {
         pattern_type: '2d_2n_1off',
         cycle: ['day', 'day', 'night', 'night', 'off'],
@@ -36,6 +37,7 @@ const PersonShiftModal = {
         this._selectedTemplateId = null;
         this._isCustomShift = false;
         this._customSubtype = 'rotational';
+        this._freeTimes = [];
 
         App.openModal(`
             <div class="modal-header">
@@ -60,6 +62,7 @@ const PersonShiftModal = {
                 App.api('/api/shift-templates'),
                 App.api('/api/sections'),
                 App.api('/api/cameras'),
+                typeof BreakPresets !== 'undefined' ? BreakPresets.load() : Promise.resolve(),
             ]);
 
             this._data = shiftData;
@@ -71,6 +74,9 @@ const PersonShiftModal = {
             this._selectedZoneIds = new Set((shiftData.assigned_zones || []).map(z => z.id));
             this._selectedTemplateId = shiftData.shift_template_id;
             this._isCustomShift = !!shiftData.custom_shift;
+            this._freeTimes = (shiftData.custom_shift && Array.isArray(shiftData.custom_shift.free_times))
+                ? JSON.parse(JSON.stringify(shiftData.custom_shift.free_times))
+                : [];
 
             if (shiftData.custom_shift) {
                 const cs = shiftData.custom_shift;
@@ -473,6 +479,47 @@ const PersonShiftModal = {
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Free Times & Lunch Breaks Section -->
+                            <div class="p-3 mt-3 border-top border-subtle">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label font-weight-bold d-flex align-items-center gap-2 m-0 text-xs">
+                                        <span>☕</span>
+                                        <span>${I18n.t('person_shift_breaks_label') || 'بازه‌های استراحت، ناهار و اوقات آزاد'}</span>
+                                    </label>
+                                    <span class="badge badge-subtle text-xs" id="person-breaks-count-badge">
+                                        ${(this._freeTimes || []).length} بازه تعریف شده
+                                    </span>
+                                </div>
+                                <small class="text-muted d-block text-xs mb-2">
+                                    ${I18n.t('person_shift_breaks_hint') || 'در این زمان‌ها برای این فرد آژیر غیبت به صدا درنمی‌آید.'}
+                                </small>
+
+                                <!-- Pills list -->
+                                <div id="person-free-times-list" class="d-flex flex-column gap-1 mb-2">
+                                    ${this.renderFreeTimesListHtml()}
+                                </div>
+
+                                <!-- Inputs row -->
+                                <div class="d-grid" style="grid-template-columns: 1fr 1fr 1fr auto; gap: 0.4rem; align-items: center; margin-bottom: 0.5rem;">
+                                    <input type="text" id="person-free-time-name" class="form-control form-control-sm" placeholder="${this._escape(I18n.t('free_time_name_placeholder') || 'عنوان (ناهار، استراحت...)')}" style="font-size: 0.78rem;" />
+                                    <input type="time" id="person-free-time-start" class="form-control form-control-sm" value="12:00" style="font-size: 0.78rem;" />
+                                    <input type="time" id="person-free-time-end" class="form-control form-control-sm" value="13:00" style="font-size: 0.78rem;" />
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="PersonShiftModal.addFreeTimeFromInputs()" style="font-size: 0.75rem; padding: 0.35rem 0.6rem;">
+                                        ${I18n.t('add_free_time_btn') || '＋'}
+                                    </button>
+                                </div>
+
+                                <!-- Dynamic Presets Bar -->
+                                <div id="person-break-presets-bar">
+                                    ${typeof BreakPresets !== 'undefined' ? BreakPresets.renderBarHtml({
+                                        containerId: 'person-break-presets-bar',
+                                        inputPrefix: 'person-free-time',
+                                        onSelectPresetCall: 'PersonShiftModal.applyBreakPreset',
+                                        refreshCall: 'PersonShiftModal.renderFreeTimesListHtml',
+                                    }) : ''}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -638,6 +685,7 @@ const PersonShiftModal = {
                     active_days: ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
                     grace_period_minutes: isNaN(graceVal) ? 15 : graceVal,
                     absence_timeout_minutes: isNaN(absVal) ? 5 : absVal,
+                    free_times: this._freeTimes || [],
                     rotation_pattern: {
                         pattern_type: this._rotationPattern.pattern_type || '2d_2n_1off',
                         cycle: this._rotationPattern.cycle || ['day', 'day', 'night', 'night', 'off'],
@@ -669,6 +717,7 @@ const PersonShiftModal = {
                     active_days: selectedDays.length > 0 ? selectedDays : ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'],
                     grace_period_minutes: isNaN(graceVal) ? 10 : graceVal,
                     absence_timeout_minutes: isNaN(absenceVal) ? 2 : absenceVal,
+                    free_times: this._freeTimes || [],
                 };
             }
         }
@@ -712,5 +761,82 @@ const PersonShiftModal = {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    },
+
+    /**
+     * Render the list of free times (lunch, rest, etc.).
+     */
+    renderFreeTimesListHtml() {
+        if (!this._freeTimes || this._freeTimes.length === 0) {
+            return `<div class="text-muted text-xs font-italic p-1">${I18n.t('no_free_times_hint') || 'هیچ بازه استراحتی تعریف نشده است.'}</div>`;
+        }
+        return this._freeTimes.map((ft, idx) => `
+            <div class="d-flex justify-content-between align-items-center bg-surface-hover p-1 px-2 rounded border border-subtle text-xs">
+                <div class="d-flex align-items-center gap-2">
+                    <span>☕</span>
+                    <strong class="text-primary">${this._escape(ft.name || 'Break')}</strong>
+                    <span class="text-accent font-weight-bold">(${ft.start_time} - ${ft.end_time})</span>
+                </div>
+                <button type="button" class="btn btn-ghost btn-xs text-danger p-0" onclick="PersonShiftModal.removeFreeTime(${idx})" style="line-height: 1;">
+                    ✕
+                </button>
+            </div>
+        `).join('');
+    },
+
+    /**
+     * Add free time from input fields.
+     */
+    addFreeTimeFromInputs() {
+        const nameInput = document.getElementById('person-free-time-name');
+        const startInput = document.getElementById('person-free-time-start');
+        const endInput = document.getElementById('person-free-time-end');
+
+        const name = (nameInput ? nameInput.value : '').trim() || (I18n.isRTL() ? 'استراحت' : 'Break');
+        const startTime = (startInput ? startInput.value : '').trim() || '12:00';
+        const endTime = (endInput ? endInput.value : '').trim() || '13:00';
+
+        if (!this._freeTimes) this._freeTimes = [];
+        this._freeTimes.push({ name, start_time: startTime, end_time: endTime });
+
+        if (nameInput) nameInput.value = '';
+
+        const listEl = document.getElementById('person-free-times-list');
+        if (listEl) listEl.innerHTML = this.renderFreeTimesListHtml();
+        const countBadge = document.getElementById('person-breaks-count-badge');
+        if (countBadge) countBadge.textContent = `${this._freeTimes.length} بازه تعریف شده`;
+    },
+
+    /**
+     * Apply preset to person free times.
+     */
+    applyBreakPreset(name, startTime, endTime) {
+        if (!this._freeTimes) this._freeTimes = [];
+        const exists = this._freeTimes.some(ft => ft.start_time === startTime && ft.end_time === endTime && ft.name === name);
+        if (!exists) {
+            this._freeTimes.push({
+                name: name || (I18n.isRTL() ? 'استراحت' : 'Break'),
+                start_time: startTime || '12:00',
+                end_time: endTime || '13:00',
+            });
+        }
+
+        const listEl = document.getElementById('person-free-times-list');
+        if (listEl) listEl.innerHTML = this.renderFreeTimesListHtml();
+        const countBadge = document.getElementById('person-breaks-count-badge');
+        if (countBadge) countBadge.textContent = `${this._freeTimes.length} بازه تعریف شده`;
+    },
+
+    /**
+     * Remove free time by index.
+     */
+    removeFreeTime(idx) {
+        if (this._freeTimes && this._freeTimes.length > idx) {
+            this._freeTimes.splice(idx, 1);
+        }
+        const listEl = document.getElementById('person-free-times-list');
+        if (listEl) listEl.innerHTML = this.renderFreeTimesListHtml();
+        const countBadge = document.getElementById('person-breaks-count-badge');
+        if (countBadge) countBadge.textContent = `${this._freeTimes.length} بازه تعریف شده`;
     },
 };

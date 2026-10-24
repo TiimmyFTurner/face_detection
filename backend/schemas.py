@@ -316,6 +316,36 @@ class ShiftTemplateResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── Break Presets Schemas ────────────────────────────────
+class BreakPresetBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Preset name, e.g. Lunch or Tea Break")
+    start_time: str = Field(default="12:00", description="Start time in HH:MM format")
+    end_time: str = Field(default="13:00", description="End time in HH:MM format")
+    category: str = Field(default="lunch", description="Category: 'lunch', 'rest', 'prayer', or 'other'")
+    icon: Optional[str] = Field(default="🍽️", description="Display icon emoji")
+
+
+class BreakPresetCreate(BreakPresetBase):
+    pass
+
+
+class BreakPresetUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    category: Optional[str] = None
+    icon: Optional[str] = None
+
+
+class BreakPresetResponse(BreakPresetBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+
 class CameraZoneCreate(BaseModel):
     """Schema for creating a camera important area."""
     name: str = Field(..., min_length=1, max_length=255, examples=["Work Desk"])

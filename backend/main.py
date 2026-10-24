@@ -21,7 +21,7 @@ from backend.database import init_db
 from backend.face_engine import face_engine
 from backend.stream_processor import stream_processor, ws_manager
 from backend.snapshot_cleanup import retention_worker
-from backend.routers import auth, cameras, events, persons, roles, sections, snapshots, system, users, zones
+from backend.routers import auth, break_presets, cameras, events, persons, roles, sections, snapshots, system, users, zones
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(
@@ -122,6 +122,7 @@ app.include_router(persons.router)
 app.include_router(events.router)
 app.include_router(snapshots.router)
 app.include_router(zones.router)
+app.include_router(break_presets.router)
 app.include_router(system.router)
 
 

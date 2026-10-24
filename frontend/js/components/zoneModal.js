@@ -51,6 +51,7 @@ const ZoneModal = {
             const [zones, persons] = await Promise.all([
                 App.api(`/api/cameras/${camera.id}/zones`),
                 App.api('/api/persons'),
+                typeof BreakPresets !== 'undefined' ? BreakPresets.load() : Promise.resolve(),
             ]);
 
             ZoneModal._zones = zones || [];
@@ -291,14 +292,14 @@ const ZoneModal = {
                                 </button>
                             </div>
 
-                            <!-- Presets -->
-                            <div style="display: flex; gap: 0.4rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.addPresetFreeTime('lunch')" style="font-size: 0.68rem; padding: 2px 7px;">
-                                    🍽️ ${I18n.t('quick_add_lunch')}
-                                </button>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="ZoneModal.addPresetFreeTime('rest')" style="font-size: 0.68rem; padding: 2px 7px;">
-                                    ☕ ${I18n.t('quick_add_rest')}
-                                </button>
+                            <!-- Dynamic Presets Bar -->
+                            <div id="zone-break-presets-bar" style="margin-top: 0.6rem;">
+                                ${typeof BreakPresets !== 'undefined' ? BreakPresets.renderBarHtml({
+                                    containerId: 'zone-break-presets-bar',
+                                    inputPrefix: 'free-time',
+                                    onSelectPresetCall: 'ZoneModal.applyBreakPreset',
+                                    refreshCall: 'ZoneModal.renderFreeTimesListHtml',
+                                }) : ''}
                             </div>
                         </div>
 
@@ -748,26 +749,34 @@ const ZoneModal = {
     },
 
     /**
-     * Add preset free time (lunch or rest).
+     * Apply preset free time (lunch, rest, prayer, custom).
      */
-    addPresetFreeTime(type) {
-        if (type === 'lunch') {
+    applyBreakPreset(name, startTime, endTime) {
+        if (!ZoneModal._freeTimes) ZoneModal._freeTimes = [];
+        const exists = ZoneModal._freeTimes.some(
+            ft => ft.start_time === startTime && ft.end_time === endTime && ft.name === name
+        );
+        if (!exists) {
             ZoneModal._freeTimes.push({
-                name: I18n.isRTL() ? 'ناهار' : 'Lunch',
-                start_time: '12:00',
-                end_time: '13:00',
-            });
-        } else if (type === 'rest') {
-            ZoneModal._freeTimes.push({
-                name: I18n.isRTL() ? 'استراحت' : 'Rest',
-                start_time: '16:00',
-                end_time: '16:30',
+                name: name || (I18n.isRTL() ? 'استراحت' : 'Break'),
+                start_time: startTime || '12:00',
+                end_time: endTime || '13:00',
             });
         }
-
         const container = document.getElementById('zone-free-times-list');
         if (container) {
             container.innerHTML = ZoneModal.renderFreeTimesListHtml();
+        }
+    },
+
+    /**
+     * Add preset free time (lunch or rest, legacy).
+     */
+    addPresetFreeTime(type) {
+        if (type === 'lunch') {
+            this.applyBreakPreset(I18n.isRTL() ? 'ناهار' : 'Lunch', '12:00', '13:00');
+        } else if (type === 'rest') {
+            this.applyBreakPreset(I18n.isRTL() ? 'استراحت' : 'Rest', '16:00', '16:30');
         }
     },
 

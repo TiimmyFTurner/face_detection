@@ -6093,3 +6093,131 @@ html[dir="rtl"] textarea {
         box-shadow: none !important;
     }
 }
+
+/* ── Break Presets & Lunch Manager ───────────────────────── */
+.break-presets-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+}
+
+.break-presets-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.break-presets-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.break-presets-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.break-preset-action-btn {
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.break-preset-action-btn:hover {
+    background: var(--bg-surface-hover);
+}
+
+.break-presets-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.break-preset-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.break-preset-btn {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+    cursor: pointer;
+}
+
+.break-preset-btn:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--accent-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.break-preset-btn:active {
+    transform: translateY(0);
+}
+
+.break-preset-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.break-preset-name {
+    font-weight: 600;
+}
+
+.break-preset-time {
+    font-size: 0.65rem;
+    color: var(--accent-blue);
+    background: rgba(56, 189, 248, 0.12);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.break-preset-pill.managing .break-preset-btn {
+    padding-inline-end: 18px;
+    border-color: rgba(248, 113, 113, 0.4);
+}
+
+.break-preset-del-btn {
+    position: absolute;
+    inset-inline-end: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ef4444;
+    color: #fff;
+    border: none;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+    transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.break-preset-del-btn:hover {
+    background: #dc2626;
+    transform: translateY(-50%) scale(1.15);
+}

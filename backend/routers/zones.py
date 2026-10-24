@@ -541,6 +541,19 @@ async def compute_duty_roster_data(
                 shift_start_ts = cur_shift_start_dt.timestamp() if cur_shift_start_dt else 0
                 seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
+                # Check person-specific breaks in addition to zone breaks
+                person_breaks = []
+                if person:
+                    if person.custom_shift and isinstance(person.custom_shift, dict):
+                        person_breaks = _parse_list_field(person.custom_shift.get("free_times"), [])
+                    elif person.shift_template_id and person.shift_template_id in shift_templates_map:
+                        st = shift_templates_map[person.shift_template_id]
+                        if st and getattr(st, "free_times", None):
+                            person_breaks = _parse_list_field(st.free_times, [])
+
+                combined_free = list(s_free) + person_breaks
+                cur_in_free_time, cur_break_name = is_time_in_free_time(combined_free, now_local)
+
                 if rot_state and rot_state.get("shift_kind") == "off":
                     status_str = "off_duty"
                     is_in_zone = False
@@ -559,7 +572,7 @@ async def compute_duty_roster_data(
                     last_seen_sec = None
                     last_seen_str = "Camera Disconnected"
                     curr_absence_mins = 0
-                elif in_free_time:
+                elif cur_in_free_time:
                     if seen_in_shift and (now_ts - last_seen) < 120.0:
                         status_str = "present"
                         is_in_zone = True
@@ -570,7 +583,7 @@ async def compute_duty_roster_data(
                         status_str = "on_break"
                         is_in_zone = False
                         last_seen_sec = round(now_ts - last_seen, 1) if seen_in_shift else None
-                        last_seen_str = f"On Break ({break_name})"
+                        last_seen_str = f"On Break ({cur_break_name})"
                         curr_absence_mins = 0
                 elif seen_in_shift and (now_ts - last_seen) < 120.0:
                     status_str = "present"

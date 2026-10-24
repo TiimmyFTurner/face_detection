@@ -27,7 +27,7 @@ from backend.auth import require_permission, get_user_scope
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
-from backend.shift_utils import get_rotation_day_state
+from backend.shift_utils import get_rotation_day_state, get_interval_free_minutes
 from backend.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
@@ -331,6 +331,10 @@ async def get_zones_status(
             last_seen = stream_processor._zone_last_seen.get(key, 0)
             seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
+            z_timeout = getattr(z, "absence_timeout_minutes", 2) or 2
+            z_timeout_secs = float(z_timeout * 60)
+            z_grace = getattr(z, "grace_period_minutes", 10) or 10
+
             if not in_schedule:
                 status_str = "off_duty"
                 last_seen_sec = None
@@ -342,32 +346,51 @@ async def get_zones_status(
                 last_seen_str = "Camera Disconnected"
                 minutes_absent = None
             elif in_free_time:
-                if seen_in_shift and (now - last_seen) < 120.0:
+                # During Free Times & Breaks: Never absent, 0 absence minutes
+                if seen_in_shift and (now - last_seen) < z_timeout_secs:
                     status_str = "present"
                     last_seen_sec = round(now - last_seen, 1)
-                    last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                    last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)" if last_seen_sec < 60 else f"In Zone (seen {int(last_seen_sec // 60)}m ago)"
                     minutes_absent = 0
                 else:
                     status_str = "on_break"
                     last_seen_sec = round(now - last_seen, 1) if seen_in_shift else None
                     last_seen_str = f"On Break ({break_name})"
                     minutes_absent = 0
-            elif seen_in_shift and (now - last_seen) < 120.0:
+            elif seen_in_shift and (now - last_seen) < z_timeout_secs:
+                # Missing for less than Absence Alarm Grace Timer: Present, 0 absence minutes!
                 status_str = "present"
                 last_seen_sec = round(now - last_seen, 1)
-                last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)" if last_seen_sec < 60 else f"In Zone (seen {int(last_seen_sec // 60)}m ago)"
+                minutes_absent = 0
+            elif not seen_in_shift and elapsed_shift_mins <= z_grace:
+                # Within Arrival Grace Period: Present / in grace, 0 absence minutes!
+                status_str = "present"
+                last_seen_sec = None
+                last_seen_str = f"Arrival Grace Period ({elapsed_shift_mins}/{z_grace}m)"
                 minutes_absent = 0
             else:
-                status_str = "absent"
+                # Exceeded threshold or arrival grace
                 if seen_in_shift:
                     last_seen_sec = round(now - last_seen, 1)
-                    mins = max(1, int(last_seen_sec // 60))
-                    last_seen_str = f"Missing for {mins}m"
-                    minutes_absent = mins
+                    raw_mins = max(1, int(last_seen_sec // 60))
+                    last_dt = datetime.fromtimestamp(last_seen)
+                    free_mins_since = get_interval_free_minutes(last_dt, now_dt, z.free_times or [])
+                    net_mins = max(0, raw_mins - free_mins_since)
+                    if net_mins < z_timeout:
+                        status_str = "present"
+                        last_seen_str = f"In Zone (seen {raw_mins}m ago)"
+                        minutes_absent = 0
+                    else:
+                        status_str = "absent"
+                        last_seen_str = f"Missing for {net_mins}m"
+                        minutes_absent = net_mins
                 else:
+                    status_str = "absent"
                     last_seen_sec = None
                     last_seen_str = "Not Seen Yet"
-                    minutes_absent = max(1, elapsed_shift_mins) if elapsed_shift_mins > 0 else 0
+                    free_since_start = get_interval_free_minutes(shift_start_dt, now_dt, z.free_times or [])
+                    minutes_absent = max(1, elapsed_shift_mins - free_since_start) if elapsed_shift_mins > 0 else 0
 
             assigned_status_list.append(
                 ZonePersonStatus(
@@ -553,6 +576,8 @@ async def compute_duty_roster_data(
 
                 combined_free = list(s_free) + person_breaks
                 cur_in_free_time, cur_break_name = is_time_in_free_time(combined_free, now_local)
+                is_within_grace = False
+                timeout_secs = float(s_timeout * 60)
 
                 if rot_state and rot_state.get("shift_kind") == "off":
                     status_str = "off_duty"
@@ -573,11 +598,12 @@ async def compute_duty_roster_data(
                     last_seen_str = "Camera Disconnected"
                     curr_absence_mins = 0
                 elif cur_in_free_time:
-                    if seen_in_shift and (now_ts - last_seen) < 120.0:
+                    # During Free Times & Breaks: Never absent, 0 absence minutes
+                    if seen_in_shift and (now_ts - last_seen) < timeout_secs:
                         status_str = "present"
                         is_in_zone = True
                         last_seen_sec = round(now_ts - last_seen, 1)
-                        last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                        last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)" if last_seen_sec < 60 else f"In Zone (seen {int(last_seen_sec // 60)}m ago)"
                         curr_absence_mins = 0
                     else:
                         status_str = "on_break"
@@ -585,23 +611,46 @@ async def compute_duty_roster_data(
                         last_seen_sec = round(now_ts - last_seen, 1) if seen_in_shift else None
                         last_seen_str = f"On Break ({cur_break_name})"
                         curr_absence_mins = 0
-                elif seen_in_shift and (now_ts - last_seen) < 120.0:
+                elif seen_in_shift and (now_ts - last_seen) < timeout_secs:
+                    # Missing for less than Absence Alarm Grace Timer: Present, 0 absence minutes!
                     status_str = "present"
                     is_in_zone = True
                     last_seen_sec = round(now_ts - last_seen, 1)
-                    last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)"
+                    last_seen_str = f"In Zone (seen {int(last_seen_sec)}s ago)" if last_seen_sec < 60 else f"In Zone (seen {int(last_seen_sec // 60)}m ago)"
+                    curr_absence_mins = 0
+                elif not seen_in_shift and cur_elapsed_shift_mins <= s_grace:
+                    # Within Arrival Grace Period: Present / in grace, 0 absence minutes!
+                    is_within_grace = True
+                    status_str = "present"
+                    is_in_zone = False
+                    last_seen_sec = None
+                    last_seen_str = f"Arrival Grace Period ({cur_elapsed_shift_mins}/{s_grace}m)"
                     curr_absence_mins = 0
                 else:
-                    status_str = "absent"
-                    is_in_zone = False
+                    # Exceeded threshold or arrival grace
                     if seen_in_shift:
                         last_seen_sec = round(now_ts - last_seen, 1)
-                        curr_absence_mins = max(1, int(last_seen_sec // 60))
-                        last_seen_str = f"Missing for {curr_absence_mins}m"
+                        raw_missing_mins = max(1, int(last_seen_sec // 60))
+                        last_dt = datetime.fromtimestamp(last_seen)
+                        free_since = get_interval_free_minutes(last_dt, now_local, combined_free)
+                        net_missing = max(0, raw_missing_mins - free_since)
+                        if net_missing < s_timeout:
+                            status_str = "present"
+                            is_in_zone = True
+                            curr_absence_mins = 0
+                            last_seen_str = f"In Zone (seen {raw_missing_mins}m ago)"
+                        else:
+                            status_str = "absent"
+                            is_in_zone = False
+                            curr_absence_mins = net_missing
+                            last_seen_str = f"Missing for {curr_absence_mins}m"
                     else:
+                        status_str = "absent"
+                        is_in_zone = False
                         last_seen_sec = None
-                        curr_absence_mins = max(1, cur_elapsed_shift_mins) if cur_elapsed_shift_mins > 0 else 0
                         last_seen_str = "Not Seen Yet"
+                        free_since_start = get_interval_free_minutes(cur_shift_start_dt, now_local, combined_free) if cur_shift_start_dt else 0
+                        curr_absence_mins = max(1, cur_elapsed_shift_mins - free_since_start) if cur_elapsed_shift_mins > 0 else 0
 
                 # Filter ONLY actual face detection sightings for this shift (from cur_shift_start_dt to min(now_local, cur_shift_end_dt))
                 shift_events = []
@@ -613,60 +662,62 @@ async def compute_duty_roster_data(
 
                 absence_intervals: list[AbsenceInterval] = []
                 raw_arrival_delay = 0
-                is_within_grace = False
 
                 if cur_in_schedule and cur_elapsed_shift_mins > 0:
                     if not shift_events:
                         # No actual face sightings during shift
-                        if not is_cam_online or in_free_time:
+                        if not is_cam_online or cur_in_free_time:
                             shift_absence_mins = 0
                             shift_presence_mins = 0
                             compliance = 100.0
+                        elif cur_elapsed_shift_mins <= s_grace:
+                            # Within arrival grace period — suppress absence
+                            is_within_grace = True
+                            shift_absence_mins = 0
+                            shift_presence_mins = cur_elapsed_shift_mins
+                            compliance = 100.0
                         else:
-                            # If elapsed time is still within the arrival grace period:
-                            if cur_elapsed_shift_mins <= s_grace:
-                                is_within_grace = True
-                                shift_absence_mins = 0
-                                shift_presence_mins = cur_elapsed_shift_mins
-                                compliance = 100.0
-                            else:
-                                shift_absence_mins = cur_elapsed_shift_mins
-                                shift_presence_mins = 0
-                                compliance = 0.0
-                                if cur_elapsed_shift_mins >= 3:
-                                    curr_t_str = now_local.strftime("%H:%M")
-                                    absence_intervals.append(
-                                        AbsenceInterval(
-                                            start_time=cur_start_str,
-                                            end_time=curr_t_str,
-                                            duration_minutes=cur_elapsed_shift_mins,
-                                            duration_str=_format_duration(cur_elapsed_shift_mins * 60),
-                                            interval_type="unseen",
-                                        )
+                            free_since_start = get_interval_free_minutes(cur_shift_start_dt, now_local, combined_free) if cur_shift_start_dt else 0
+                            net_unseen = max(0, cur_elapsed_shift_mins - free_since_start)
+                            shift_absence_mins = net_unseen
+                            shift_presence_mins = 0
+                            compliance = 0.0
+                            if net_unseen >= s_timeout:
+                                curr_t_str = now_local.strftime("%H:%M")
+                                absence_intervals.append(
+                                    AbsenceInterval(
+                                        start_time=cur_start_str,
+                                        end_time=curr_t_str,
+                                        duration_minutes=net_unseen,
+                                        duration_str=_format_duration(net_unseen * 60),
+                                        interval_type="unseen",
                                     )
+                                )
                     else:
                         first_ev_loc = _to_local_dt(shift_events[0].timestamp)
                         raw_delay = max(0, int((first_ev_loc - cur_shift_start_dt).total_seconds() // 60)) if (is_cam_online and cur_shift_start_dt) else 0
                         raw_arrival_delay = raw_delay
 
-                        if 0 < raw_delay <= s_grace:
+                        if 0 <= raw_delay <= s_grace:
                             is_within_grace = True
-
-                        # Log late arrival ONLY if person exceeded the configured grace period:
-                        if is_cam_online and raw_delay > s_grace and raw_delay >= 3:
-                            first_t_str = first_ev_loc.strftime("%H:%M")
-                            absence_intervals.append(
-                                AbsenceInterval(
-                                    start_time=cur_start_str,
-                                    end_time=first_t_str,
-                                    duration_minutes=raw_delay,
-                                    duration_str=_format_duration(raw_delay * 60),
-                                    interval_type="late_arrival",
-                                )
-                            )
-                            effective_delay = raw_delay
-                        else:
                             effective_delay = 0
+                        else:
+                            free_arr = get_interval_free_minutes(cur_shift_start_dt, first_ev_loc, combined_free) if cur_shift_start_dt else 0
+                            net_delay = max(0, raw_delay - free_arr)
+                            if is_cam_online and net_delay > s_grace and net_delay >= s_timeout:
+                                first_t_str = first_ev_loc.strftime("%H:%M")
+                                absence_intervals.append(
+                                    AbsenceInterval(
+                                        start_time=cur_start_str,
+                                        end_time=first_t_str,
+                                        duration_minutes=net_delay,
+                                        duration_str=_format_duration(net_delay * 60),
+                                        interval_type="late_arrival",
+                                    )
+                                )
+                                effective_delay = net_delay
+                            else:
+                                effective_delay = 0
 
                         # Disconnect events for this camera
                         cam_disc_events = [
@@ -674,47 +725,52 @@ async def compute_duty_roster_data(
                             if ev.camera_id == z.camera_id and ev.alert_type == "camera_disconnected"
                         ]
 
-                        # Gaps between detections inside shift (excluding camera downtime)
+                        # Gaps between detections inside shift (excluding camera downtime and free times)
                         gaps_mins = 0
                         for idx in range(len(shift_events) - 1):
                             t1 = shift_events[idx].timestamp
                             t2 = shift_events[idx + 1].timestamp
-                            gap_sec = (t2 - t1).total_seconds()
-                            if gap_sec >= 180:
+                            t1_loc = _to_local_dt(t1)
+                            t2_loc = _to_local_dt(t2)
+                            gap_raw = max(0, int((t2_loc - t1_loc).total_seconds() // 60))
+                            if gap_raw >= s_timeout:
                                 was_offline = any(t1 <= dev.timestamp <= t2 for dev in cam_disc_events)
                                 if not was_offline:
-                                    gap_m = int((gap_sec - 60) // 60)
-                                    gaps_mins += gap_m
-                                    t1_loc = _to_local_dt(t1).strftime("%H:%M")
-                                    t2_loc = _to_local_dt(t2).strftime("%H:%M")
-                                    absence_intervals.append(
-                                        AbsenceInterval(
-                                            start_time=t1_loc,
-                                            end_time=t2_loc,
-                                            duration_minutes=gap_m,
-                                            duration_str=_format_duration(gap_m * 60),
-                                            interval_type="gap",
+                                    free_gap = get_interval_free_minutes(t1_loc, t2_loc, combined_free)
+                                    net_gap = max(0, gap_raw - free_gap)
+                                    if net_gap >= s_timeout:
+                                        gaps_mins += net_gap
+                                        absence_intervals.append(
+                                            AbsenceInterval(
+                                                start_time=t1_loc.strftime("%H:%M"),
+                                                end_time=t2_loc.strftime("%H:%M"),
+                                                duration_minutes=net_gap,
+                                                duration_str=_format_duration(net_gap * 60),
+                                                interval_type="gap",
+                                            )
                                         )
-                                    )
 
                         # Trailing absence from last sighting to now
-                        if is_in_zone or not is_cam_online or in_free_time:
+                        if is_in_zone or not is_cam_online or cur_in_free_time:
                             trailing_absence = 0
                         else:
                             last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
-                            trailing_absence = max(0, int((now_local - last_ev_loc).total_seconds() // 60))
-                            if trailing_absence >= 3:
-                                last_t_str = last_ev_loc.strftime("%H:%M")
-                                curr_t_str = now_local.strftime("%H:%M")
+                            raw_trailing = max(0, int((now_local - last_ev_loc).total_seconds() // 60))
+                            free_trailing = get_interval_free_minutes(last_ev_loc, now_local, combined_free)
+                            net_trailing = max(0, raw_trailing - free_trailing)
+                            if net_trailing >= s_timeout:
+                                trailing_absence = net_trailing
                                 absence_intervals.append(
                                     AbsenceInterval(
-                                        start_time=last_t_str,
-                                        end_time=curr_t_str,
+                                        start_time=last_ev_loc.strftime("%H:%M"),
+                                        end_time=now_local.strftime("%H:%M"),
                                         duration_minutes=trailing_absence,
                                         duration_str=_format_duration(trailing_absence * 60),
                                         interval_type="current",
                                     )
                                 )
+                            else:
+                                trailing_absence = 0
 
                         if not is_cam_online:
                             shift_absence_mins = min(cur_elapsed_shift_mins, gaps_mins)

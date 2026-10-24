@@ -173,6 +173,37 @@ def is_time_in_free_time(
     return False, None
 
 
+def get_interval_free_minutes(
+    start_dt: datetime,
+    end_dt: datetime,
+    free_times: Any,
+) -> int:
+    """
+    Calculate the total minutes between start_dt and end_dt that fall
+    within scheduled free times / breaks (lunch, tea, rest).
+    """
+    parsed_breaks = _parse_list_field(free_times, [])
+    if not parsed_breaks or start_dt >= end_dt:
+        return 0
+
+    total_secs = (end_dt - start_dt).total_seconds()
+    total_mins = int(total_secs // 60)
+    if total_mins <= 0:
+        return 0
+
+    # Cap to prevent excessive loops (e.g. max 1440 mins = 24h)
+    total_mins = min(total_mins, 1440)
+    free_mins = 0
+    curr = start_dt
+    for _ in range(total_mins):
+        in_free, _ = is_time_in_free_time(parsed_breaks, curr)
+        if in_free:
+            free_mins += 1
+        curr += timedelta(minutes=1)
+
+    return free_mins
+
+
 def get_rotation_day_state(
     rotation_pattern: dict,
     ref_dt: Optional[datetime] = None,

@@ -556,12 +556,25 @@ const DutyPage = {
             // Live status badge
             let statusBadgeHtml = '';
             if (isPresent) {
-                const secAgo = person.last_seen_seconds_ago !== null ? Math.round(person.last_seen_seconds_ago) : 0;
-                statusBadgeHtml = `
-                    <span class="badge-status-pill on-station" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
-                        🟢 ${isRtl ? `حاضر در منطقه (${I18n.toPersianDigits(secAgo)} ثانیه پیش)` : `In Zone (${secAgo}s ago)`}
-                    </span>
-                `;
+                if (person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) {
+                    const elapsed = Math.round(person.shift_elapsed_minutes || 0);
+                    const grace = person.grace_period_minutes || 10;
+                    statusBadgeHtml = `
+                        <span class="badge-status-pill on-station" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                            ⏱️ ${isRtl ? `در مهلت مجاز ورود (${I18n.toPersianDigits(elapsed)} از ${I18n.toPersianDigits(grace)} دقیقه)` : `Arrival Grace (${elapsed}/${grace}m)`}
+                        </span>
+                    `;
+                } else {
+                    const secAgo = person.last_seen_seconds_ago !== null ? Math.round(person.last_seen_seconds_ago) : 0;
+                    const timeAgoText = secAgo < 60
+                        ? (isRtl ? `${I18n.toPersianDigits(secAgo)} ثانیه پیش` : `${secAgo}s ago`)
+                        : (isRtl ? `${I18n.toPersianDigits(Math.round(secAgo / 60))} دقیقه پیش` : `${Math.round(secAgo / 60)}m ago`);
+                    statusBadgeHtml = `
+                        <span class="badge-status-pill on-station" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
+                            🟢 ${isRtl ? `حاضر در منطقه (${timeAgoText})` : `In Zone (${timeAgoText})`}
+                        </span>
+                    `;
+                }
             } else if (isOnBreak) {
                 statusBadgeHtml = `
                     <span class="badge-status-pill on-break" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700;">
@@ -608,7 +621,9 @@ const DutyPage = {
             const currAbsenceDisplay = isOnBreak
                 ? (isRtl ? 'استراحت (مجاز)' : 'Break (Excused)')
                 : (isPresent
-                    ? (isRtl ? '۰ دقیقه (حاضر)' : '0m (Present)')
+                    ? (person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)
+                        ? (isRtl ? 'مهلت ورود (مجاز)' : 'Grace Period (Excused)')
+                        : (isRtl ? '۰ دقیقه (حاضر)' : '0m (Present)'))
                     : (isRtl ? I18n.toPersianDigits(person.current_absence_str) : person.current_absence_str));
 
             const sumShiftAbsenceDisplay = isRtl

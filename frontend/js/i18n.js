@@ -1849,10 +1849,18 @@ const I18n = {
             return p.last_seen_str || I18n.t('status_on_break');
         }
         if (p.status === 'present') {
+            if (p.last_seen_str && p.last_seen_str.includes('Arrival Grace Period')) {
+                return I18n.isRTL() ? 'مهلت ورود مجاز' : 'Arrival Grace Period';
+            }
             if (p.last_seen_sec !== null && p.last_seen_sec !== undefined) {
                 const sec = Math.round(p.last_seen_sec);
-                const secDisplay = I18n.isRTL() ? I18n.toPersianDigits(sec) : sec;
-                return I18n.t('status_in_zone_secs', { sec: secDisplay });
+                if (sec < 60) {
+                    const secDisplay = I18n.isRTL() ? I18n.toPersianDigits(sec) : sec;
+                    return I18n.t('status_in_zone_secs', { sec: secDisplay });
+                }
+                const min = Math.round(sec / 60);
+                const minDisplay = I18n.isRTL() ? I18n.toPersianDigits(min) : min;
+                return I18n.isRTL() ? `حاضر (${minDisplay} دقیقه پیش)` : `In Zone (${min}m ago)`;
             }
             return I18n.t('status_in_zone_recent');
         }

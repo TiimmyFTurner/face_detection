@@ -48,7 +48,7 @@ from backend.schemas import (
 )
 from backend.stream_processor import stream_processor
 from backend.routers.zones import is_time_in_timetable, _parse_list_field
-from backend.shift_utils import get_rotation_day_state
+from backend.shift_utils import get_rotation_day_state, is_time_in_free_time, get_interval_free_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -843,6 +843,18 @@ async def get_person_analytics(
 
     # 4. Daily activity & shift attendance analysis (last 14 days)
     local_now = datetime.now()
+    p_timeout = 2
+    p_grace = 10
+    p_free = []
+    if person.custom_shift and isinstance(person.custom_shift, dict):
+        p_timeout = person.custom_shift.get("absence_timeout_minutes") or 2
+        p_grace = person.custom_shift.get("grace_period_minutes") or 10
+        p_free = _parse_list_field(person.custom_shift.get("free_times"), [])
+    elif person_zones:
+        p_timeout = getattr(person_zones[0], "absence_timeout_minutes", 2) or 2
+        p_grace = getattr(person_zones[0], "grace_period_minutes", 10) or 10
+        p_free = _parse_list_field(person_zones[0].free_times, [])
+
     daily_activity: list[PersonDailyActivity] = []
 
     scheduled_shift_days = 0
@@ -986,19 +998,22 @@ async def get_person_analytics(
                     # 2. Gaps between sightings
                     for idx in range(len(day_events) - 1):
                         gap_sec = (day_events[idx + 1].timestamp - day_events[idx].timestamp).total_seconds()
-                        if gap_sec >= 180:
-                            gap_m = int((gap_sec - 60) // 60)
-                            t1_str = _to_local_dt(day_events[idx].timestamp).strftime("%H:%M")
-                            t2_str = _to_local_dt(day_events[idx + 1].timestamp).strftime("%H:%M")
-                            day_absence_intervals.append(
-                                AbsenceInterval(
-                                    start_time=t1_str,
-                                    end_time=t2_str,
-                                    duration_minutes=gap_m,
-                                    duration_str=_format_duration(gap_m * 60),
-                                    interval_type="gap",
+                        gap_raw_mins = int(gap_sec // 60)
+                        if gap_raw_mins >= p_timeout:
+                            t1_loc = _to_local_dt(day_events[idx].timestamp).replace(tzinfo=None)
+                            t2_loc = _to_local_dt(day_events[idx + 1].timestamp).replace(tzinfo=None)
+                            free_gap = get_interval_free_minutes(t1_loc, t2_loc, p_free)
+                            net_gap = max(0, gap_raw_mins - free_gap)
+                            if net_gap >= p_timeout:
+                                day_absence_intervals.append(
+                                    AbsenceInterval(
+                                        start_time=t1_loc.strftime("%H:%M"),
+                                        end_time=t2_loc.strftime("%H:%M"),
+                                        duration_minutes=net_gap,
+                                        duration_str=_format_duration(net_gap * 60),
+                                        interval_type="gap",
+                                    )
                                 )
-                            )
                     # 3. Early departure
                     if early_leave_mins >= 3:
                         day_absence_intervals.append(
@@ -1120,23 +1135,56 @@ async def get_person_analytics(
 
     current_absence_mins = None
     current_status = "never_seen"
+    in_shift_now = any(s.is_in_schedule_now for s in shifts_info) if has_assigned_shift else False
+    in_free_now, _ = is_time_in_free_time(p_free, local_now)
+
     if last_seen_ev:
         if has_assigned_shift:
-            in_shift_now = any(s.is_in_schedule_now for s in shifts_info)
             if in_shift_now:
                 is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
                 if is_cam_offline:
                     current_status = "camera_offline"
                     current_absence_mins = 0
-                elif seconds_since < 180:
+                elif in_free_now:
+                    current_status = "on_break"
+                    current_absence_mins = 0
+                elif seconds_since < (p_timeout * 60):
                     current_status = "present"
+                    current_absence_mins = 0
                 else:
-                    current_status = "absent"
-                    current_absence_mins = max(1, int(seconds_since // 60))
+                    last_ev_loc = _to_local_dt(last_seen_ev.timestamp).replace(tzinfo=None)
+                    free_since = get_interval_free_minutes(last_ev_loc, local_now, p_free)
+                    net_missing = max(0, int(seconds_since // 60) - free_since)
+                    if net_missing < p_timeout:
+                        current_status = "present"
+                        current_absence_mins = 0
+                    else:
+                        current_status = "absent"
+                        current_absence_mins = net_missing
             else:
                 current_status = "off_duty"
         else:
-            current_status = "present" if seconds_since < 300 else "off_duty"
+            current_status = "present" if seconds_since < (p_timeout * 60) else "off_duty"
+    else:
+        # Never seen yet
+        if has_assigned_shift and in_shift_now:
+            # Check if within arrival grace period
+            matching_s = next((s for s in shifts_info if s.is_in_schedule_now), None)
+            if matching_s:
+                try:
+                    sh, sm = map(int, matching_s.start_time.split(":"))
+                    elapsed_arr = max(0, (local_now.hour * 60 + local_now.minute) - (sh * 60 + sm))
+                except Exception:
+                    elapsed_arr = 999
+                if in_free_now:
+                    current_status = "on_break"
+                    current_absence_mins = 0
+                elif elapsed_arr <= p_grace:
+                    current_status = "present"
+                    current_absence_mins = 0
+                else:
+                    current_status = "absent"
+                    current_absence_mins = elapsed_arr
 
     absence_count_today = daily_activity[0].absence_count if daily_activity and daily_activity[0].is_scheduled_shift_day else 0
     today_absence_intervals = daily_activity[0].absence_intervals if daily_activity and daily_activity[0].is_scheduled_shift_day else []

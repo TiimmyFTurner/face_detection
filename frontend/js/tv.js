@@ -527,13 +527,18 @@ const TVBoard = {
             statusSub = person.camera_name || '';
         } else {
             // Present
-            if (person.last_seen_seconds_ago !== null && person.last_seen_seconds_ago !== undefined) {
+            if (person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) {
+                statusText = this.isRtl ? 'در مهلت ورود' : 'In Grace Period';
+                const el = Math.round(person.shift_elapsed_minutes || 0);
+                const gr = person.grace_period_minutes || 10;
+                statusSub = `${this.toDigits(el)}/${this.toDigits(gr)}m`;
+            } else if (person.last_seen_seconds_ago !== null && person.last_seen_seconds_ago !== undefined) {
                 const s = Math.round(person.last_seen_seconds_ago);
                 statusSub = s < 5
                     ? this.t('seen_just_now')
-                    : this.t('seen_ago', { s: this.toDigits(s) });
+                    : (s < 60 ? this.t('seen_ago', { s: this.toDigits(s) }) : `${this.toDigits(Math.round(s / 60))}m ago`);
             } else {
-                statusSub = this.t('not_seen_yet');
+                statusSub = this.t('seen_just_now');
             }
         }
 

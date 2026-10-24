@@ -722,3 +722,219 @@ async def test_server_reset_populates_last_seen_from_db_when_sighting_exists(cli
     assert abs(restored_ts - expected_ts) < 5.0  # within 5 seconds of the event timestamp
 
 
+@pytest.mark.asyncio
+async def test_duty_roster_suppress_absence_when_under_absence_timeout(client: AsyncClient, monkeypatch):
+    """
+    When person was seen 2 minutes ago and absence_timeout_minutes is 5:
+    - They must NOT be shown as absent.
+    - Status must be 'present', current_absence_minutes must be 0.
+    """
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+    now_local = datetime.now()
+    shift_start_dt = now_local - timedelta(minutes=60)
+    shift_end_dt = now_local + timedelta(hours=3)
+
+    async with test_session() as session:
+        cam = Camera(name="Gate Alpha", rtsp_url="rtsp://127.0.0.1/alpha", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="Timer Grace Worker", role="Operator")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Alpha Station",
+            x=0, y=0, width=100, height=100,
+            assigned_person_ids=[p.id],
+            start_time=shift_start_dt.strftime("%H:%M"),
+            end_time=shift_end_dt.strftime("%H:%M"),
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            grace_period_minutes=10,
+            absence_timeout_minutes=5,  # 5 minutes threshold
+            is_active=True,
+        )
+        session.add(zone)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+
+    # Sighted 2 minutes ago (120s ago, which is < 5 min threshold)
+    stream_processor._zone_last_seen[(zid, pid)] = time.time() - 120.0
+
+    resp = await client.get("/api/zones/duty-roster?only_active=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    item = next((r for r in data["roster"] if r["person_id"] == pid), None)
+    assert item is not None
+    assert item["status"] == "present"
+    assert item["is_in_zone"] is True
+    assert item["current_absence_minutes"] == 0
+
+    # Also check /api/zones/status
+    resp_status = await client.get("/api/zones/status")
+    assert resp_status.status_code == 200
+    z_st = next((z for z in resp_status.json() if z["zone_id"] == zid), None)
+    assert z_st is not None
+    p_st = next((st for st in z_st["assigned_persons"] if st["person_id"] == pid), None)
+    assert p_st is not None
+    assert p_st["status"] == "present"
+    assert p_st["minutes_absent"] == 0
+
+
+@pytest.mark.asyncio
+async def test_duty_roster_suppress_absence_during_arrival_grace_period(client: AsyncClient, monkeypatch):
+    """
+    When shift started 5 minutes ago, arrival grace is 15 mins, and person hasn't arrived yet:
+    - They must NOT be shown as absent.
+    - Status must be 'present' (within grace period).
+    - current_absence_minutes = 0, shift_absence_minutes = 0, no absence intervals.
+    """
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+    now_local = datetime.now()
+    # Shift started 5 minutes ago, ends in 4 hours
+    shift_start_dt = now_local - timedelta(minutes=5)
+    shift_end_dt = now_local + timedelta(hours=4)
+
+    async with test_session() as session:
+        cam = Camera(name="Entry Gate", rtsp_url="rtsp://127.0.0.1/entry", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="Late Arriving Worker", role="Technician")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Entry Checkpoint",
+            x=0, y=0, width=100, height=100,
+            assigned_person_ids=[p.id],
+            start_time=shift_start_dt.strftime("%H:%M"),
+            end_time=shift_end_dt.strftime("%H:%M"),
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            grace_period_minutes=15,  # 15 minutes grace period
+            absence_timeout_minutes=5,
+            is_active=True,
+        )
+        session.add(zone)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+
+    # Not seen yet in this shift
+    stream_processor._zone_last_seen.pop((zid, pid), None)
+
+    resp = await client.get("/api/zones/duty-roster?only_active=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    item = next((r for r in data["roster"] if r["person_id"] == pid), None)
+    assert item is not None
+    assert item["status"] == "present"
+    assert item["is_within_grace_period"] is True
+    assert item["current_absence_minutes"] == 0
+    assert item["shift_absence_minutes"] == 0
+    assert item["absence_count"] == 0
+    assert len(item["absence_intervals"]) == 0
+
+    # Also check /api/zones/status
+    resp_status = await client.get("/api/zones/status")
+    assert resp_status.status_code == 200
+    z_st = next((z for z in resp_status.json() if z["zone_id"] == zid), None)
+    assert z_st is not None
+    p_st = next((st for st in z_st["assigned_persons"] if st["person_id"] == pid), None)
+    assert p_st is not None
+    assert p_st["status"] == "present"
+    assert p_st["minutes_absent"] == 0
+
+
+@pytest.mark.asyncio
+async def test_duty_roster_deducts_scheduled_break_from_gap_absence(client: AsyncClient, monkeypatch):
+    """
+    When detections have a 45-minute gap that occurs entirely during a scheduled 45-minute lunch break:
+    - That gap must NOT be counted as an absence window.
+    - shift_absence_minutes must be 0.
+    """
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+    now_local = datetime.now()
+    # Shift started 120 minutes ago
+    shift_start_dt = now_local - timedelta(minutes=120)
+    shift_end_dt = now_local + timedelta(hours=3)
+
+    # Break was from 90 mins ago to 45 mins ago (45 minutes duration)
+    break_start_dt = now_local - timedelta(minutes=90)
+    break_end_dt = now_local - timedelta(minutes=45)
+
+    async with test_session() as session:
+        cam = Camera(name="Factory Bay", rtsp_url="rtsp://127.0.0.1/bay", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="Lunch Worker", role="Mechanic")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Main Bay",
+            x=0, y=0, width=100, height=100,
+            assigned_person_ids=[p.id],
+            start_time=shift_start_dt.strftime("%H:%M"),
+            end_time=shift_end_dt.strftime("%H:%M"),
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            grace_period_minutes=10,
+            absence_timeout_minutes=5,
+            free_times=[{
+                "name": "Lunch",
+                "start_time": break_start_dt.strftime("%H:%M"),
+                "end_time": break_end_dt.strftime("%H:%M"),
+            }],
+            is_active=True,
+        )
+        session.add(zone)
+        await session.flush()
+
+        # Event 1: right as break started
+        ev1 = Event(
+            camera_id=cam.id,
+            zone_id=zone.id,
+            person_id=p.id,
+            person_name=p.name,
+            timestamp=break_start_dt.astimezone(timezone.utc),
+            confidence_score=0.92,
+            snapshot_path="/snapshots/test_lunch1.jpg",
+            alert_type="normal",
+        )
+        # Event 2: right as break ended
+        ev2 = Event(
+            camera_id=cam.id,
+            zone_id=zone.id,
+            person_id=p.id,
+            person_name=p.name,
+            timestamp=break_end_dt.astimezone(timezone.utc),
+            confidence_score=0.93,
+            snapshot_path="/snapshots/test_lunch2.jpg",
+            alert_type="normal",
+        )
+        session.add(ev1)
+        session.add(ev2)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+
+    # Sighted right now
+    stream_processor._zone_last_seen[(zid, pid)] = time.time() - 10.0
+
+    resp = await client.get("/api/zones/duty-roster?only_active=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    item = next((r for r in data["roster"] if r["person_id"] == pid), None)
+    assert item is not None
+    assert item["status"] == "present"
+    # The gap during break should NOT be logged as gap absence
+    gap_intervals = [i for i in item["absence_intervals"] if i["interval_type"] == "gap"]
+    assert len(gap_intervals) == 0
+    assert item["current_absence_minutes"] == 0
+
+

@@ -112,6 +112,7 @@ const PersonAnalyticsModal = {
                         <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
                             <h2 class="modal-title" style="margin: 0; font-size: 1.4rem;">${PersonAnalyticsModal.escapeHtml(d.name)}</h2>
                             ${statusBadgeHtml}
+                            ${d.section ? `<span class="badge badge-primary text-xs" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 999px;">🏢 ${PersonAnalyticsModal.escapeHtml(d.section)}</span>` : ''}
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem; display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
                             <span>🏷️ ${PersonAnalyticsModal.escapeHtml(d.role || I18n.t('no_role_assigned'))}</span>
@@ -125,6 +126,9 @@ const PersonAnalyticsModal = {
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-${isFa ? 'right' : 'left'}: auto;">
+                    <button class="btn btn-primary btn-sm" onclick="PersonShiftModal.show(${d.id})" title="${PersonAnalyticsModal.escapeAttr(I18n.t('manage_shift') || 'مدیریت شیفت')}">
+                        ⏰ <span>${I18n.t('manage_shift') || 'مدیریت شیفت'}</span>
+                    </button>
                     <button class="btn btn-secondary btn-sm" onclick="PersonAnalyticsModal.printSummary()" title="${PersonAnalyticsModal.escapeAttr(I18n.t('print_summary'))}">
                         ${I18n.t('print_summary')}
                     </button>

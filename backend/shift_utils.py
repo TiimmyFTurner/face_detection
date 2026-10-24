@@ -171,3 +171,143 @@ def is_time_in_free_time(
                 return True, name
 
     return False, None
+
+
+def get_rotation_day_state(
+    rotation_pattern: dict,
+    ref_dt: Optional[datetime] = None,
+) -> dict:
+    """
+    Calculate active status and exact shift window for a rotational shift schedule
+    (e.g., 2 days, 2 nights, 1 off / 2 days, 2 nights, 2 off).
+
+    Rotation configuration schema:
+    {
+        "pattern_type": "2d_2n_1off" | "2d_2n_2off" | "custom",
+        "cycle": ["day", "day", "night", "night", "off"],
+        "anchor_date": "2026-01-01",
+        "day_start": "07:00",
+        "day_end": "19:00",
+        "night_start": "19:00",
+        "night_end": "07:00",
+        "grace_period_minutes": 15,
+        "absence_timeout_minutes": 5,
+    }
+    """
+    if ref_dt is None:
+        ref_dt = datetime.now()
+
+    cycle = rotation_pattern.get("cycle") or ["day", "day", "night", "night", "off"]
+    if not isinstance(cycle, list) or len(cycle) == 0:
+        cycle = ["day", "day", "night", "night", "off"]
+
+    cycle_len = len(cycle)
+    anchor_str = str(rotation_pattern.get("anchor_date") or "2026-01-01")[:10]
+    try:
+        anchor_date = datetime.strptime(anchor_str, "%Y-%m-%d").date()
+    except Exception:
+        anchor_date = datetime(2026, 1, 1).date()
+
+    day_start_str = str(rotation_pattern.get("day_start") or "07:00").strip()
+    day_end_str = str(rotation_pattern.get("day_end") or "19:00").strip()
+    night_start_str = str(rotation_pattern.get("night_start") or "19:00").strip()
+    night_end_str = str(rotation_pattern.get("night_end") or "07:00").strip()
+
+    try:
+        d_sh, d_sm = map(int, day_start_str.split(":"))
+        d_eh, d_em = map(int, day_end_str.split(":"))
+    except Exception:
+        d_sh, d_sm, d_eh, d_em = 7, 0, 19, 0
+
+    try:
+        n_sh, n_sm = map(int, night_start_str.split(":"))
+        n_eh, n_em = map(int, night_end_str.split(":"))
+    except Exception:
+        n_sh, n_sm, n_eh, n_em = 19, 0, 7, 0
+
+    ref_date = ref_dt.date()
+    days_since_anchor = (ref_date - anchor_date).days
+    cycle_day_idx = days_since_anchor % cycle_len
+    state_today = str(cycle[cycle_day_idx]).lower()
+
+    # Previous day index (for overnight night-shift carryover)
+    prev_day_idx = (days_since_anchor - 1) % cycle_len
+    state_yesterday = str(cycle[prev_day_idx]).lower()
+
+    ref_mins = ref_dt.hour * 60 + ref_dt.minute
+    night_end_mins = n_eh * 60 + n_em
+
+    # Check Case A: Overnight night-shift from yesterday morning carryover (e.g. 00:00 to 07:00)
+    if state_yesterday == "night" and ref_mins <= night_end_mins:
+        shift_start = datetime.combine(ref_date - timedelta(days=1), datetime.min.time()).replace(hour=n_sh, minute=n_sm)
+        shift_end = datetime.combine(ref_date, datetime.min.time()).replace(hour=n_eh, minute=n_em)
+        elapsed = max(0, int((ref_dt - shift_start).total_seconds() // 60))
+        return {
+            "is_active_now": True,
+            "shift_kind": "night",
+            "shift_name": f"شیفت شب (ادامه از دیشب - روز {prev_day_idx + 1} چرخه)",
+            "cycle_day_index": prev_day_idx,
+            "cycle_day_number": prev_day_idx + 1,
+            "cycle_length": cycle_len,
+            "cycle_states": cycle,
+            "shift_start": shift_start,
+            "shift_end": shift_end,
+            "time_range": f"{night_start_str} - {night_end_str}",
+            "is_overnight": True,
+            "elapsed_minutes": elapsed,
+        }
+
+    # Case B: Scheduled today
+    if state_today == "day":
+        shift_start = datetime.combine(ref_date, datetime.min.time()).replace(hour=d_sh, minute=d_sm)
+        shift_end = datetime.combine(ref_date, datetime.min.time()).replace(hour=d_eh, minute=d_em)
+        is_active = (shift_start <= ref_dt <= shift_end)
+        elapsed = max(0, int((ref_dt - shift_start).total_seconds() // 60)) if is_active else 0
+        return {
+            "is_active_now": is_active,
+            "shift_kind": "day",
+            "shift_name": f"شیفت روز (روز {cycle_day_idx + 1} از {cycle_len})",
+            "cycle_day_index": cycle_day_idx,
+            "cycle_day_number": cycle_day_idx + 1,
+            "cycle_length": cycle_len,
+            "cycle_states": cycle,
+            "shift_start": shift_start,
+            "shift_end": shift_end,
+            "time_range": f"{day_start_str} - {day_end_str}",
+            "is_overnight": False,
+            "elapsed_minutes": elapsed,
+        }
+    elif state_today == "night":
+        shift_start = datetime.combine(ref_date, datetime.min.time()).replace(hour=n_sh, minute=n_sm)
+        shift_end = datetime.combine(ref_date + timedelta(days=1), datetime.min.time()).replace(hour=n_eh, minute=n_em)
+        is_active = (ref_dt >= shift_start)
+        elapsed = max(0, int((ref_dt - shift_start).total_seconds() // 60)) if is_active else 0
+        return {
+            "is_active_now": is_active,
+            "shift_kind": "night",
+            "shift_name": f"شیفت شب (روز {cycle_day_idx + 1} از {cycle_len})",
+            "cycle_day_index": cycle_day_idx,
+            "cycle_day_number": cycle_day_idx + 1,
+            "cycle_length": cycle_len,
+            "cycle_states": cycle,
+            "shift_start": shift_start,
+            "shift_end": shift_end,
+            "time_range": f"{night_start_str} - {night_end_str}",
+            "is_overnight": True,
+            "elapsed_minutes": elapsed,
+        }
+    else:  # "off"
+        return {
+            "is_active_now": False,
+            "shift_kind": "off",
+            "shift_name": f"استراحت / آف (روز {cycle_day_idx + 1} از {cycle_len})",
+            "cycle_day_index": cycle_day_idx,
+            "cycle_day_number": cycle_day_idx + 1,
+            "cycle_length": cycle_len,
+            "cycle_states": cycle,
+            "shift_start": None,
+            "shift_end": None,
+            "time_range": "استراحت / آف",
+            "is_overnight": False,
+            "elapsed_minutes": 0,
+        }

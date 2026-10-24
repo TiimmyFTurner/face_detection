@@ -21,7 +21,7 @@ from backend.database import init_db
 from backend.face_engine import face_engine
 from backend.stream_processor import stream_processor, ws_manager
 from backend.snapshot_cleanup import retention_worker
-from backend.routers import auth, cameras, events, persons, roles, snapshots, system, users, zones
+from backend.routers import auth, cameras, events, persons, roles, sections, snapshots, system, users, zones
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(
@@ -116,6 +116,7 @@ async def add_no_cache_headers(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(roles.router)
+app.include_router(sections.router)
 app.include_router(cameras.router)
 app.include_router(persons.router)
 app.include_router(events.router)

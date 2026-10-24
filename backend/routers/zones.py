@@ -23,10 +23,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy import select, desc, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth import require_permission
+from backend.auth import require_permission, get_user_scope
 from backend.database import get_db
-from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate
+from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
+from backend.shift_utils import get_rotation_day_state
 from backend.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
@@ -425,6 +426,10 @@ async def compute_duty_roster_data(
     persons_result = await db.execute(select(Person))
     persons = {p.id: p for p in persons_result.scalars().all()}
 
+    # 3b. Shift templates map for rotational shifts
+    st_res = await db.execute(select(ShiftTemplate))
+    shift_templates_map = {st.id: st for st in st_res.scalars().all()}
+
     # 4. Avatar map
     emb_result = await db.execute(select(PersonEmbedding))
     embeddings = emb_result.scalars().all()
@@ -482,22 +487,67 @@ async def compute_duty_roster_data(
             assigned_ids = [int(x) for x in raw_assigned if str(x).isdigit()]
 
             for pid in assigned_ids:
-                if only_active and not in_schedule:
-                    continue
-
                 person = persons.get(pid)
                 person_name = person.name if person else f"Person #{pid}"
                 person_role = person.role if person else None
                 avatar_url = avatar_map.get(pid)
 
+                # Resolve rotational shift if assigned to this person
+                cur_in_schedule = in_schedule
+                cur_shift_start_dt = shift_start_dt
+                cur_shift_end_dt = shift_end_dt
+                cur_start_str = start_str
+                cur_end_str = end_str
+                cur_shift_window_str = shift_window_str
+                cur_dur_h = dur_h
+                cur_elapsed_shift_mins = elapsed_shift_mins
+                cur_shift_name = s_name
+                cur_is_overnight = is_overnight
+                rot_state = None
+
+                if person:
+                    rot_pattern = None
+                    if person.custom_shift and isinstance(person.custom_shift, dict):
+                        if person.custom_shift.get("shift_type") in ("rotational", "rotation"):
+                            rot_pattern = person.custom_shift.get("rotation_pattern")
+                    elif person.shift_template_id and person.shift_template_id in shift_templates_map:
+                        st = shift_templates_map[person.shift_template_id]
+                        if getattr(st, "shift_type", "fixed") in ("rotational", "rotation") and st.rotation_pattern:
+                            rot_pattern = st.rotation_pattern
+
+                    if rot_pattern and isinstance(rot_pattern, dict):
+                        rot_state = get_rotation_day_state(rot_pattern, now_local)
+                        cur_shift_name = rot_state.get("shift_name", s_name)
+                        cur_shift_window_str = rot_state.get("time_range", shift_window_str)
+                        cur_in_schedule = rot_state.get("is_active_now", False)
+                        cur_is_overnight = rot_state.get("is_overnight", False)
+                        cur_elapsed_shift_mins = rot_state.get("elapsed_minutes", 0)
+                        if rot_state.get("shift_start"):
+                            cur_shift_start_dt = rot_state["shift_start"]
+                            cur_start_str = cur_shift_start_dt.strftime("%H:%M")
+                        if rot_state.get("shift_end"):
+                            cur_shift_end_dt = rot_state["shift_end"]
+                            cur_end_str = cur_shift_end_dt.strftime("%H:%M")
+                        if cur_shift_start_dt and cur_shift_end_dt:
+                            cur_dur_h = max(0.1, round((cur_shift_end_dt - cur_shift_start_dt).total_seconds() / 3600.0, 1))
+
+                if only_active and not cur_in_schedule:
+                    continue
+
                 # Check live presence via stream processor
                 key = (z.id, pid)
                 last_seen = stream_processor._zone_last_seen.get(key, 0)
                 is_cam_online = stream_processor.is_camera_online(z.camera_id)
-                shift_start_ts = shift_start_dt.timestamp()
+                shift_start_ts = cur_shift_start_dt.timestamp() if cur_shift_start_dt else 0
                 seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
-                if not in_schedule:
+                if rot_state and rot_state.get("shift_kind") == "off":
+                    status_str = "off_duty"
+                    is_in_zone = False
+                    last_seen_sec = None
+                    last_seen_str = f"آف چرخشی ({cur_shift_name})"
+                    curr_absence_mins = 0
+                elif not cur_in_schedule:
                     status_str = "off_duty"
                     is_in_zone = False
                     last_seen_sec = None
@@ -537,22 +587,22 @@ async def compute_duty_roster_data(
                         last_seen_str = f"Missing for {curr_absence_mins}m"
                     else:
                         last_seen_sec = None
-                        curr_absence_mins = max(1, elapsed_shift_mins) if elapsed_shift_mins > 0 else 0
+                        curr_absence_mins = max(1, cur_elapsed_shift_mins) if cur_elapsed_shift_mins > 0 else 0
                         last_seen_str = "Not Seen Yet"
 
-                # Filter ONLY actual face detection sightings for this shift (from shift_start_dt to min(now_local, shift_end_dt))
+                # Filter ONLY actual face detection sightings for this shift (from cur_shift_start_dt to min(now_local, cur_shift_end_dt))
                 shift_events = []
                 for ev in recent_events:
                     if ev.person_id == pid and ev.alert_type not in ("absence_timeout", "camera_disconnected"):
                         ev_loc = _to_local_dt(ev.timestamp)
-                        if shift_start_dt <= ev_loc <= min(now_local, shift_end_dt):
+                        if cur_shift_start_dt and cur_shift_end_dt and (cur_shift_start_dt <= ev_loc <= min(now_local, cur_shift_end_dt)):
                             shift_events.append(ev)
 
                 absence_intervals: list[AbsenceInterval] = []
                 raw_arrival_delay = 0
                 is_within_grace = False
 
-                if in_schedule and elapsed_shift_mins > 0:
+                if cur_in_schedule and cur_elapsed_shift_mins > 0:
                     if not shift_events:
                         # No actual face sightings during shift
                         if not is_cam_online or in_free_time:
@@ -561,29 +611,29 @@ async def compute_duty_roster_data(
                             compliance = 100.0
                         else:
                             # If elapsed time is still within the arrival grace period:
-                            if elapsed_shift_mins <= s_grace:
+                            if cur_elapsed_shift_mins <= s_grace:
                                 is_within_grace = True
                                 shift_absence_mins = 0
-                                shift_presence_mins = elapsed_shift_mins
+                                shift_presence_mins = cur_elapsed_shift_mins
                                 compliance = 100.0
                             else:
-                                shift_absence_mins = elapsed_shift_mins
+                                shift_absence_mins = cur_elapsed_shift_mins
                                 shift_presence_mins = 0
                                 compliance = 0.0
-                                if elapsed_shift_mins >= 3:
+                                if cur_elapsed_shift_mins >= 3:
                                     curr_t_str = now_local.strftime("%H:%M")
                                     absence_intervals.append(
                                         AbsenceInterval(
-                                            start_time=start_str,
+                                            start_time=cur_start_str,
                                             end_time=curr_t_str,
-                                            duration_minutes=elapsed_shift_mins,
-                                            duration_str=_format_duration(elapsed_shift_mins * 60),
+                                            duration_minutes=cur_elapsed_shift_mins,
+                                            duration_str=_format_duration(cur_elapsed_shift_mins * 60),
                                             interval_type="unseen",
                                         )
                                     )
                     else:
                         first_ev_loc = _to_local_dt(shift_events[0].timestamp)
-                        raw_delay = max(0, int((first_ev_loc - shift_start_dt).total_seconds() // 60)) if is_cam_online else 0
+                        raw_delay = max(0, int((first_ev_loc - cur_shift_start_dt).total_seconds() // 60)) if (is_cam_online and cur_shift_start_dt) else 0
                         raw_arrival_delay = raw_delay
 
                         if 0 < raw_delay <= s_grace:
@@ -594,7 +644,7 @@ async def compute_duty_roster_data(
                             first_t_str = first_ev_loc.strftime("%H:%M")
                             absence_intervals.append(
                                 AbsenceInterval(
-                                    start_time=start_str,
+                                    start_time=cur_start_str,
                                     end_time=first_t_str,
                                     duration_minutes=raw_delay,
                                     duration_str=_format_duration(raw_delay * 60),
@@ -654,12 +704,12 @@ async def compute_duty_roster_data(
                                 )
 
                         if not is_cam_online:
-                            shift_absence_mins = min(elapsed_shift_mins, gaps_mins)
+                            shift_absence_mins = min(cur_elapsed_shift_mins, gaps_mins)
                         else:
-                            shift_absence_mins = min(elapsed_shift_mins, effective_delay + gaps_mins + trailing_absence)
+                            shift_absence_mins = min(cur_elapsed_shift_mins, effective_delay + gaps_mins + trailing_absence)
 
-                        shift_presence_mins = max(0, elapsed_shift_mins - shift_absence_mins)
-                        compliance = round((shift_presence_mins / elapsed_shift_mins) * 100, 1) if elapsed_shift_mins > 0 else 100.0
+                        shift_presence_mins = max(0, cur_elapsed_shift_mins - shift_absence_mins)
+                        compliance = round((shift_presence_mins / cur_elapsed_shift_mins) * 100, 1) if cur_elapsed_shift_mins > 0 else 100.0
                 else:
                     shift_absence_mins = 0
                     shift_presence_mins = 0
@@ -675,17 +725,17 @@ async def compute_duty_roster_data(
                         zone_name=z.name,
                         camera_id=z.camera_id,
                         camera_name=camera_name,
-                        shift_start_time=start_str,
-                        shift_end_time=end_str,
-                        shift_window_str=shift_window_str,
-                        shift_duration_hours=dur_h,
+                        shift_start_time=cur_start_str,
+                        shift_end_time=cur_end_str,
+                        shift_window_str=cur_shift_window_str,
+                        shift_duration_hours=cur_dur_h,
                         active_days=s_days,
                         absence_timeout_minutes=s_timeout,
                         grace_period_minutes=s_grace,
                         free_times=s_free,
-                        shift_name=s_name if s_name else None,
-                        is_overnight=is_overnight,
-                        is_in_duty_hours=in_schedule,
+                        shift_name=cur_shift_name if cur_shift_name else None,
+                        is_overnight=cur_is_overnight,
+                        is_in_duty_hours=cur_in_schedule,
                         is_in_free_time=in_free_time,
                         current_break_name=break_name if in_free_time else None,
                         status=status_str,
@@ -695,7 +745,7 @@ async def compute_duty_roster_data(
                         last_seen_str=last_seen_str,
                         current_absence_minutes=curr_absence_mins,
                         current_absence_str=_format_duration(curr_absence_mins * 60),
-                        shift_elapsed_minutes=elapsed_shift_mins,
+                        shift_elapsed_minutes=cur_elapsed_shift_mins,
                         shift_presence_minutes=shift_presence_mins,
                         shift_presence_str=_format_duration(shift_presence_mins * 60),
                         shift_absence_minutes=shift_absence_mins,
@@ -743,16 +793,35 @@ async def compute_duty_roster_data(
 async def get_duty_roster(
     only_active: bool = Query(True, description="Filter only persons currently in their active duty hours"),
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("duty:view")),
+    _user: User = Depends(require_permission("duty:view")),
 ):
     """
     Real-time duty roster monitoring:
     - Lists personnel currently in scheduled duty hours (or all assigned if only_active=False)
     - Shift time window and active days
-    - Real-time absence if not currently in the assigned zone (< 120s)
-    - Cumulative sum of absence for the active shift today
+    - Scoped for supervisors to only show assigned persons and camera zones
     """
-    return await compute_duty_roster_data(db=db, only_active=only_active)
+    duty_data = await compute_duty_roster_data(db=db, only_active=only_active)
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped:
+        duty_data.roster = [
+            r for r in duty_data.roster
+            if (scope.person_ids and r.person_id in scope.person_ids) or
+               (scope.camera_ids and r.camera_id in scope.camera_ids)
+        ]
+        duty_data.total_scheduled = len(duty_data.roster)
+        duty_data.on_duty_count = sum(1 for r in duty_data.roster if r.status in ("present", "absent", "on_break"))
+        duty_data.absent_count = sum(1 for r in duty_data.roster if r.status == "absent")
+        duty_data.on_station_count = sum(1 for r in duty_data.roster if r.status == "present")
+        duty_data.offline_camera_count = sum(1 for r in duty_data.roster if r.status == "camera_offline")
+        if duty_data.roster:
+            duty_data.compliance_rate = round(
+                sum(r.compliance_rate for r in duty_data.roster) / len(duty_data.roster), 1
+            )
+        else:
+            duty_data.compliance_rate = 100.0
+
+    return duty_data
 
 
 @router.get("/api/zones/duty-roster/export")
@@ -767,6 +836,13 @@ async def export_duty_roster(
     Export live duty roster attendance records and compliance stats as Excel (.xlsx) or CSV.
     """
     duty_data = await compute_duty_roster_data(db=db, only_active=only_active)
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped:
+        duty_data.roster = [
+            r for r in duty_data.roster
+            if (scope.person_ids and r.person_id in scope.person_ids) or
+               (scope.camera_ids and r.camera_id in scope.camera_ids)
+        ]
     roster = duty_data.roster
     if status and status != "all":
         roster = [r for r in roster if r.status == status]
@@ -798,14 +874,28 @@ async def get_zone_logs(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("dashboard:view")),
 ):
     """Get paginated zone violations, absence timeout alerts, and unauthorized entry logs."""
-    where_clause = or_(
-        Event.alert_type.in_(["out_of_zone", "unauthorized_entry", "absence_timeout", "camera_disconnected"]),
-        Event.zone_id.isnot(None),
-    )
+    conditions = [
+        or_(
+            Event.alert_type.in_(["out_of_zone", "unauthorized_entry", "absence_timeout", "camera_disconnected"]),
+            Event.zone_id.isnot(None),
+        )
+    ]
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped:
+        scope_clauses = []
+        if scope.camera_ids:
+            scope_clauses.append(Event.camera_id.in_(scope.camera_ids))
+        if scope.person_ids:
+            scope_clauses.append(Event.person_id.in_(scope.person_ids))
+        if scope_clauses:
+            conditions.append(or_(*scope_clauses))
+        else:
+            conditions.append(Event.id == -1)
 
-    # Total count
+    where_clause = and_(*conditions)
     count_query = select(func.count(Event.id)).where(where_clause)
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
@@ -981,6 +1071,8 @@ async def create_shift_template(
         start_time=data.start_time,
         end_time=data.end_time,
         color=data.color or "#38bdf8",
+        shift_type=data.shift_type or "fixed",
+        rotation_pattern=data.rotation_pattern,
         active_days=data.active_days or ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         grace_period_minutes=data.grace_period_minutes,
         absence_timeout_minutes=data.absence_timeout_minutes,
@@ -1025,6 +1117,10 @@ async def update_shift_template(
         tmpl.end_time = data.end_time
     if data.color is not None:
         tmpl.color = data.color
+    if data.shift_type is not None:
+        tmpl.shift_type = data.shift_type
+    if data.rotation_pattern is not None:
+        tmpl.rotation_pattern = data.rotation_pattern
     if data.active_days is not None:
         tmpl.active_days = data.active_days
     if data.grace_period_minutes is not None:

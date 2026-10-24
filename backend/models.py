@@ -22,6 +22,21 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Section(Base):
+    """A factory/facility section or department (e.g. Packaging, Assembly, Warehouse)."""
+
+    __tablename__ = "sections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, index=True, nullable=False)
+    description = Column(Text, default="")
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    def __repr__(self) -> str:
+        return f"<Section id={self.id} name='{self.name}'>"
+
+
 class Camera(Base):
     """IP camera configuration and state."""
 
@@ -31,6 +46,7 @@ class Camera(Base):
     name = Column(String(255), nullable=False)
     rtsp_url = Column(Text, nullable=False)
     location = Column(String(255), default="")
+    section = Column(String(255), default="")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
@@ -87,6 +103,8 @@ class ShiftTemplate(Base):
     end_time = Column(String(10), nullable=False, default="16:00")
     color = Column(String(50), default="#38bdf8")  # Hex color badge
     active_days = Column(JSON, default=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    shift_type = Column(String(50), default="fixed")  # "fixed", "rotational"
+    rotation_pattern = Column(JSON, default=None)     # Cycle configuration dict (e.g. 2 days, 2 nights, 1 off)
     grace_period_minutes = Column(Integer, default=10)
     absence_timeout_minutes = Column(Integer, default=2)
     free_times = Column(JSON, default=list)
@@ -105,10 +123,14 @@ class Person(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     role = Column(String(255), default="")
+    section = Column(String(255), default="")
+    shift_template_id = Column(Integer, ForeignKey("shift_templates.id", ondelete="SET NULL"), nullable=True)
+    custom_shift = Column(JSON, default=None)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
     # Relationships
+    shift_template = relationship("ShiftTemplate")
     embeddings = relationship(
         "PersonEmbedding", back_populates="person", cascade="all, delete-orphan"
     )
@@ -201,6 +223,9 @@ class User(Base):
     salt = Column(String(64), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
     custom_permissions = Column(JSON, default=list)                     # extra permissions specific to this user
+    assigned_sections = Column(JSON, default=list)                      # list of section names assigned to this user/supervisor
+    assigned_camera_ids = Column(JSON, default=list)                    # list of camera IDs assigned to this user/supervisor
+    assigned_person_ids = Column(JSON, default=list)                    # list of person IDs assigned to this user/supervisor
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)

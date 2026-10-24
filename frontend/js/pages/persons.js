@@ -224,6 +224,7 @@ const PersonsPage = {
                                         ${PersonsPage.escapeHtml(person.name)}
                                     </span>
                                     ${statusPill}
+                                    ${person.section ? `<span class="badge badge-primary text-xs" style="font-size: 0.68rem; padding: 2px 6px;">🏢 ${PersonsPage.escapeHtml(person.section)}</span>` : ''}
                                 </div>
                                 <div class="person-role">
                                     ${PersonsPage.escapeHtml(person.role || I18n.t('no_role_assigned'))}
@@ -255,6 +256,9 @@ const PersonsPage = {
                             <button class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.show(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('btn_person_analytics'))}">
                                 📊 <span>${I18n.t('btn_person_analytics')}</span>
                             </button>
+                            <button class="btn btn-secondary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('manage_shift') || 'مدیریت شیفت')}">
+                                ⏰ <span>${I18n.t('manage_shift') || 'مدیریت شیفت'}</span>
+                            </button>
                             <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('btn_add_photos'))}">
                                 📸 <span>${I18n.t('btn_add_photos')}</span>
                             </button>
@@ -269,7 +273,9 @@ const PersonsPage = {
             return `
                 <div class="person-card" data-person-id="${person.id}">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; min-height: 24px;">
-                        <div style="flex: 1;"></div>
+                        <div style="flex: 1;">
+                            ${person.section ? `<span class="badge badge-primary text-xs" style="font-size: 0.68rem; padding: 2px 6px;">🏢 ${PersonsPage.escapeHtml(person.section)}</span>` : ''}
+                        </div>
                         ${statusPill}
                     </div>
 
@@ -289,7 +295,9 @@ const PersonsPage = {
                     <div class="person-name" onclick="PersonAnalyticsModal.show(${person.id})" style="cursor: pointer;" title="${PersonsPage.escapeAttr(I18n.t('btn_person_analytics'))}">
                         ${PersonsPage.escapeHtml(person.name)}
                     </div>
-                    <div class="person-role">${PersonsPage.escapeHtml(person.role || I18n.t('no_role_assigned'))}</div>
+                    <div class="person-role">
+                        ${PersonsPage.escapeHtml(person.role || I18n.t('no_role_assigned'))}
+                    </div>
 
                     <!-- Shift Time Badge -->
                     ${shiftTimeStr ? `
@@ -329,6 +337,9 @@ const PersonsPage = {
                     <div class="person-actions" style="display: flex; flex-direction: column; gap: 0.4rem;">
                         <button class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.show(${person.id})" style="width: 100%; justify-content: center;">
                             📊 <span>${I18n.t('btn_person_analytics')}</span>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="PersonShiftModal.show(${person.id})" style="width: 100%; justify-content: center;">
+                            ⏰ <span>${I18n.t('manage_shift') || 'مدیریت شیفت و ایستگاه'}</span>
                         </button>
                         <div style="display: flex; gap: 0.4rem; width: 100%;">
                             <button class="btn btn-secondary btn-sm" style="flex: 1; justify-content: center;" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')">

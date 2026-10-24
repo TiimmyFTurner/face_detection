@@ -242,6 +242,27 @@ SECTIONS_METADATA = [
             },
         ],
     },
+    {
+        "id": "sections",
+        "title_fa": "بخش‌ها و حوزه‌های نظارت",
+        "title_en": "Sections & Facility Areas",
+        "permissions": [
+            {
+                "key": "sections:view",
+                "label_fa": "مشاهده بخش‌های کارخانه",
+                "label_en": "View Factory Sections",
+                "description_fa": "مشاهده لیست بخش‌ها، تعداد پرسنل و دوربین‌های منتسب",
+                "description_en": "View sections list, counts of assigned cameras and staff",
+            },
+            {
+                "key": "sections:manage",
+                "label_fa": "مدیریت بخش‌های کارخانه",
+                "label_en": "Manage Factory Sections",
+                "description_fa": "ایجاد، ویرایش و حذف بخش‌های سازمان",
+                "description_en": "Create, edit, and delete factory sections",
+            },
+        ],
+    },
 ]
 
 ALL_PERMISSIONS = [p["key"] for s in SECTIONS_METADATA for p in s["permissions"]]
@@ -345,6 +366,96 @@ def get_user_permissions(user: User) -> set[str]:
         perms.update(user.custom_permissions)
 
     return perms
+
+
+# ── User Resource Scope Resolution ────────────────────────────────
+class UserScope:
+    """Represents the resolved resource scope (cameras, persons, sections) for a user."""
+
+    def __init__(
+        self,
+        is_scoped: bool,
+        sections: list[str],
+        camera_ids: Optional[set[int]],
+        person_ids: Optional[set[int]],
+    ):
+        self.is_scoped = is_scoped
+        self.sections = sections
+        self.camera_ids = camera_ids  # None indicates unrestricted access
+        self.person_ids = person_ids  # None indicates unrestricted access
+
+    def can_access_camera(self, camera_id: Optional[int]) -> bool:
+        if not self.is_scoped or self.camera_ids is None:
+            return True
+        if camera_id is None:
+            return False
+        return camera_id in self.camera_ids
+
+    def can_access_person(self, person_id: Optional[int]) -> bool:
+        if not self.is_scoped or self.person_ids is None:
+            return True
+        if person_id is None:
+            return False
+        return person_id in self.person_ids
+
+
+async def get_user_scope(user: User, db: AsyncSession) -> UserScope:
+    """
+    Resolve effective cameras and persons allowed for this user:
+    - If user has Admin role or '*' permission, access is unrestricted.
+    - If user is supervisor or has assigned sections / cameras / persons:
+      computes allowed camera IDs and person IDs (merging section matches + direct IDs).
+    """
+    from backend.models import Camera, Person, Role
+    from sqlalchemy import inspect
+
+    # Safely obtain role without triggering async lazy loading
+    role = None
+    try:
+        insp = inspect(user)
+        if "role" in insp.dict:
+            role = user.role
+    except Exception:
+        pass
+
+    if role is None and getattr(user, "role_id", None):
+        role = await db.get(Role, user.role_id)
+
+    perms = set(user.custom_permissions or [])
+    if role:
+        perms.update(role.permissions or [])
+
+    if "*" in perms or (role and role.name == "admin"):
+        return UserScope(is_scoped=False, sections=[], camera_ids=None, person_ids=None)
+
+    raw_sections = [str(s).strip() for s in (getattr(user, "assigned_sections", None) or []) if str(s).strip()]
+    raw_cam_ids = {int(c) for c in (getattr(user, "assigned_camera_ids", None) or []) if str(c).isdigit()}
+    raw_per_ids = {int(p) for p in (getattr(user, "assigned_person_ids", None) or []) if str(p).isdigit()}
+
+    is_supervisor = bool(role and role.name == "supervisor")
+    has_assignments = bool(raw_sections or raw_cam_ids or raw_per_ids)
+
+    if not is_supervisor and not has_assignments:
+        return UserScope(is_scoped=False, sections=[], camera_ids=None, person_ids=None)
+
+    camera_ids: set[int] = set(raw_cam_ids)
+    person_ids: set[int] = set(raw_per_ids)
+
+    if raw_sections:
+        c_res = await db.execute(select(Camera.id).where(Camera.section.in_(raw_sections)))
+        for cid in c_res.scalars().all():
+            camera_ids.add(cid)
+
+        p_res = await db.execute(select(Person.id).where(Person.section.in_(raw_sections)))
+        for pid in p_res.scalars().all():
+            person_ids.add(pid)
+
+    return UserScope(
+        is_scoped=True,
+        sections=raw_sections,
+        camera_ids=camera_ids,
+        person_ids=person_ids,
+    )
 
 
 # ── FastAPI Dependencies ──────────────────────────────────────────

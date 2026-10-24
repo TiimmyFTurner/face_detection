@@ -14,15 +14,32 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth import require_permission
+from backend.auth import require_permission, get_user_scope, UserScope
 from backend.database import get_db
-from backend.models import Event, Camera
+from backend.models import Event, Camera, User
 from backend.reporting import generate_events_xlsx, generate_events_csv
 from backend.schemas import EventResponse, EventListResponse, EventStats
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/events", tags=["events"])
+
+
+async def _apply_user_scope_to_conditions(user: User, db: AsyncSession, conditions: list) -> UserScope:
+    """Filter SQLAlchemy conditions so scoped supervisors only see assigned cameras and persons."""
+    scope = await get_user_scope(user, db)
+    if scope.is_scoped:
+        scope_clauses = []
+        if scope.camera_ids:
+            scope_clauses.append(Event.camera_id.in_(scope.camera_ids))
+        if scope.person_ids:
+            scope_clauses.append(Event.person_id.in_(scope.person_ids))
+        if scope_clauses:
+            conditions.append(or_(*scope_clauses))
+        else:
+            # Scoped supervisor with empty assignment should not see other sections' events
+            conditions.append(Event.id == -1)
+    return scope
 
 
 def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -123,7 +140,6 @@ async def list_events(
     Supports filtering by camera, person ID, person name, search term, known/unknown status, and time range.
     Results are ordered newest-first with pagination.
     """
-    # Build query with filters
     conditions = _build_event_filter_conditions(
         camera_id=camera_id,
         person_id=person_id,
@@ -134,6 +150,7 @@ async def list_events(
         end_time=end_time,
         has_snapshot=has_snapshot,
     )
+    await _apply_user_scope_to_conditions(_user, db, conditions)
 
     where_clause = and_(*conditions) if conditions else True
 
@@ -200,41 +217,55 @@ async def list_events(
 @router.get("/stats", response_model=EventStats)
 async def get_event_stats(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("dashboard:view")),
+    _user: User = Depends(require_permission("dashboard:view")),
 ):
     """
-    Get summary statistics for the dashboard.
-
-    Returns counts of total events today, known/unknown breakdowns,
-    and active camera count.
+    Get summary statistics for the dashboard, scoped to assigned cameras/personnel for supervisors.
     """
-    # Calculate start of today (UTC)
+    scope = await get_user_scope(_user, db)
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    scope_conditions = [Event.timestamp >= today_start]
+    if scope.is_scoped:
+        scope_clauses = []
+        if scope.camera_ids:
+            scope_clauses.append(Event.camera_id.in_(scope.camera_ids))
+        if scope.person_ids:
+            scope_clauses.append(Event.person_id.in_(scope.person_ids))
+        if scope_clauses:
+            scope_conditions.append(or_(*scope_clauses))
+        else:
+            scope_conditions.append(Event.id == -1)
+
     # Total events today
-    total_query = select(func.count(Event.id)).where(Event.timestamp >= today_start)
+    total_query = select(func.count(Event.id)).where(and_(*scope_conditions))
     total_result = await db.execute(total_query)
     total_today = total_result.scalar() or 0
 
     # Known events today
-    known_query = select(func.count(Event.id)).where(
-        and_(Event.timestamp >= today_start, Event.is_known == True)  # noqa: E712
-    )
+    known_conditions = list(scope_conditions) + [Event.is_known == True]
+    known_query = select(func.count(Event.id)).where(and_(*known_conditions))
     known_result = await db.execute(known_query)
     known_today = known_result.scalar() or 0
 
     # Unknown events today
-    unknown_today = total_today - known_today
+    unknown_today = max(0, total_today - known_today)
 
-    # Configured cameras in database
-    cameras_query = select(func.count(Camera.id)).where(Camera.is_active == True)  # noqa: E712
+    # Configured cameras count
+    if scope.is_scoped and scope.camera_ids is not None:
+        cameras_query = select(func.count(Camera.id)).where(Camera.is_active == True, Camera.id.in_(scope.camera_ids))
+    else:
+        cameras_query = select(func.count(Camera.id)).where(Camera.is_active == True)
     cameras_result = await db.execute(cameras_query)
     total_configured = cameras_result.scalar() or 0
 
-    # Real-time online cameras actively receiving video frames
+    # Real-time online cameras
     from backend.stream_processor import stream_processor
-    online_cameras = stream_processor.get_online_cameras_count()
+    if scope.is_scoped and scope.camera_ids is not None:
+        online_cameras = sum(1 for cid in scope.camera_ids if stream_processor.is_camera_online(cid))
+    else:
+        online_cameras = stream_processor.get_online_cameras_count()
 
     return EventStats(
         total_today=total_today,
@@ -274,6 +305,7 @@ async def get_grouped_events(
         start_time=start_time,
         end_time=end_time,
     )
+    await _apply_user_scope_to_conditions(_user, db, conditions)
 
     where_clause = and_(*conditions) if conditions else True
 
@@ -368,6 +400,7 @@ async def export_events(
         end_time=end_time,
         has_snapshot=has_snapshot,
     )
+    await _apply_user_scope_to_conditions(_user, db, conditions)
     where_clause = and_(*conditions) if conditions else True
 
     query = (

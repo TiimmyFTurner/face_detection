@@ -17,6 +17,7 @@ class CameraCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, examples=["Front Door"])
     rtsp_url: str = Field(..., min_length=1, examples=["rtsp://admin:pass@192.168.1.100:554/stream"])
     location: str = Field(default="", max_length=255, examples=["Main Entrance"])
+    section: str = Field(default="", max_length=255, examples=["Packaging"])
     is_active: bool = Field(default=True)
 
 
@@ -31,6 +32,7 @@ class CameraUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     rtsp_url: Optional[str] = Field(None, min_length=1)
     location: Optional[str] = Field(None, max_length=255)
+    section: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
 
 
@@ -40,6 +42,7 @@ class CameraResponse(BaseModel):
     name: str
     rtsp_url: str
     location: str
+    section: str = ""
     is_active: bool
     is_online: bool = False
     created_at: datetime
@@ -63,12 +66,16 @@ class PersonCreate(BaseModel):
     """Schema for creating a new person (photos uploaded separately as multipart)."""
     name: str = Field(..., min_length=1, max_length=255, examples=["John Doe"])
     role: str = Field(default="", max_length=255, examples=["Employee"])
+    section: str = Field(default="", max_length=255, examples=["Packaging"])
 
 
 class PersonUpdate(BaseModel):
     """Schema for updating a person."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     role: Optional[str] = Field(None, max_length=255)
+    section: Optional[str] = Field(None, max_length=255)
+    shift_template_id: Optional[int] = None
+    custom_shift: Optional[dict] = None
 
 
 class PersonShiftInfo(BaseModel):
@@ -217,6 +224,9 @@ class PersonResponse(BaseModel):
     id: int
     name: str
     role: str
+    section: str = ""
+    shift_template_id: Optional[int] = None
+    custom_shift: Optional[dict] = None
     embedding_count: int = 0
     reference_photos: list[str] = []
     photos: list[PersonPhotoItem] = []
@@ -265,6 +275,8 @@ class ShiftTemplateCreate(BaseModel):
     start_time: str = Field(default="08:00", description="Shift start time HH:MM")
     end_time: str = Field(default="16:00", description="Shift end time HH:MM")
     color: str = Field(default="#38bdf8", description="Hex badge color")
+    shift_type: str = Field(default="fixed", description="'fixed' or 'rotational'")
+    rotation_pattern: Optional[dict[str, Any]] = Field(default=None, description="Rotation pattern details")
     active_days: list[str] = Field(default_factory=lambda: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
     grace_period_minutes: int = Field(default=10, ge=0, le=120, description="Allowed arrival delay in minutes")
     absence_timeout_minutes: int = Field(default=2, ge=1, le=1440, description="Absence alarm timer in minutes")
@@ -277,6 +289,8 @@ class ShiftTemplateUpdate(BaseModel):
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     color: Optional[str] = None
+    shift_type: Optional[str] = None
+    rotation_pattern: Optional[dict[str, Any]] = None
     active_days: Optional[list[str]] = None
     grace_period_minutes: Optional[int] = Field(None, ge=0, le=120)
     absence_timeout_minutes: Optional[int] = Field(None, ge=1, le=1440)
@@ -290,6 +304,8 @@ class ShiftTemplateResponse(BaseModel):
     start_time: str = "08:00"
     end_time: str = "16:00"
     color: str = "#38bdf8"
+    shift_type: str = "fixed"
+    rotation_pattern: Optional[dict[str, Any]] = None
     active_days: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     grace_period_minutes: int = 10
     absence_timeout_minutes: int = 2
@@ -685,6 +701,9 @@ class UserBase(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=255)
     role_id: Optional[int] = None
     custom_permissions: list[str] = []
+    assigned_sections: list[str] = []
+    assigned_camera_ids: list[int] = []
+    assigned_person_ids: list[int] = []
     is_active: bool = True
 
 
@@ -696,6 +715,9 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role_id: Optional[int] = None
     custom_permissions: Optional[list[str]] = None
+    assigned_sections: Optional[list[str]] = None
+    assigned_camera_ids: Optional[list[int]] = None
+    assigned_person_ids: Optional[list[int]] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
@@ -708,6 +730,10 @@ class UserResponse(BaseModel):
     role_name: str = ""
     role_display_name: str = ""
     custom_permissions: list[str] = []
+    assigned_sections: list[str] = []
+    assigned_camera_ids: list[int] = []
+    assigned_person_ids: list[int] = []
+    is_scoped: bool = False
     effective_permissions: list[str] = []
     permissions: list[str] = []
     is_active: bool = True
@@ -716,6 +742,68 @@ class UserResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+# ═══════════════════════════════════════════════════════════
+# Section Schemas
+# ═══════════════════════════════════════════════════════════
+
+class SectionBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = ""
+
+
+class SectionCreate(SectionBase):
+    pass
+
+
+class SectionUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class SectionResponse(SectionBase):
+    id: int
+    camera_count: int = 0
+    person_count: int = 0
+    supervisor_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ═══════════════════════════════════════════════════════════
+# Person Shift Management Schemas
+# ═══════════════════════════════════════════════════════════
+
+class PersonShiftZoneInfo(BaseModel):
+    id: int
+    name: str
+    camera_id: int
+    camera_name: str
+    start_time: str = "00:00"
+    end_time: str = "23:59"
+    active_days: list[str] = []
+
+
+class PersonShiftManageRequest(BaseModel):
+    section: Optional[str] = None
+    shift_template_id: Optional[int] = None
+    custom_shift: Optional[dict] = None
+    assigned_zone_ids: Optional[list[int]] = None
+
+
+class PersonShiftManageResponse(BaseModel):
+    person_id: int
+    person_name: str
+    role: str = ""
+    section: str = ""
+    shift_template_id: Optional[int] = None
+    shift_template: Optional[ShiftTemplateResponse] = None
+    custom_shift: Optional[dict] = None
+    effective_shift: Optional[dict] = None
+    assigned_zones: list[PersonShiftZoneInfo] = []
 
 
 # ═══════════════════════════════════════════════════════════

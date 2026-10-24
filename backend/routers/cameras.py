@@ -24,9 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import Union, Optional
 
-from backend.auth import require_permission, require_any_permission
+from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.database import get_db
-from backend.models import Camera, CameraZone, Event
+from backend.models import Camera, CameraZone, Event, User
 from backend.schemas import CameraCreate, CameraBatchCreate, CameraUpdate, CameraResponse, CameraTestResult
 from backend.stream_processor import stream_processor
 
@@ -40,10 +40,15 @@ router = APIRouter(prefix="/api/cameras", tags=["cameras"])
 @router.get("", response_model=list[CameraResponse])
 async def list_cameras(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_any_permission("cameras:view", "dashboard:view")),
+    _user: User = Depends(require_any_permission("cameras:view", "dashboard:view")),
 ):
-    """List all configured cameras with real-time streaming status."""
-    result = await db.execute(select(Camera).order_by(Camera.created_at.desc()))
+    """List all configured cameras with real-time streaming status (scoped for supervisors)."""
+    scope = await get_user_scope(_user, db)
+    query = select(Camera).order_by(Camera.created_at.desc())
+    if scope.is_scoped and scope.camera_ids is not None:
+        query = query.where(Camera.id.in_(scope.camera_ids))
+
+    result = await db.execute(query)
     cameras = result.scalars().all()
     response = []
     for c in cameras:
@@ -64,6 +69,7 @@ async def create_camera(
         name=data.name,
         rtsp_url=data.rtsp_url,
         location=data.location,
+        section=data.section.strip() if data.section else "",
         is_active=data.is_active,
     )
     db.add(camera)
@@ -95,6 +101,7 @@ async def create_cameras_batch(
             name=item.name,
             rtsp_url=item.rtsp_url,
             location=item.location,
+            section=item.section.strip() if item.section else "",
             is_active=item.is_active,
         )
         db.add(cam)
@@ -120,9 +127,13 @@ async def create_cameras_batch(
 async def get_camera(
     camera_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("cameras:view")),
+    _user: User = Depends(require_permission("cameras:view")),
 ):
     """Get details for a specific camera."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_camera(camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به این دوربین برای شما مجاز نیست.")
+
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -137,6 +148,10 @@ async def update_camera(
     _user=Depends(require_permission("cameras:edit")),
 ):
     """Update camera configuration. Restarts stream if URL or active state changes."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_camera(camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به ویرایش این دوربین برای شما مجاز نیست.")
+
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -151,6 +166,8 @@ async def update_camera(
         url_changed = True
     if data.location is not None:
         camera.location = data.location
+    if data.section is not None:
+        camera.section = data.section.strip()
     if data.is_active is not None and data.is_active != camera.is_active:
         camera.is_active = data.is_active
         active_changed = True
@@ -177,6 +194,10 @@ async def delete_camera(
     _user=Depends(require_permission("cameras:delete")),
 ):
     """Remove a camera, clean up its zones, and stop its stream."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_camera(camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به حذف این دوربین برای شما مجاز نیست.")
+
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")

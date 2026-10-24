@@ -81,7 +81,45 @@ async def init_db() -> None:
                     if "shifts" not in z_cols:
                         sync_conn.exec_driver_sql("ALTER TABLE camera_zones ADD COLUMN shifts JSON")
 
+                # Cameras table migration
+                cam_res = sync_conn.exec_driver_sql("PRAGMA table_info(cameras)")
+                cam_cols = {row[1] for row in cam_res.fetchall()}
+                if cam_cols and "section" not in cam_cols:
+                    sync_conn.exec_driver_sql("ALTER TABLE cameras ADD COLUMN section VARCHAR(255) DEFAULT ''")
+
+                # Persons table migration
+                p_res = sync_conn.exec_driver_sql("PRAGMA table_info(persons)")
+                p_cols = {row[1] for row in p_res.fetchall()}
+                if p_cols:
+                    if "section" not in p_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE persons ADD COLUMN section VARCHAR(255) DEFAULT ''")
+                    if "shift_template_id" not in p_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE persons ADD COLUMN shift_template_id INTEGER")
+                    if "custom_shift" not in p_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE persons ADD COLUMN custom_shift JSON")
+
+                # Shift templates table migration
+                st_res = sync_conn.exec_driver_sql("PRAGMA table_info(shift_templates)")
+                st_cols = {row[1] for row in st_res.fetchall()}
+                if st_cols:
+                    if "shift_type" not in st_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE shift_templates ADD COLUMN shift_type VARCHAR(50) DEFAULT 'fixed'")
+                    if "rotation_pattern" not in st_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE shift_templates ADD COLUMN rotation_pattern JSON")
+
+                # Users table migration
+                u_res = sync_conn.exec_driver_sql("PRAGMA table_info(users)")
+                u_cols = {row[1] for row in u_res.fetchall()}
+                if u_cols:
+                    if "assigned_sections" not in u_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE users ADD COLUMN assigned_sections JSON")
+                    if "assigned_camera_ids" not in u_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE users ADD COLUMN assigned_camera_ids JSON")
+                    if "assigned_person_ids" not in u_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE users ADD COLUMN assigned_person_ids JSON")
+
                 # Data backfill for existing records
+                sync_conn.exec_driver_sql("UPDATE shift_templates SET shift_type = 'fixed' WHERE shift_type IS NULL OR shift_type = ''")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET start_time = '00:00' WHERE start_time IS NULL OR start_time = ''")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET end_time = '23:59' WHERE end_time IS NULL OR end_time = ''")
                 sync_conn.exec_driver_sql("UPDATE camera_zones SET active_days = '[\"Mon\", \"Tue\", \"Wed\", \"Thu\", \"Fri\", \"Sat\", \"Sun\"]' WHERE active_days IS NULL")
@@ -97,6 +135,11 @@ async def init_db() -> None:
                 sync_conn.exec_driver_sql("UPDATE events SET zone_name = '' WHERE zone_name IS NULL")
                 sync_conn.exec_driver_sql("UPDATE events SET confidence_score = 0.0 WHERE alert_type IN ('camera_disconnected', 'absence_timeout') AND confidence_score > 0")
                 sync_conn.exec_driver_sql("UPDATE cameras SET rtsp_url = replace(rtsp_url, '%40', '@') WHERE instr(rtsp_url, '%40') > 0")
+                sync_conn.exec_driver_sql("UPDATE cameras SET section = '' WHERE section IS NULL")
+                sync_conn.exec_driver_sql("UPDATE persons SET section = '' WHERE section IS NULL")
+                sync_conn.exec_driver_sql("UPDATE users SET assigned_sections = '[]' WHERE assigned_sections IS NULL")
+                sync_conn.exec_driver_sql("UPDATE users SET assigned_camera_ids = '[]' WHERE assigned_camera_ids IS NULL")
+                sync_conn.exec_driver_sql("UPDATE users SET assigned_person_ids = '[]' WHERE assigned_person_ids IS NULL")
 
                 # Clean up orphan camera zones whose camera was previously deleted
                 sync_conn.exec_driver_sql("DELETE FROM camera_zones WHERE camera_id NOT IN (SELECT id FROM cameras)")
@@ -264,6 +307,88 @@ async def _seed_defaults() -> None:
                     free_times=sdata["free_times"],
                 )
                 session.add(st)
+            await session.commit()
+
+        # Seed Rotational Shift Templates if not existing
+        shift_res_after = await session.execute(select(ShiftTemplate))
+        curr_shifts = shift_res_after.scalars().all()
+        curr_names = {s.name for s in curr_shifts}
+
+        rotational_presets = [
+            {
+                "name": "نوبت‌کاری چرخشی (۲ روز، ۲ شب، ۱ آف)",
+                "start_time": "07:00",
+                "end_time": "19:00",
+                "color": "#ec4899",
+                "shift_type": "rotational",
+                "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"],
+                "grace_period_minutes": 15,
+                "absence_timeout_minutes": 5,
+                "free_times": [],
+                "rotation_pattern": {
+                    "pattern_type": "2d_2n_1off",
+                    "cycle": ["day", "day", "night", "night", "off"],
+                    "anchor_date": "2026-01-01",
+                    "day_start": "07:00",
+                    "day_end": "19:00",
+                    "night_start": "19:00",
+                    "night_end": "07:00",
+                },
+            },
+            {
+                "name": "نوبت‌کاری چرخشی (۲ روز، ۲ شب، ۲ آف)",
+                "start_time": "07:00",
+                "end_time": "19:00",
+                "color": "#8b5cf6",
+                "shift_type": "rotational",
+                "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"],
+                "grace_period_minutes": 15,
+                "absence_timeout_minutes": 5,
+                "free_times": [],
+                "rotation_pattern": {
+                    "pattern_type": "2d_2n_2off",
+                    "cycle": ["day", "day", "night", "night", "off", "off"],
+                    "anchor_date": "2026-01-01",
+                    "day_start": "07:00",
+                    "day_end": "19:00",
+                    "night_start": "19:00",
+                    "night_end": "07:00",
+                },
+            },
+        ]
+        added_rot = False
+        for rdata in rotational_presets:
+            if rdata["name"] not in curr_names:
+                st = ShiftTemplate(
+                    name=rdata["name"],
+                    start_time=rdata["start_time"],
+                    end_time=rdata["end_time"],
+                    color=rdata["color"],
+                    shift_type=rdata["shift_type"],
+                    active_days=rdata["active_days"],
+                    grace_period_minutes=rdata["grace_period_minutes"],
+                    absence_timeout_minutes=rdata["absence_timeout_minutes"],
+                    free_times=rdata["free_times"],
+                    rotation_pattern=rdata["rotation_pattern"],
+                )
+                session.add(st)
+                added_rot = True
+        if added_rot:
+            await session.commit()
+
+        # Check / Seed default Sections
+        from backend.models import Section
+        sec_res = await session.execute(select(Section))
+        if not sec_res.scalars().all():
+            default_sections = [
+                {"name": "بسته‌بندی (Packaging)", "description": "خطوط بسته‌بندی، توزین و الصاق برچسب"},
+                {"name": "خط تولید (Production)", "description": "سالن اصلی مونتاژ و ماشین‌آلات ساخت"},
+                {"name": "انبار و لجستیک (Warehouse)", "description": "انبار مواد اولیه، بارگیری و محصولات نهایی"},
+                {"name": "کنترل کیفیت (QC)", "description": "ایستگاه‌های آزمایشگاهی و بازرسی کیفی"},
+                {"name": "اداری و مالی (Office)", "description": "دفاتر سرپرستی، حراست و مدیریت"},
+            ]
+            for s in default_sections:
+                session.add(Section(name=s["name"], description=s["description"]))
             await session.commit()
 
 async def get_db() -> AsyncSession:

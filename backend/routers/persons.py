@@ -22,11 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy import select, func, and_, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth import require_permission
+from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.config import settings
 from backend.database import get_db
 from backend.face_engine import face_engine
-from backend.models import Person, PersonEmbedding, Event, Camera, CameraZone
+from backend.models import Person, PersonEmbedding, Event, Camera, CameraZone, ShiftTemplate, User
 from backend.schemas import (
     PersonResponse,
     PersonPhotoItem,
@@ -41,9 +41,14 @@ from backend.schemas import (
     PersonCameraDistribution,
     PersonAlertStats,
     EventResponse,
+    ShiftTemplateResponse,
+    PersonShiftZoneInfo,
+    PersonShiftManageRequest,
+    PersonShiftManageResponse,
 )
 from backend.stream_processor import stream_processor
 from backend.routers.zones import is_time_in_timetable, _parse_list_field
+from backend.shift_utils import get_rotation_day_state
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +93,10 @@ def _build_person_response(
     return {
         "id": person.id,
         "name": person.name,
-        "role": person.role,
+        "role": person.role or "",
+        "section": getattr(person, "section", "") or "",
+        "shift_template_id": getattr(person, "shift_template_id", None),
+        "custom_shift": getattr(person, "custom_shift", None),
         "embedding_count": len(embeddings),
         "reference_photos": [p["url"] for p in photo_items],
         "photos": photo_items,
@@ -100,13 +108,18 @@ def _build_person_response(
 @router.get("", response_model=list[PersonResponse])
 async def list_persons(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("persons:view")),
+    _user: User = Depends(require_permission("persons:view")),
 ):
     """
     List all known persons with their embedding counts and high-level
-    detection summary statistics (total detections, today's detections, last seen).
+    detection summary statistics (scoped for supervisors).
     """
-    result = await db.execute(select(Person).order_by(Person.name))
+    scope = await get_user_scope(_user, db)
+    query = select(Person).order_by(Person.name)
+    if scope.is_scoped and scope.person_ids is not None:
+        query = query.where(Person.id.in_(scope.person_ids))
+
+    result = await db.execute(query)
     persons = result.scalars().all()
 
     # Query all camera zones for assigned counts
@@ -239,11 +252,12 @@ async def list_persons(
 async def create_person(
     name: str = Form(...),
     role: str = Form(default=""),
+    section: str = Form(default=""),
     photos: list[UploadFile] = File(default=[]),
     event_ids: Optional[str] = Form(default=None),
     snapshot_filenames: Optional[str] = Form(default=None),
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("persons:create")),
+    _user: User = Depends(require_permission("persons:create")),
 ):
     """
     Create a new known person by uploading reference photos and/or selecting
@@ -280,7 +294,11 @@ async def create_person(
         )
 
     # Create person record
-    person = Person(name=name, role=role)
+    person = Person(
+        name=name.strip(),
+        role=role.strip() if role else "",
+        section=section.strip() if section else "",
+    )
     db.add(person)
     await db.commit()
     await db.refresh(person)
@@ -394,9 +412,13 @@ async def create_person(
 async def get_person(
     person_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("persons:view")),
+    _user: User = Depends(require_permission("persons:view")),
 ):
     """Get details for a specific person."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به این فرد برای شما مجاز نیست.")
+
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -414,17 +436,27 @@ async def update_person(
     person_id: int,
     data: PersonUpdate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("persons:edit")),
+    _user: User = Depends(require_permission("persons:edit")),
 ):
-    """Update a person's name or role."""
+    """Update a person's name, role, section, or shift."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به ویرایش این فرد برای شما مجاز نیست.")
+
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
     if data.name is not None:
-        person.name = data.name
+        person.name = data.name.strip()
     if data.role is not None:
-        person.role = data.role
+        person.role = data.role.strip()
+    if data.section is not None:
+        person.section = data.section.strip()
+    if data.shift_template_id is not None:
+        person.shift_template_id = data.shift_template_id if data.shift_template_id > 0 else None
+    if data.custom_shift is not None:
+        person.custom_shift = data.custom_shift
 
     await db.commit()
     await db.refresh(person)
@@ -444,9 +476,13 @@ async def update_person(
 async def delete_person(
     person_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("persons:delete")),
+    _user: User = Depends(require_permission("persons:delete")),
 ):
     """Delete a person and all their embeddings and reference photos."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به حذف این فرد برای شما مجاز نیست.")
+
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -659,6 +695,10 @@ async def get_person_analytics(
     Get in-depth analytics, shift punctuality compliance, 24-hour activity
     distribution, 14-day attendance log, and camera distribution for a person.
     """
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به آمار تحلیلی این فرد برای شما مجاز نیست.")
+
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -1286,5 +1326,168 @@ async def reindex_person_embeddings(
         "failed": failed_count,
         "message": f"Successfully re-indexed {updated_count} embeddings using model '{settings.insightface_model}'.",
     }
+
+
+# ═══════════════════════════════════════════════════════════
+# Person Shift & Timetable Management
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/{person_id}/shift", response_model=PersonShiftManageResponse)
+async def get_person_shift_config(
+    person_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_any_permission("duty:view", "persons:view", "persons:edit")),
+):
+    """Retrieve full shift schedule, assigned workstations/zones, and timetable for a person."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به شیفت این فرد برای شما مجاز نیست.")
+
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    # Fetch shift template if linked
+    tmpl = None
+    if person.shift_template_id:
+        tmpl = await db.get(ShiftTemplate, person.shift_template_id)
+
+    # Fetch all zones to find workstation assignments
+    zones_res = await db.execute(select(CameraZone))
+    all_zones = zones_res.scalars().all()
+
+    cams_res = await db.execute(select(Camera))
+    cam_map = {c.id: c.name for c in cams_res.scalars().all()}
+
+    assigned_zones: list[PersonShiftZoneInfo] = []
+    for z in all_zones:
+        pids = [int(x) for x in _parse_list_field(z.assigned_person_ids, []) if str(x).isdigit()]
+        if person.id in pids:
+            assigned_zones.append(
+                PersonShiftZoneInfo(
+                    id=z.id,
+                    name=z.name,
+                    camera_id=z.camera_id,
+                    camera_name=cam_map.get(z.camera_id, f"Camera #{z.camera_id}"),
+                    start_time=z.start_time or "00:00",
+                    end_time=z.end_time or "23:59",
+                    active_days=_parse_list_field(z.active_days, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+                )
+            )
+
+    # Determine effective shift
+    effective_shift = None
+    if person.custom_shift:
+        c_shift = person.custom_shift
+        is_rot = c_shift.get("shift_type") in ("rotational", "rotation")
+        rot_state = None
+        if is_rot and c_shift.get("rotation_pattern"):
+            rot_state = get_rotation_day_state(c_shift["rotation_pattern"])
+        effective_shift = {
+            "type": "custom",
+            "name": c_shift.get("name") or "شیفت سفارشی",
+            **c_shift,
+            "rotation_state": rot_state,
+        }
+    elif tmpl:
+        is_rot = getattr(tmpl, "shift_type", "fixed") in ("rotational", "rotation")
+        rot_state = None
+        if is_rot and tmpl.rotation_pattern:
+            rot_state = get_rotation_day_state(tmpl.rotation_pattern)
+        effective_shift = {
+            "type": "template",
+            "id": tmpl.id,
+            "name": tmpl.name,
+            "shift_type": getattr(tmpl, "shift_type", "fixed"),
+            "rotation_pattern": getattr(tmpl, "rotation_pattern", None),
+            "rotation_state": rot_state,
+            "start_time": tmpl.start_time,
+            "end_time": tmpl.end_time,
+            "color": tmpl.color,
+            "active_days": _parse_list_field(tmpl.active_days, []),
+            "grace_period_minutes": tmpl.grace_period_minutes,
+            "absence_timeout_minutes": tmpl.absence_timeout_minutes,
+            "free_times": _parse_list_field(tmpl.free_times, []),
+        }
+    elif assigned_zones:
+        pz = assigned_zones[0]
+        effective_shift = {
+            "type": "zone",
+            "name": pz.name,
+            "start_time": pz.start_time,
+            "end_time": pz.end_time,
+            "active_days": pz.active_days,
+        }
+
+    return PersonShiftManageResponse(
+        person_id=person.id,
+        person_name=person.name,
+        role=person.role or "",
+        section=person.section or "",
+        shift_template_id=person.shift_template_id,
+        shift_template=ShiftTemplateResponse.model_validate(tmpl) if tmpl else None,
+        custom_shift=person.custom_shift,
+        effective_shift=effective_shift,
+        assigned_zones=assigned_zones,
+    )
+
+
+@router.put("/{person_id}/shift", response_model=PersonShiftManageResponse)
+async def update_person_shift_config(
+    person_id: int,
+    data: PersonShiftManageRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_any_permission("duty:manage", "persons:edit")),
+):
+    """Update section, shift template, custom hours, and workstation assignments for a person."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به مدیریت شیفت این فرد برای شما مجاز نیست.")
+
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    if data.section is not None:
+        person.section = data.section.strip()
+
+    if "shift_template_id" in data.model_fields_set:
+        if data.shift_template_id and data.shift_template_id > 0:
+            tmpl = await db.get(ShiftTemplate, data.shift_template_id)
+            if not tmpl:
+                raise HTTPException(status_code=400, detail="الگوی شیفت انتخاب‌شده نامعتبر است.")
+            person.shift_template_id = data.shift_template_id
+            person.custom_shift = None
+        else:
+            person.shift_template_id = None
+
+    if "custom_shift" in data.model_fields_set:
+        person.custom_shift = data.custom_shift
+        if data.custom_shift:
+            person.shift_template_id = None
+
+    # Synchronize camera zone workstation assignments
+    if data.assigned_zone_ids is not None:
+        target_zone_ids = set(data.assigned_zone_ids)
+        zones_res = await db.execute(select(CameraZone))
+        all_zones = zones_res.scalars().all()
+        for z in all_zones:
+            current_pids = [int(x) for x in _parse_list_field(z.assigned_person_ids, []) if str(x).isdigit()]
+            if z.id in target_zone_ids and person_id not in current_pids:
+                current_pids.append(person_id)
+                z.assigned_person_ids = current_pids
+            elif z.id not in target_zone_ids and person_id in current_pids:
+                current_pids = [pid for pid in current_pids if pid != person_id]
+                z.assigned_person_ids = current_pids
+
+    await db.commit()
+    await db.refresh(person)
+
+    # Refresh stream processor zone caches
+    await stream_processor.refresh_zones()
+
+    logger.info("Updated shift schedule and stations for person id=%d ('%s')", person.id, person.name)
+    return await get_person_shift_config(person_id=person.id, db=db, _user=_user)
+
 
 

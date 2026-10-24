@@ -214,6 +214,17 @@ const CameraForm = {
                         value="${isEdit ? CameraForm.escapeAttr(camera.location || '') : ''}"
                     />
                 </div>
+                <div class="form-group">
+                    <label class="form-label" for="camera-section">🏢 ${I18n.t('tab_sections') || 'بخش سازمانی'}</label>
+                    <input
+                        class="form-input"
+                        type="text"
+                        id="camera-section"
+                        name="section"
+                        placeholder="مثال: بسته‌بندی، خط تولید، انبار مرکزی"
+                        value="${isEdit ? CameraForm.escapeAttr(camera.section || '') : ''}"
+                    />
+                </div>
                 <div class="form-group" style="display: flex; align-items: center; gap: 12px; margin-bottom: 0;">
                     <label class="form-label" style="margin-bottom: 0;">${I18n.t('label_active')}</label>
                     <button
@@ -242,6 +253,7 @@ const CameraForm = {
             name: form.querySelector('[name="name"]').value.trim(),
             rtsp_url: form.querySelector('[name="rtsp_url"]').value.trim(),
             location: form.querySelector('[name="location"]').value.trim(),
+            section: (form.querySelector('[name="section"]')?.value || '').trim(),
             is_active: toggle ? toggle.classList.contains('active') : true,
         };
 
@@ -391,6 +403,16 @@ const CameraForm = {
                     />
                 </div>
 
+                <div class="form-group">
+                    <label class="form-label" for="builder-section">🏢 ${I18n.t('tab_sections') || 'بخش سازمانی'}</label>
+                    <input
+                        class="form-input"
+                        type="text"
+                        id="builder-section"
+                        placeholder="مثال: بسته‌بندی، خط تولید، انبار مرکزی"
+                    />
+                </div>
+
                 <div class="form-group" style="display: flex; align-items: center; gap: 12px; margin-bottom: 0;">
                     <label class="form-label" style="margin-bottom: 0;">${I18n.t('label_active')}</label>
                     <button
@@ -470,6 +492,7 @@ const CameraForm = {
 
         const name = (document.getElementById('builder-name')?.value || '').trim();
         const location = (document.getElementById('builder-location')?.value || '').trim();
+        const section = (document.getElementById('builder-section')?.value || '').trim();
         const toggle = document.getElementById('builder-active-toggle');
         const rtspUrl = CameraForm.getBuiltRtspUrl();
 
@@ -486,6 +509,7 @@ const CameraForm = {
             name,
             rtsp_url: rtspUrl,
             location,
+            section,
             is_active: toggle ? toggle.classList.contains('active') : true,
         };
 

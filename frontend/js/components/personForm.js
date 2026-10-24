@@ -81,8 +81,8 @@ const PersonForm = {
 
             <div class="modal-body" style="padding: 1.25rem 1.5rem; max-height: 74vh; overflow-y: auto;">
                 <form id="person-form" onsubmit="PersonForm.handleSubmit(event)">
-                    <!-- Name & Role Row -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                    <!-- Name, Role & Section Row -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label" for="person-name" style="font-weight: 700; font-size: 0.85rem;">
                                 ${I18n.t('label_full_name')} <span style="color: var(--accent-rose);">*</span>
@@ -107,6 +107,18 @@ const PersonForm = {
                                 id="person-role"
                                 name="role"
                                 placeholder="${PersonForm.escapeAttr(I18n.t('placeholder_role'))}"
+                            />
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" for="person-section" style="font-weight: 700; font-size: 0.85rem;">
+                                🏢 ${I18n.t('tab_sections') || 'بخش سازمانی'}
+                            </label>
+                            <input
+                                class="form-input"
+                                type="text"
+                                id="person-section"
+                                name="section"
+                                placeholder="مثال: بسته‌بندی، خط تولید"
                             />
                         </div>
                     </div>
@@ -688,8 +700,10 @@ const PersonForm = {
 
         const nameInput = document.getElementById('person-name');
         const roleInput = document.getElementById('person-role');
+        const sectionInput = document.getElementById('person-section');
         const name = nameInput ? nameInput.value.trim() : '';
         const role = roleInput ? roleInput.value.trim() : '';
+        const section = sectionInput ? sectionInput.value.trim() : '';
 
         if (!name) {
             App.toast(I18n.t('err_enter_name'), 'error');
@@ -713,6 +727,9 @@ const PersonForm = {
             const formData = new FormData();
             formData.append('name', name);
             formData.append('role', role);
+            if (section) {
+                formData.append('section', section);
+            }
 
             // Separate event photos from local file uploads
             const eventIds = [];

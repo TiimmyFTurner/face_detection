@@ -36,6 +36,10 @@ def _to_user_response(user: User) -> UserResponse:
     role_name = user.role.name if user.role else ""
     role_display = user.role.display_name if user.role else ""
     effective_perms = list(get_user_permissions(user))
+    assigned_secs = user.assigned_sections or []
+    assigned_cams = user.assigned_camera_ids or []
+    assigned_pers = user.assigned_person_ids or []
+    is_scoped = bool((role_name == "supervisor" or assigned_secs or assigned_cams or assigned_pers) and role_name != "admin")
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -44,6 +48,10 @@ def _to_user_response(user: User) -> UserResponse:
         role_name=role_name,
         role_display_name=role_display,
         custom_permissions=user.custom_permissions or [],
+        assigned_sections=assigned_secs,
+        assigned_camera_ids=assigned_cams,
+        assigned_person_ids=assigned_pers,
+        is_scoped=is_scoped,
         effective_permissions=effective_perms,
         permissions=effective_perms,
         is_active=user.is_active,
@@ -98,6 +106,9 @@ async def create_user(
         salt=salt,
         role_id=role_id,
         custom_permissions=data.custom_permissions or [],
+        assigned_sections=data.assigned_sections or [],
+        assigned_camera_ids=data.assigned_camera_ids or [],
+        assigned_person_ids=data.assigned_person_ids or [],
         is_active=data.is_active,
     )
     db.add(user)
@@ -150,6 +161,12 @@ async def update_user(
         user.role_id = data.role_id
     if data.custom_permissions is not None:
         user.custom_permissions = data.custom_permissions
+    if data.assigned_sections is not None:
+        user.assigned_sections = data.assigned_sections
+    if data.assigned_camera_ids is not None:
+        user.assigned_camera_ids = data.assigned_camera_ids
+    if data.assigned_person_ids is not None:
+        user.assigned_person_ids = data.assigned_person_ids
     if data.is_active is not None:
         # Prevent deactivating the last active admin
         if not data.is_active and user.role and user.role.name == "admin":

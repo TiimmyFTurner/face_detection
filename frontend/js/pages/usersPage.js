@@ -5,9 +5,12 @@
  *   - Tab 2: Dynamic Roles & Permissions management, custom role creation, granular permission matrix editor.
  */
 const UsersPage = {
-    _activeTab: 'users', // 'users' | 'roles'
+    _activeTab: 'users', // 'users' | 'roles' | 'sections'
     _users: [],
     _roles: [],
+    _sections: [],
+    _cameras: [],
+    _persons: [],
     _permissionsRegistry: null,
 
     async load() {
@@ -32,6 +35,11 @@ const UsersPage = {
                         <span>${I18n.t('tab_roles') || 'نقش‌ها و دسترسی‌ها'}</span>
                         <span class="badge badge-subtle ml-2" id="roles-count-badge">0</span>
                     </button>
+                    <button class="segmented-tab ${this._activeTab === 'sections' ? 'active' : ''}" id="tab-btn-sections" onclick="UsersPage.switchTab('sections')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; flex-shrink: 0;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        <span>${I18n.t('tab_sections') || 'بخش‌های کارخانه'}</span>
+                        <span class="badge badge-subtle ml-2" id="sections-count-badge">0</span>
+                    </button>
                 </div>
 
                 <!-- Tab Content Body -->
@@ -49,21 +57,30 @@ const UsersPage = {
 
     async refreshData() {
         try {
-            const [users, roles, permsRes] = await Promise.all([
+            const [users, roles, permsRes, sections, cameras, persons] = await Promise.all([
                 App.api('/api/users'),
                 App.api('/api/roles'),
                 App.api('/api/roles/permissions-registry'),
+                App.api('/api/sections').catch(() => []),
+                App.api('/api/cameras').catch(() => []),
+                App.api('/api/persons').catch(() => []),
             ]);
 
-            this._users = users;
-            this._roles = roles;
+            this._users = users || [];
+            this._roles = roles || [];
             this._permissionsRegistry = permsRes;
+            this._sections = sections || [];
+            this._cameras = cameras || [];
+            this._persons = persons || [];
 
             const uBadge = document.getElementById('users-count-badge');
-            if (uBadge) uBadge.textContent = users.length;
+            if (uBadge) uBadge.textContent = this._users.length;
 
             const rBadge = document.getElementById('roles-count-badge');
-            if (rBadge) rBadge.textContent = roles.length;
+            if (rBadge) rBadge.textContent = this._roles.length;
+
+            const sBadge = document.getElementById('sections-count-badge');
+            if (sBadge) sBadge.textContent = this._sections.length;
 
             this.renderActiveTab();
         } catch (err) {
@@ -104,7 +121,7 @@ const UsersPage = {
                 ` : '';
             }
             this._renderUsersTab(container);
-        } else {
+        } else if (this._activeTab === 'roles') {
             if (headerActions) {
                 headerActions.innerHTML = canManage ? `
                     <button class="btn btn-primary d-inline-flex align-items-center" onclick="UsersPage.openRoleModal()">
@@ -114,6 +131,16 @@ const UsersPage = {
                 ` : '';
             }
             this._renderRolesTab(container);
+        } else {
+            if (headerActions) {
+                headerActions.innerHTML = canManage ? `
+                    <button class="btn btn-primary d-inline-flex align-items-center" onclick="UsersPage.openSectionModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; margin-inline-end: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        <span>${I18n.t('add_section') || 'بخش جدید'}</span>
+                    </button>
+                ` : '';
+            }
+            this._renderSectionsTab(container);
         }
     },
 
@@ -152,6 +179,30 @@ const UsersPage = {
                 ? `<span class="badge badge-info" title="${(user.custom_permissions || []).join(', ')}">+${customPermsCount} سفارشی</span>`
                 : `<span class="text-muted text-sm">—</span>`;
 
+            // Build Supervisor / User Scope Badges
+            let scopeBadges = '';
+            if (user.role_name === 'admin') {
+                scopeBadges = `<span class="badge badge-subtle">دسترسی سراسری (مدیر)</span>`;
+            } else {
+                const parts = [];
+                if (user.assigned_sections && user.assigned_sections.length) {
+                    parts.push(...user.assigned_sections.map(s => `<span class="badge badge-primary text-xs" style="margin: 2px;">🏢 ${this._escape(s)}</span>`));
+                }
+                if (user.assigned_camera_ids && user.assigned_camera_ids.length) {
+                    parts.push(`<span class="badge badge-subtle text-xs" style="margin: 2px;" title="دوربین‌های منتسب">📹 ${user.assigned_camera_ids.length}</span>`);
+                }
+                if (user.assigned_person_ids && user.assigned_person_ids.length) {
+                    parts.push(`<span class="badge badge-subtle text-xs" style="margin: 2px;" title="پرسنل منتسب">👤 ${user.assigned_person_ids.length}</span>`);
+                }
+                if (parts.length > 0) {
+                    scopeBadges = `<div class="d-flex flex-wrap gap-1">${parts.join('')}</div>`;
+                } else if (user.role_name === 'supervisor') {
+                    scopeBadges = `<span class="badge badge-warning text-xs">بدون انتساب بخش</span>`;
+                } else {
+                    scopeBadges = `<span class="text-muted text-xs">—</span>`;
+                }
+            }
+
             rowsHtml += `
                 <tr>
                     <td>
@@ -170,6 +221,7 @@ const UsersPage = {
                             ${this._escape(user.role_display_name || user.role_name || 'بدون نقش')}
                         </span>
                     </td>
+                    <td>${scopeBadges}</td>
                     <td>${customPermsBadge}</td>
                     <td>${statusBadge}</td>
                     <td><small class="text-muted">${lastLoginStr}</small></td>
@@ -201,6 +253,7 @@ const UsersPage = {
                         <tr>
                             <th>${I18n.t('user_fullname') || 'کاربر'}</th>
                             <th>${I18n.t('role') || 'نقش'}</th>
+                            <th>${I18n.t('col_assigned_section') || 'بخش / محدوده نظارت'}</th>
                             <th>${I18n.t('custom_permissions') || 'دسترسی‌های اختصاصی'}</th>
                             <th>${I18n.t('status') || 'وضعیت'}</th>
                             <th>${I18n.t('last_login') || 'آخرین ورود'}</th>
@@ -434,6 +487,12 @@ const UsersPage = {
             roleOptions += `<option value="${r.id}" ${selected}>${this._escape(r.display_name)} (${this._escape(r.name)})</option>`;
         });
 
+        // Scope settings
+        const userAssignedSections = new Set(user ? (user.assigned_sections || []) : []);
+        const userAssignedCameras = new Set(user ? (user.assigned_camera_ids || []) : []);
+        const userAssignedPersons = new Set(user ? (user.assigned_person_ids || []) : []);
+        const hasScope = userAssignedSections.size > 0 || userAssignedCameras.size > 0 || userAssignedPersons.size > 0 || (user && user.role_name === 'supervisor');
+
         // Build Custom Permissions matrix
         const userCustomPerms = new Set(user ? (user.custom_permissions || []) : []);
         const permsMatrixHtml = this._buildPermissionsCheckboxGrid('user-custom-perm', userCustomPerms);
@@ -483,6 +542,108 @@ const UsersPage = {
                         <label class="form-check-label font-weight-bold" for="form-user-active">${I18n.t('user_active_toggle') || 'حساب کاربری فعال باشد'}</label>
                     </div>
 
+                    <!-- Collapsible Supervisor Scope & Section Assignment -->
+                    <div class="user-scope-accordion card-glass p-3 mb-4">
+                        <div class="d-flex align-items-center justify-content-between cursor-pointer" onclick="UsersPage.toggleUserScopeSection()">
+                            <div>
+                                <span class="font-weight-bold">🏢 ${I18n.t('supervisor_scope_heading') || 'محدوده نظارت سرپرست (بخش‌ها، دوربین‌ها و پرسنل)'}</span>
+                                <small class="text-muted d-block">${I18n.t('supervisor_scope_hint') || 'برای سرپرستان و اپراتورها، بخش‌ها یا دوربین‌ها و پرسنل مجاز را تعیین کنید'}</small>
+                            </div>
+                            <span id="user-scope-arrow">${hasScope ? '▲' : '▼'}</span>
+                        </div>
+
+                        <div id="user-scope-container" style="display: ${hasScope ? 'block' : 'none'}; margin-top: 1rem;">
+                            <!-- 1. Factory Sections Selection -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                                    <label class="form-label font-weight-bold m-0">🏭 ${I18n.t('tab_sections') || 'بخش‌های تحت نظارت'}</label>
+                                    <button type="button" class="btn btn-sm btn-subtle text-xs" onclick="UsersPage.autoSelectScopeResources()">
+                                        ⚡ ${I18n.t('btn_autoselect_resources') || 'انتخاب خودکار دوربین‌ها و پرسنل بخش‌های انتخاب‌شده'}
+                                    </button>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 p-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, #333);">
+                                    ${(this._sections || []).length === 0 ? `<span class="text-muted text-xs">هیچ بخشی تعریف نشده است.</span>` :
+                                        (this._sections || []).map(sec => {
+                                            const checked = userAssignedSections.has(sec.name) ? 'checked' : '';
+                                            return `
+                                                <label class="form-check m-0 d-flex align-items-center gap-1 cursor-pointer" style="padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.04);">
+                                                    <input type="checkbox" class="user-scope-sec-cb form-check-input m-0" value="${this._escape(sec.name)}" ${checked}>
+                                                    <span class="text-sm font-weight-bold">${this._escape(sec.name)}</span>
+                                                    <span class="badge badge-subtle text-xs">(${sec.camera_count || 0}د / ${sec.person_count || 0}ن)</span>
+                                                </label>
+                                            `;
+                                        }).join('')
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="row g-3">
+                                <!-- 2. Allowed Cameras Selection -->
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <label class="form-label font-weight-bold m-0 text-sm">📹 ${I18n.t('cameras') || 'دوربین‌های مجاز'}</label>
+                                        <div class="d-flex gap-1">
+                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopeCams(true)">${I18n.t('all') || 'همه'}</button>
+                                            <span class="text-muted text-xs">|</span>
+                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopeCams(false)">${I18n.t('none') || 'هیچ'}</button>
+                                        </div>
+                                    </div>
+                                    <input type="text" class="form-control form-control-sm mb-2" placeholder="جستجوی دوربین..." oninput="UsersPage.filterScopeList(this, 'user-scope-cam-item')">
+                                    <div class="scope-resource-list" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 6px;">
+                                        ${(this._cameras || []).length === 0 ? `<div class="text-muted text-xs p-2">دوربینی یافت نشد.</div>` :
+                                            (this._cameras || []).map(cam => {
+                                                const checked = userAssignedCameras.has(cam.id) ? 'checked' : '';
+                                                return `
+                                                    <div class="form-check scope-resource-item user-scope-cam-item py-1" data-search="${this._escape(cam.name.toLowerCase())} ${cam.section ? this._escape(cam.section.toLowerCase()) : ''}">
+                                                        <label class="d-flex align-items-center justify-content-between w-100 cursor-pointer text-xs m-0">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <input type="checkbox" class="user-scope-cam-cb form-check-input m-0" value="${cam.id}" data-section="${this._escape(cam.section || '')}" ${checked}>
+                                                                <span>${this._escape(cam.name)}</span>
+                                                            </div>
+                                                            <span class="badge ${cam.section ? 'badge-primary' : 'badge-subtle'} text-xxs">${this._escape(cam.section || 'عمومی')}</span>
+                                                        </label>
+                                                    </div>
+                                                `;
+                                            }).join('')
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- 3. Allowed Persons Selection -->
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <label class="form-label font-weight-bold m-0 text-sm">👤 ${I18n.t('persons') || 'پرسنل مجاز'}</label>
+                                        <div class="d-flex gap-1">
+                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopePersons(true)">${I18n.t('all') || 'همه'}</button>
+                                            <span class="text-muted text-xs">|</span>
+                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopePersons(false)">${I18n.t('none') || 'هیچ'}</button>
+                                        </div>
+                                    </div>
+                                    <input type="text" class="form-control form-control-sm mb-2" placeholder="جستجوی پرسنل..." oninput="UsersPage.filterScopeList(this, 'user-scope-per-item')">
+                                    <div class="scope-resource-list" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 6px;">
+                                        ${(this._persons || []).length === 0 ? `<div class="text-muted text-xs p-2">پرسنلی یافت نشد.</div>` :
+                                            (this._persons || []).map(p => {
+                                                const checked = userAssignedPersons.has(p.id) ? 'checked' : '';
+                                                const subText = p.person_id || p.national_id || '';
+                                                return `
+                                                    <div class="form-check scope-resource-item user-scope-per-item py-1" data-search="${this._escape(p.name.toLowerCase())} ${this._escape(subText.toLowerCase())} ${p.section ? this._escape(p.section.toLowerCase()) : ''}">
+                                                        <label class="d-flex align-items-center justify-content-between w-100 cursor-pointer text-xs m-0">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <input type="checkbox" class="user-scope-per-cb form-check-input m-0" value="${p.id}" data-section="${this._escape(p.section || '')}" ${checked}>
+                                                                <span>${this._escape(p.name)}</span>
+                                                            </div>
+                                                            <span class="badge ${p.section ? 'badge-primary' : 'badge-subtle'} text-xxs">${this._escape(p.section || p.department || 'بدون بخش')}</span>
+                                                        </label>
+                                                    </div>
+                                                `;
+                                            }).join('')
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Collapsible Custom Permissions Override -->
                     <div class="custom-perms-accordion card-glass p-3 mb-4">
                         <div class="d-flex align-items-center justify-content-between cursor-pointer" onclick="UsersPage.toggleCustomPermsSection()">
@@ -512,6 +673,67 @@ const UsersPage = {
         App.openModal(modalHtml, 'modal-wide');
     },
 
+    toggleUserScopeSection() {
+        const cont = document.getElementById('user-scope-container');
+        const arrow = document.getElementById('user-scope-arrow');
+        if (!cont) return;
+        const isHidden = cont.style.display === 'none';
+        cont.style.display = isHidden ? 'block' : 'none';
+        if (arrow) arrow.textContent = isHidden ? '▲' : '▼';
+    },
+
+    toggleAllScopeCams(check) {
+        document.querySelectorAll('.user-scope-cam-cb').forEach(cb => {
+            cb.checked = check;
+        });
+    },
+
+    toggleAllScopePersons(check) {
+        document.querySelectorAll('.user-scope-per-cb').forEach(cb => {
+            cb.checked = check;
+        });
+    },
+
+    filterScopeList(inputEl, itemClass) {
+        const term = (inputEl.value || '').trim().toLowerCase();
+        document.querySelectorAll('.' + itemClass).forEach(el => {
+            const searchData = el.getAttribute('data-search') || '';
+            el.style.display = searchData.includes(term) ? '' : 'none';
+        });
+    },
+
+    autoSelectScopeResources() {
+        const checkedSections = new Set();
+        document.querySelectorAll('.user-scope-sec-cb:checked').forEach(cb => {
+            checkedSections.add(cb.value);
+        });
+
+        if (checkedSections.size === 0) {
+            App.showToast('ابتدا حداقل یک بخش را علامت بزنید.', 'warning');
+            return;
+        }
+
+        let camCount = 0;
+        document.querySelectorAll('.user-scope-cam-cb').forEach(cb => {
+            const sec = cb.getAttribute('data-section');
+            if (sec && checkedSections.has(sec)) {
+                cb.checked = true;
+                camCount++;
+            }
+        });
+
+        let perCount = 0;
+        document.querySelectorAll('.user-scope-per-cb').forEach(cb => {
+            const sec = cb.getAttribute('data-section');
+            if (sec && checkedSections.has(sec)) {
+                cb.checked = true;
+                perCount++;
+            }
+        });
+
+        App.showToast(`${camCount} دوربین و ${perCount} پرسنل متعلق به بخش‌های انتخابی علامت خوردند.`, 'info');
+    },
+
     toggleCustomPermsSection() {
         const cont = document.getElementById('custom-perms-container');
         const arrow = document.getElementById('custom-perms-arrow');
@@ -538,6 +760,22 @@ const UsersPage = {
             customPerms.push(cb.value);
         });
 
+        // Collect supervisor scope
+        const assignedSections = [];
+        document.querySelectorAll('.user-scope-sec-cb:checked').forEach(cb => {
+            assignedSections.push(cb.value);
+        });
+
+        const assignedCameras = [];
+        document.querySelectorAll('.user-scope-cam-cb:checked').forEach(cb => {
+            assignedCameras.push(parseInt(cb.value, 10));
+        });
+
+        const assignedPersons = [];
+        document.querySelectorAll('.user-scope-per-cb:checked').forEach(cb => {
+            assignedPersons.push(parseInt(cb.value, 10));
+        });
+
         if (btn) btn.disabled = true;
 
         try {
@@ -548,6 +786,9 @@ const UsersPage = {
                     role_id: roleId,
                     is_active: isActive,
                     custom_permissions: customPerms,
+                    assigned_sections: assignedSections,
+                    assigned_camera_ids: assignedCameras,
+                    assigned_person_ids: assignedPersons,
                 };
                 if (password && password.trim().length >= 4) {
                     payload.password = password.trim();
@@ -564,6 +805,9 @@ const UsersPage = {
                     role_id: roleId,
                     is_active: isActive,
                     custom_permissions: customPerms,
+                    assigned_sections: assignedSections,
+                    assigned_camera_ids: assignedCameras,
+                    assigned_person_ids: assignedPersons,
                 };
                 await App.api('/api/users', 'POST', payload);
                 App.showToast(I18n.t('user_created_success') || 'کاربر جدید با موفقیت ایجاد شد.', 'success');
@@ -976,6 +1220,229 @@ const UsersPage = {
         });
 
         return sectionsHtml;
+    },
+
+    // ═══════════════════════════════════════════════════════
+    // TAB 3: FACTORY SECTIONS & DEPARTMENTS
+    // ═══════════════════════════════════════════════════════
+    _renderSectionsTab(container) {
+        const canManage = Auth.hasPermission('sections:manage') || Auth.hasPermission('users:manage');
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
+
+        if (this._sections.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state-card text-center p-5 card-glass">
+                    <div class="empty-icon" style="font-size: 3rem; margin-bottom: 1rem;">🏢</div>
+                    <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem;">${I18n.t('no_sections_found') || 'هیچ بخشی تعریف نشده است'}</h3>
+                    <p class="text-muted" style="max-width: 500px; margin: 0 auto 1.5rem auto;">${I18n.t('no_sections_desc') || 'می‌توانید بخش‌های مختلف کارخانه مانند خط تولید، بسته‌بندی، انبار و غیره را تعریف نمایید.'}</p>
+                    ${canManage ? `
+                        <button class="btn btn-primary" onclick="UsersPage.openSectionModal()">
+                            <span>➕</span>
+                            <span>${I18n.t('add_section') || 'افزودن بخش جدید'}</span>
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+            return;
+        }
+
+        const sectionCardsHtml = this._sections.map(sec => {
+            const camCountDisplay = isFa ? I18n.toPersianDigits(sec.camera_count || 0) : (sec.camera_count || 0);
+            const perCountDisplay = isFa ? I18n.toPersianDigits(sec.person_count || 0) : (sec.person_count || 0);
+            const supCountDisplay = isFa ? I18n.toPersianDigits(sec.supervisor_count || 0) : (sec.supervisor_count || 0);
+            const idDisplay = isFa ? I18n.toPersianDigits(sec.id) : sec.id;
+
+            return `
+                <div class="section-card-item">
+                    <div>
+                        <div class="section-header-top">
+                            <div class="section-identity-group">
+                                <div class="section-icon-box">
+                                    🏢
+                                </div>
+                                <div class="section-title-wrap">
+                                    <h3 class="section-title-text">${this._escape(sec.name)}</h3>
+                                    <span class="section-id-badge">شناسه: #${idDisplay}</span>
+                                </div>
+                            </div>
+                            ${canManage ? `
+                                <div class="section-actions-group">
+                                    <button class="section-action-btn edit" title="${I18n.t('edit') || 'ویرایش'}" onclick="UsersPage.openSectionModal(${sec.id})">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                    </button>
+                                    <button class="section-action-btn delete" title="${I18n.t('delete') || 'حذف'}" onclick="UsersPage.deleteSection(${sec.id}, '${this._escape(sec.name)}')">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <p class="section-desc-text">
+                            ${this._escape(sec.description || 'بدون توضیحات تکمیلی')}
+                        </p>
+                    </div>
+
+                    <div class="section-metrics-bar">
+                        <div class="section-metric-pill cameras" title="دوربین‌های این بخش">
+                            <span>📹</span>
+                            <strong>${camCountDisplay}</strong>
+                            <span>دوربین</span>
+                        </div>
+                        <div class="section-metric-pill personnel" title="پرسنل مستقر در این بخش">
+                            <span>👤</span>
+                            <strong>${perCountDisplay}</strong>
+                            <span>پرسنل</span>
+                        </div>
+                        <div class="section-metric-pill supervisors" title="سرپرستان ناظر">
+                            <span>⚡</span>
+                            <strong>${supCountDisplay}</strong>
+                            <span>سرپرست</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="sections-tab-wrapper">
+                <div class="sections-intro-bar">
+                    <div class="sections-intro-inner">
+                        <div class="sections-intro-title-group">
+                            <div class="sections-intro-icon-box">🏢</div>
+                            <div>
+                                <h3 class="sections-intro-title">مدیریت بخش‌ها و نواحی کارخانه</h3>
+                                <p class="sections-intro-subtitle">تعریف بخش‌های عملیاتی کارخانه و انتساب سرپرستان، دوربین‌ها و پرسنل به هر بخش</p>
+                            </div>
+                        </div>
+                        <div class="sections-intro-actions">
+                            <span class="sections-count-pill">
+                                🏢 ${isFa ? I18n.toPersianDigits(this._sections.length) : this._sections.length} بخش فعال
+                            </span>
+                            ${canManage ? `
+                                <button type="button" class="btn-add-section-top" onclick="UsersPage.openSectionModal()">
+                                    <span>➕</span>
+                                    <span>${I18n.t('add_section') || 'افزودن بخش جدید'}</span>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sections-grid">
+                    ${sectionCardsHtml}
+                </div>
+            </div>
+        `;
+    },
+
+    openSectionModal(sectionId = null) {
+        const sec = sectionId ? this._sections.find(s => s.id === sectionId) : null;
+        const isEdit = !!sec;
+        const isFa = I18n.isRTL() || I18n.currentLang === 'fa';
+
+        const modalHtml = `
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-icon">${isEdit ? '✏️' : '🏢'}</span>
+                    <div>
+                        <h2 class="modal-title">${isEdit ? 'ویرایش بخش کارخانه' : 'افزودن بخش جدید کارخانه'}</h2>
+                        <p class="modal-subtitle">${isEdit ? this._escape(sec.name) : 'نام و توضیحات بخش را وارد نمایید'}</p>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="App.closeModal()">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <div id="section-form-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem;"></div>
+
+                <form id="section-edit-form" onsubmit="UsersPage._saveSection(event, ${sectionId || 'null'})">
+                    <div class="form-group mb-3">
+                        <label for="form-section-name" class="form-label font-weight-bold">نام بخش سازمانی *</label>
+                        <input type="text" id="form-section-name" class="form-control" required placeholder="مثال: بسته‌بندی، خط تولید، انبار مرکزی" value="${isEdit ? this._escape(sec.name) : ''}">
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <label for="form-section-desc" class="form-label font-weight-bold">شرح و توضیحات تکمیلی</label>
+                        <textarea id="form-section-desc" class="form-control" rows="3" placeholder="توضیح مختصر در خصوص عملکرد یا محدوده فیزیکی این بخش">${isEdit ? this._escape(sec.description || '') : ''}</textarea>
+                    </div>
+
+                    ${isEdit ? `
+                        <div class="section-modal-stats-grid">
+                            <div class="section-modal-stat-card cameras" title="تعداد دوربین‌های پایش این بخش">
+                                <span class="stat-icon">📹</span>
+                                <div class="stat-val">${isFa ? I18n.toPersianDigits(sec.camera_count || 0) : (sec.camera_count || 0)}</div>
+                                <span class="stat-label">دوربین‌های منتسب</span>
+                            </div>
+                            <div class="section-modal-stat-card personnel" title="پرسنل سازمانی منتسب به این بخش">
+                                <span class="stat-icon">👤</span>
+                                <div class="stat-val">${isFa ? I18n.toPersianDigits(sec.person_count || 0) : (sec.person_count || 0)}</div>
+                                <span class="stat-label">پرسنل مستقر</span>
+                            </div>
+                            <div class="section-modal-stat-card supervisors" title="سرپرستان ناظر دارای مجوز این بخش">
+                                <span class="stat-icon">⚡</span>
+                                <div class="stat-val">${isFa ? I18n.toPersianDigits(sec.supervisor_count || 0) : (sec.supervisor_count || 0)}</div>
+                                <span class="stat-label">سرپرستان ناظر</span>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('cancel') || 'انصراف'}</button>
+                        <button type="submit" id="save-section-btn" class="btn btn-primary">
+                            <span>💾</span>
+                            <span>${I18n.t('save') || 'ذخیره تغییرات'}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        App.openModal(modalHtml, 'modal-medium');
+    },
+
+    async _saveSection(e, sectionId) {
+        e.preventDefault();
+        const errEl = document.getElementById('section-form-error');
+        const btn = document.getElementById('save-section-btn');
+        if (errEl) errEl.style.display = 'none';
+
+        const name = document.getElementById('form-section-name').value.trim();
+        const description = document.getElementById('form-section-desc').value.trim();
+
+        if (!name) return;
+        if (btn) btn.disabled = true;
+
+        try {
+            if (sectionId) {
+                await App.api(`/api/sections/${sectionId}`, 'PUT', { name, description });
+                App.showToast('اطلاعات بخش با موفقیت به‌روزرسانی شد.', 'success');
+            } else {
+                await App.api('/api/sections', 'POST', { name, description });
+                App.showToast('بخش جدید با موفقیت اضافه گردید.', 'success');
+            }
+            App.closeModal();
+            await this.refreshData();
+        } catch (err) {
+            if (errEl) {
+                errEl.textContent = err.message || 'خطا در ثبت اطلاعات بخش';
+                errEl.style.display = 'block';
+            }
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    async deleteSection(sectionId, name) {
+        if (!confirm(`آیا از حذف بخش «${name}» اطمینان دارید؟\nنکته: در صورت وجود دوربین یا پرسنل منتسب به این بخش، مقدار بخش آنها پاک خواهد شد.`)) {
+            return;
+        }
+
+        try {
+            await App.api(`/api/sections/${sectionId}`, 'DELETE');
+            App.showToast('بخش با موفقیت حذف شد.', 'success');
+            await this.refreshData();
+        } catch (err) {
+            alert(err.message || 'خطا در حذف بخش');
+        }
     },
 
     _escape(str) {

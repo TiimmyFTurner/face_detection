@@ -6220,4 +6220,287 @@ html[dir="rtl"] textarea {
 .break-preset-del-btn:hover {
     background: #dc2626;
     transform: translateY(-50%) scale(1.15);
-}
+}
+
+/* ── Supervisor Scope & Resource Selector Styles ─────────── */
+.user-scope-accordion,
+.custom-perms-accordion {
+    border-radius: var(--radius-lg, 12px);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--bg-surface, rgba(30, 41, 59, 0.5));
+    transition: all var(--transition-normal, 0.25s ease);
+}
+
+.user-scope-accordion:hover,
+.custom-perms-accordion:hover {
+    border-color: rgba(56, 189, 248, 0.25);
+}
+
+.scope-header-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md, 8px);
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+
+.scope-toggle-arrow {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s, color 0.2s;
+    cursor: pointer;
+}
+
+.scope-toggle-arrow.expanded {
+    transform: rotate(180deg);
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue, #38bdf8);
+}
+
+.scope-section-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 0.5rem;
+}
+
+.scope-sections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 0.55rem;
+}
+
+.scope-section-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--radius-md, 8px);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    user-select: none;
+    margin: 0;
+}
+
+.scope-section-chip:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(56, 189, 248, 0.35);
+    transform: translateY(-1px);
+}
+
+.scope-section-chip.active {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: var(--accent-blue, #38bdf8);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+}
+
+.scope-section-chip input[type="checkbox"] {
+    accent-color: var(--accent-blue, #38bdf8);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.chip-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.chip-count {
+    font-size: 0.68rem;
+    color: var(--accent-blue, #38bdf8);
+    background: rgba(56, 189, 248, 0.15);
+    padding: 2px 7px;
+    border-radius: 9999px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.scope-card {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: var(--radius-md, 8px);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.scope-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.badge-accent {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue, #38bdf8);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.scope-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.btn-xxs {
+    padding: 1px 6px;
+    font-size: 0.68rem;
+    border-radius: 4px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.btn-xxs:hover {
+    color: var(--accent-blue, #38bdf8);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.action-sep {
+    color: var(--text-tertiary);
+    font-size: 0.65rem;
+}
+
+.scope-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.scope-search-box .search-icon {
+    position: absolute;
+    inset-inline-start: 9px;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+.scope-search-input {
+    width: 100%;
+    padding: 0.4rem 0.65rem;
+    padding-inline-start: 28px;
+    font-size: 0.78rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+    border-radius: var(--radius-sm, 6px);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.scope-search-input:focus {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--accent-blue, #38bdf8);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+    outline: none;
+}
+
+.scope-resource-list {
+    max-height: 200px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+    border-radius: var(--radius-sm, 6px);
+    padding: 4px;
+}
+
+.scope-resource-item {
+    border-radius: var(--radius-sm, 6px);
+    margin-bottom: 2px;
+    transition: all 0.15s ease;
+}
+
+.scope-resource-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.scope-resource-item.selected {
+    background: rgba(56, 189, 248, 0.09);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.scope-resource-label {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.38rem 0.6rem;
+    width: 100%;
+    cursor: pointer;
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+.scope-resource-label input[type="checkbox"] {
+    accent-color: var(--accent-blue, #38bdf8);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.resource-meta {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.resource-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-sub {
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+}
+
+.resource-section-badge {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.resource-section-badge.assigned {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.resource-section-badge.unassigned {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.scope-empty-state {
+    text-align: center;
+    padding: 1.25rem 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+

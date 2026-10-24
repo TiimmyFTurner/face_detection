@@ -545,31 +545,42 @@ const UsersPage = {
                     <!-- Collapsible Supervisor Scope & Section Assignment -->
                     <div class="user-scope-accordion card-glass p-3 mb-4">
                         <div class="d-flex align-items-center justify-content-between cursor-pointer" onclick="UsersPage.toggleUserScopeSection()">
-                            <div>
-                                <span class="font-weight-bold">🏢 ${I18n.t('supervisor_scope_heading') || 'محدوده نظارت سرپرست (بخش‌ها، دوربین‌ها و پرسنل)'}</span>
-                                <small class="text-muted d-block">${I18n.t('supervisor_scope_hint') || 'برای سرپرستان و اپراتورها، بخش‌ها یا دوربین‌ها و پرسنل مجاز را تعیین کنید'}</small>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="scope-header-icon">🏢</div>
+                                <div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <strong class="text-sm font-weight-bold text-primary">${I18n.t('supervisor_scope_heading') || 'محدوده نظارت سرپرست (بخش‌ها، دوربین‌ها و پرسنل)'}</strong>
+                                        <span class="badge badge-accent text-xxs" id="scope-summary-badge" style="display: none;"></span>
+                                    </div>
+                                    <small class="text-muted text-xs d-block mt-0.5">${I18n.t('supervisor_scope_hint') || 'با انتخاب هر بخش، دوربین‌ها و پرسنل زیرمجموعه آن بلافاصله انتخاب می‌شوند.'}</small>
+                                </div>
                             </div>
-                            <span id="user-scope-arrow">${hasScope ? '▲' : '▼'}</span>
+                            <div class="scope-toggle-arrow ${hasScope ? 'expanded' : ''}" id="user-scope-arrow">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </div>
                         </div>
 
-                        <div id="user-scope-container" style="display: ${hasScope ? 'block' : 'none'}; margin-top: 1rem;">
+                        <div id="user-scope-container" style="display: ${hasScope ? 'block' : 'none'}; margin-top: 1.1rem;">
                             <!-- 1. Factory Sections Selection -->
                             <div class="mb-3">
-                                <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-                                    <label class="form-label font-weight-bold m-0">🏭 ${I18n.t('tab_sections') || 'بخش‌های تحت نظارت'}</label>
-                                    <button type="button" class="btn btn-sm btn-subtle text-xs" onclick="UsersPage.autoSelectScopeResources()">
-                                        ⚡ ${I18n.t('btn_autoselect_resources') || 'انتخاب خودکار دوربین‌ها و پرسنل بخش‌های انتخاب‌شده'}
-                                    </button>
+                                <div class="scope-section-header mb-2 d-flex justify-content-between align-items-center">
+                                    <label class="form-label font-weight-bold m-0 text-xs text-secondary d-flex align-items-center gap-1.5">
+                                        <span>🏭</span>
+                                        <span>${I18n.t('tab_sections') || 'بخش‌های کارخانه'}</span>
+                                    </label>
+                                    <span class="text-xxs text-muted">
+                                        ${I18n.isRTL() ? '⚡ انتخاب هر بخش = انتخاب آنی دوربین‌ها و پرسنل آن' : '⚡ Checking a section immediately selects its resources'}
+                                    </span>
                                 </div>
-                                <div class="d-flex flex-wrap gap-2 p-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color, #333);">
-                                    ${(this._sections || []).length === 0 ? `<span class="text-muted text-xs">هیچ بخشی تعریف نشده است.</span>` :
+                                <div class="scope-sections-grid">
+                                    ${(this._sections || []).length === 0 ? `<div class="text-muted text-xs p-2">هیچ بخشی تعریف نشده است.</div>` :
                                         (this._sections || []).map(sec => {
-                                            const checked = userAssignedSections.has(sec.name) ? 'checked' : '';
+                                            const checked = userAssignedSections.has(sec.name);
                                             return `
-                                                <label class="form-check m-0 d-flex align-items-center gap-1 cursor-pointer" style="padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.04);">
-                                                    <input type="checkbox" class="user-scope-sec-cb form-check-input m-0" value="${this._escape(sec.name)}" ${checked}>
-                                                    <span class="text-sm font-weight-bold">${this._escape(sec.name)}</span>
-                                                    <span class="badge badge-subtle text-xs">(${sec.camera_count || 0}د / ${sec.person_count || 0}ن)</span>
+                                                <label class="scope-section-chip ${checked ? 'active' : ''}">
+                                                    <input type="checkbox" class="user-scope-sec-cb" value="${this._escape(sec.name)}" ${checked ? 'checked' : ''} onchange="UsersPage.onSectionToggle('${this._escape(sec.name)}', this.checked, this)">
+                                                    <span class="chip-name">${this._escape(sec.name)}</span>
+                                                    <span class="chip-count">${sec.camera_count || 0} 📹 · ${sec.person_count || 0} 👤</span>
                                                 </label>
                                             `;
                                         }).join('')
@@ -580,64 +591,91 @@ const UsersPage = {
                             <div class="row g-3">
                                 <!-- 2. Allowed Cameras Selection -->
                                 <div class="col-md-6">
-                                    <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <label class="form-label font-weight-bold m-0 text-sm">📹 ${I18n.t('cameras') || 'دوربین‌های مجاز'}</label>
-                                        <div class="d-flex gap-1">
-                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopeCams(true)">${I18n.t('all') || 'همه'}</button>
-                                            <span class="text-muted text-xs">|</span>
-                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopeCams(false)">${I18n.t('none') || 'هیچ'}</button>
+                                    <div class="scope-card">
+                                        <div class="scope-card-header">
+                                            <div class="d-flex align-items-center gap-1.5">
+                                                <span>📹</span>
+                                                <strong class="text-xs text-primary">${I18n.t('allowed_cameras') || 'دوربین‌های مجاز'}</strong>
+                                                <span class="badge badge-accent text-xxs" id="scope-cam-count-badge">0</span>
+                                            </div>
+                                            <div class="scope-quick-actions">
+                                                <button type="button" class="btn btn-ghost btn-xxs" onclick="UsersPage.toggleAllScopeCams(true)">${I18n.t('select_all') || 'همه'}</button>
+                                                <span class="action-sep">•</span>
+                                                <button type="button" class="btn btn-ghost btn-xxs" onclick="UsersPage.toggleAllScopeCams(false)">${I18n.t('deselect_all') || 'هیچ'}</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <input type="text" class="form-control form-control-sm mb-2" placeholder="جستجوی دوربین..." oninput="UsersPage.filterScopeList(this, 'user-scope-cam-item')">
-                                    <div class="scope-resource-list" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 6px;">
-                                        ${(this._cameras || []).length === 0 ? `<div class="text-muted text-xs p-2">دوربینی یافت نشد.</div>` :
-                                            (this._cameras || []).map(cam => {
-                                                const checked = userAssignedCameras.has(cam.id) ? 'checked' : '';
-                                                return `
-                                                    <div class="form-check scope-resource-item user-scope-cam-item py-1" data-search="${this._escape(cam.name.toLowerCase())} ${cam.section ? this._escape(cam.section.toLowerCase()) : ''}">
-                                                        <label class="d-flex align-items-center justify-content-between w-100 cursor-pointer text-xs m-0">
-                                                            <div class="d-flex align-items-center gap-2">
-                                                                <input type="checkbox" class="user-scope-cam-cb form-check-input m-0" value="${cam.id}" data-section="${this._escape(cam.section || '')}" ${checked}>
-                                                                <span>${this._escape(cam.name)}</span>
-                                                            </div>
-                                                            <span class="badge ${cam.section ? 'badge-primary' : 'badge-subtle'} text-xxs">${this._escape(cam.section || 'عمومی')}</span>
-                                                        </label>
-                                                    </div>
-                                                `;
-                                            }).join('')
-                                        }
+
+                                        <div class="scope-search-box">
+                                            <span class="search-icon">🔍</span>
+                                            <input type="text" class="scope-search-input" placeholder="${I18n.t('search_cameras_placeholder') || 'جستجوی نام یا بخش دوربین...'}" oninput="UsersPage.filterScopeList(this, 'user-scope-cam-item')">
+                                        </div>
+
+                                        <div class="scope-resource-list custom-scrollbar">
+                                            ${(this._cameras || []).length === 0 ? `<div class="text-muted text-xs p-2 text-center">دوربینی یافت نشد.</div>` :
+                                                (this._cameras || []).map(cam => {
+                                                    const checked = userAssignedCameras.has(cam.id);
+                                                    return `
+                                                        <div class="scope-resource-item user-scope-cam-item ${checked ? 'selected' : ''}" data-search="${this._escape(cam.name.toLowerCase())} ${cam.section ? this._escape(cam.section.toLowerCase()) : ''}">
+                                                            <label class="scope-resource-label">
+                                                                <input type="checkbox" class="user-scope-cam-cb" value="${cam.id}" data-section="${this._escape(cam.section || '')}" ${checked ? 'checked' : ''} onchange="UsersPage.onItemCheckboxChange(this)">
+                                                                <div class="resource-meta">
+                                                                    <span class="resource-name">${this._escape(cam.name)}</span>
+                                                                </div>
+                                                                <span class="resource-section-badge ${cam.section ? 'assigned' : 'unassigned'}">
+                                                                    ${this._escape(cam.section || I18n.t('general_unassigned') || 'عمومی')}
+                                                                </span>
+                                                            </label>
+                                                        </div>
+                                                    `;
+                                                }).join('')
+                                            }
+                                        </div>
                                     </div>
                                 </div>
 
                                 <!-- 3. Allowed Persons Selection -->
                                 <div class="col-md-6">
-                                    <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <label class="form-label font-weight-bold m-0 text-sm">👤 ${I18n.t('persons') || 'پرسنل مجاز'}</label>
-                                        <div class="d-flex gap-1">
-                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopePersons(true)">${I18n.t('all') || 'همه'}</button>
-                                            <span class="text-muted text-xs">|</span>
-                                            <button type="button" class="btn btn-link text-xs p-0 text-decoration-none" onclick="UsersPage.toggleAllScopePersons(false)">${I18n.t('none') || 'هیچ'}</button>
+                                    <div class="scope-card">
+                                        <div class="scope-card-header">
+                                            <div class="d-flex align-items-center gap-1.5">
+                                                <span>👤</span>
+                                                <strong class="text-xs text-primary">${I18n.t('allowed_persons') || 'پرسنل مجاز'}</strong>
+                                                <span class="badge badge-accent text-xxs" id="scope-per-count-badge">0</span>
+                                            </div>
+                                            <div class="scope-quick-actions">
+                                                <button type="button" class="btn btn-ghost btn-xxs" onclick="UsersPage.toggleAllScopePersons(true)">${I18n.t('select_all') || 'همه'}</button>
+                                                <span class="action-sep">•</span>
+                                                <button type="button" class="btn btn-ghost btn-xxs" onclick="UsersPage.toggleAllScopePersons(false)">${I18n.t('deselect_all') || 'هیچ'}</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <input type="text" class="form-control form-control-sm mb-2" placeholder="جستجوی پرسنل..." oninput="UsersPage.filterScopeList(this, 'user-scope-per-item')">
-                                    <div class="scope-resource-list" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 6px;">
-                                        ${(this._persons || []).length === 0 ? `<div class="text-muted text-xs p-2">پرسنلی یافت نشد.</div>` :
-                                            (this._persons || []).map(p => {
-                                                const checked = userAssignedPersons.has(p.id) ? 'checked' : '';
-                                                const subText = p.person_id || p.national_id || '';
-                                                return `
-                                                    <div class="form-check scope-resource-item user-scope-per-item py-1" data-search="${this._escape(p.name.toLowerCase())} ${this._escape(subText.toLowerCase())} ${p.section ? this._escape(p.section.toLowerCase()) : ''}">
-                                                        <label class="d-flex align-items-center justify-content-between w-100 cursor-pointer text-xs m-0">
-                                                            <div class="d-flex align-items-center gap-2">
-                                                                <input type="checkbox" class="user-scope-per-cb form-check-input m-0" value="${p.id}" data-section="${this._escape(p.section || '')}" ${checked}>
-                                                                <span>${this._escape(p.name)}</span>
-                                                            </div>
-                                                            <span class="badge ${p.section ? 'badge-primary' : 'badge-subtle'} text-xxs">${this._escape(p.section || p.department || 'بدون بخش')}</span>
-                                                        </label>
-                                                    </div>
-                                                `;
-                                            }).join('')
-                                        }
+
+                                        <div class="scope-search-box">
+                                            <span class="search-icon">🔍</span>
+                                            <input type="text" class="scope-search-input" placeholder="${I18n.t('search_persons_placeholder') || 'جستجوی نام، کدملی یا بخش پرسنل...'}" oninput="UsersPage.filterScopeList(this, 'user-scope-per-item')">
+                                        </div>
+
+                                        <div class="scope-resource-list custom-scrollbar">
+                                            ${(this._persons || []).length === 0 ? `<div class="text-muted text-xs p-2 text-center">پرسنلی یافت نشد.</div>` :
+                                                (this._persons || []).map(p => {
+                                                    const checked = userAssignedPersons.has(p.id);
+                                                    const subText = p.person_id || p.national_id || '';
+                                                    return `
+                                                        <div class="scope-resource-item user-scope-per-item ${checked ? 'selected' : ''}" data-search="${this._escape(p.name.toLowerCase())} ${this._escape(subText.toLowerCase())} ${p.section ? this._escape(p.section.toLowerCase()) : ''}">
+                                                            <label class="scope-resource-label">
+                                                                <input type="checkbox" class="user-scope-per-cb" value="${p.id}" data-section="${this._escape(p.section || '')}" ${checked ? 'checked' : ''} onchange="UsersPage.onItemCheckboxChange(this)">
+                                                                <div class="resource-meta">
+                                                                    <span class="resource-name">${this._escape(p.name)}</span>
+                                                                    ${p.role ? `<span class="resource-sub">${this._escape(p.role)}</span>` : ''}
+                                                                </div>
+                                                                <span class="resource-section-badge ${p.section ? 'assigned' : 'unassigned'}">
+                                                                    ${this._escape(p.section || p.department || I18n.t('general_unassigned') || 'بدون بخش')}
+                                                                </span>
+                                                            </label>
+                                                        </div>
+                                                    `;
+                                                }).join('')
+                                            }
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -647,14 +685,19 @@ const UsersPage = {
                     <!-- Collapsible Custom Permissions Override -->
                     <div class="custom-perms-accordion card-glass p-3 mb-4">
                         <div class="d-flex align-items-center justify-content-between cursor-pointer" onclick="UsersPage.toggleCustomPermsSection()">
-                            <div>
-                                <span class="font-weight-bold">⚡ ${I18n.t('custom_permissions_override') || 'دسترسی‌های اختصاصی اضافه بر نقش'}</span>
-                                <small class="text-muted d-block">${I18n.t('custom_perms_hint') || 'این دسترسی‌ها علاوه بر دسترسی‌های نقش به کاربر اعطا خواهند شد'}</small>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="scope-header-icon" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25);">⚡</div>
+                                <div>
+                                    <strong class="text-sm font-weight-bold text-primary">${I18n.t('custom_permissions_override') || 'دسترسی‌های اختصاصی اضافه بر نقش'}</strong>
+                                    <small class="text-muted text-xs d-block mt-0.5">${I18n.t('custom_perms_hint') || 'این دسترسی‌ها علاوه بر دسترسی‌های نقش به کاربر اعطا خواهند شد'}</small>
+                                </div>
                             </div>
-                            <span id="custom-perms-arrow">▼</span>
+                            <div class="scope-toggle-arrow ${userCustomPerms.size > 0 ? 'expanded' : ''}" id="custom-perms-arrow">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </div>
                         </div>
 
-                        <div id="custom-perms-container" style="display: ${userCustomPerms.size > 0 ? 'block' : 'none'}; margin-top: 1rem;">
+                        <div id="custom-perms-container" style="display: ${userCustomPerms.size > 0 ? 'block' : 'none'}; margin-top: 1.1rem;">
                             ${permsMatrixHtml}
                         </div>
                     </div>
@@ -671,6 +714,7 @@ const UsersPage = {
         `;
 
         App.openModal(modalHtml, 'modal-wide');
+        setTimeout(() => this.updateScopeCounters(), 0);
     },
 
     toggleUserScopeSection() {
@@ -679,59 +723,7 @@ const UsersPage = {
         if (!cont) return;
         const isHidden = cont.style.display === 'none';
         cont.style.display = isHidden ? 'block' : 'none';
-        if (arrow) arrow.textContent = isHidden ? '▲' : '▼';
-    },
-
-    toggleAllScopeCams(check) {
-        document.querySelectorAll('.user-scope-cam-cb').forEach(cb => {
-            cb.checked = check;
-        });
-    },
-
-    toggleAllScopePersons(check) {
-        document.querySelectorAll('.user-scope-per-cb').forEach(cb => {
-            cb.checked = check;
-        });
-    },
-
-    filterScopeList(inputEl, itemClass) {
-        const term = (inputEl.value || '').trim().toLowerCase();
-        document.querySelectorAll('.' + itemClass).forEach(el => {
-            const searchData = el.getAttribute('data-search') || '';
-            el.style.display = searchData.includes(term) ? '' : 'none';
-        });
-    },
-
-    autoSelectScopeResources() {
-        const checkedSections = new Set();
-        document.querySelectorAll('.user-scope-sec-cb:checked').forEach(cb => {
-            checkedSections.add(cb.value);
-        });
-
-        if (checkedSections.size === 0) {
-            App.showToast('ابتدا حداقل یک بخش را علامت بزنید.', 'warning');
-            return;
-        }
-
-        let camCount = 0;
-        document.querySelectorAll('.user-scope-cam-cb').forEach(cb => {
-            const sec = cb.getAttribute('data-section');
-            if (sec && checkedSections.has(sec)) {
-                cb.checked = true;
-                camCount++;
-            }
-        });
-
-        let perCount = 0;
-        document.querySelectorAll('.user-scope-per-cb').forEach(cb => {
-            const sec = cb.getAttribute('data-section');
-            if (sec && checkedSections.has(sec)) {
-                cb.checked = true;
-                perCount++;
-            }
-        });
-
-        App.showToast(`${camCount} دوربین و ${perCount} پرسنل متعلق به بخش‌های انتخابی علامت خوردند.`, 'info');
+        if (arrow) arrow.classList.toggle('expanded', isHidden);
     },
 
     toggleCustomPermsSection() {
@@ -740,8 +732,138 @@ const UsersPage = {
         if (!cont) return;
         const isHidden = cont.style.display === 'none';
         cont.style.display = isHidden ? 'block' : 'none';
-        if (arrow) arrow.textContent = isHidden ? '▲' : '▼';
+        if (arrow) arrow.classList.toggle('expanded', isHidden);
     },
+
+    onSectionToggle(sectionName, isChecked, inputEl) {
+        if (!sectionName) return;
+        const secTrimmed = sectionName.trim();
+
+        if (inputEl) {
+            const chip = inputEl.closest('.scope-section-chip');
+            if (chip) chip.classList.toggle('active', isChecked);
+        }
+
+        let camCount = 0;
+        document.querySelectorAll('.user-scope-cam-cb').forEach(cb => {
+            const camSec = (cb.getAttribute('data-section') || '').trim();
+            if (camSec === secTrimmed) {
+                cb.checked = isChecked;
+                const item = cb.closest('.scope-resource-item');
+                if (item) item.classList.toggle('selected', isChecked);
+                camCount++;
+            }
+        });
+
+        let perCount = 0;
+        document.querySelectorAll('.user-scope-per-cb').forEach(cb => {
+            const perSec = (cb.getAttribute('data-section') || '').trim();
+            if (perSec === secTrimmed) {
+                cb.checked = isChecked;
+                const item = cb.closest('.scope-resource-item');
+                if (item) item.classList.toggle('selected', isChecked);
+                perCount++;
+            }
+        });
+
+        this.updateScopeCounters();
+
+        if (isChecked && (camCount > 0 || perCount > 0)) {
+            App.showToast(
+                I18n.isRTL()
+                    ? `بخش «${secTrimmed}» انتخاب شد (${camCount} دوربین و ${perCount} پرسنل علامت خوردند)`
+                    : `Section "${secTrimmed}" selected (${camCount} cameras & ${perCount} staff selected)`,
+                'info'
+            );
+        }
+    },
+
+    onItemCheckboxChange(inputEl) {
+        if (!inputEl) return;
+        const item = inputEl.closest('.scope-resource-item');
+        if (item) item.classList.toggle('selected', inputEl.checked);
+        this.updateScopeCounters();
+    },
+
+    updateScopeCounters() {
+        const totalCams = document.querySelectorAll('.user-scope-cam-cb').length;
+        const selCams = document.querySelectorAll('.user-scope-cam-cb:checked').length;
+        const totalPers = document.querySelectorAll('.user-scope-per-cb').length;
+        const selPers = document.querySelectorAll('.user-scope-per-cb:checked').length;
+        const selSecs = document.querySelectorAll('.user-scope-sec-cb:checked').length;
+
+        const camBadge = document.getElementById('scope-cam-count-badge');
+        if (camBadge) {
+            camBadge.textContent = I18n.t('scope_cameras_selected', { count: selCams, total: totalCams });
+        }
+
+        const perBadge = document.getElementById('scope-per-count-badge');
+        if (perBadge) {
+            perBadge.textContent = I18n.t('scope_persons_selected', { count: selPers, total: totalPers });
+        }
+
+        const summaryBadge = document.getElementById('scope-summary-badge');
+        if (summaryBadge) {
+            if (selSecs > 0 || selCams > 0 || selPers > 0) {
+                summaryBadge.style.display = 'inline-block';
+                summaryBadge.textContent = I18n.isRTL()
+                    ? `${selSecs} بخش · ${selCams} دوربین · ${selPers} پرسنل`
+                    : `${selSecs} sections · ${selCams} cams · ${selPers} staff`;
+            } else {
+                summaryBadge.style.display = 'none';
+            }
+        }
+    },
+
+    toggleAllScopeCams(check) {
+        document.querySelectorAll('.user-scope-cam-cb').forEach(cb => {
+            const item = cb.closest('.scope-resource-item');
+            if (!item || item.style.display !== 'none') {
+                cb.checked = check;
+                if (item) item.classList.toggle('selected', check);
+            }
+        });
+        this.updateScopeCounters();
+    },
+
+    toggleAllScopePersons(check) {
+        document.querySelectorAll('.user-scope-per-cb').forEach(cb => {
+            const item = cb.closest('.scope-resource-item');
+            if (!item || item.style.display !== 'none') {
+                cb.checked = check;
+                if (item) item.classList.toggle('selected', check);
+            }
+        });
+        this.updateScopeCounters();
+    },
+
+    filterScopeList(inputEl, itemClass) {
+        const term = (inputEl.value || '').trim().toLowerCase();
+        let visibleCount = 0;
+        document.querySelectorAll('.' + itemClass).forEach(el => {
+            const searchData = el.getAttribute('data-search') || '';
+            const match = !term || searchData.includes(term);
+            el.style.display = match ? '' : 'none';
+            if (match) visibleCount++;
+        });
+
+        const container = inputEl.closest('.scope-card')?.querySelector('.scope-resource-list');
+        if (container) {
+            let emptyEl = container.querySelector('.scope-empty-state');
+            if (visibleCount === 0) {
+                if (!emptyEl) {
+                    emptyEl = document.createElement('div');
+                    emptyEl.className = 'scope-empty-state';
+                    emptyEl.textContent = itemClass.includes('cam') ? I18n.t('no_cameras_found') : I18n.t('no_persons_found');
+                    container.appendChild(emptyEl);
+                }
+                emptyEl.style.display = 'block';
+            } else if (emptyEl) {
+                emptyEl.style.display = 'none';
+            }
+        }
+    },
+
 
     async _saveUser(e, userId) {
         e.preventDefault();

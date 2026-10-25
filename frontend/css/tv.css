@@ -540,74 +540,68 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     box-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
 }
 
-/* Card Header (Photo + Name + Badges + Station) */
+/* Card Header (Name + Status Dot + Badges + Station) */
 .tv-card-header {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.tv-avatar-wrap {
-    position: relative;
-    flex: 0 0 auto;
-    width: 46px;
-    height: 46px;
-}
-
-.tv-avatar-img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-    background: #1e293b;
-    border: 2px solid var(--tv-border);
-}
-
-.tv-card.status-present .tv-avatar-img {
-    border-color: var(--tv-emerald);
-    box-shadow: 0 0 10px var(--tv-emerald-glow);
-}
-
-.tv-card.status-absent .tv-avatar-img {
-    border-color: var(--tv-rose);
-    box-shadow: 0 0 12px var(--tv-rose-glow);
-}
-
-.tv-card.status-on_break .tv-avatar-img {
-    border-color: var(--tv-amber);
-}
-
+/* Explicitly hide any person pictures / avatars on TV screen cards */
+.tv-avatar-wrap,
+.tv-avatar-img,
 .tv-avatar-placeholder {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
+    display: none !important;
+}
+
+.tv-name-cluster {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 1.35rem;
-    background: #1e293b;
-    border: 2px solid var(--tv-border);
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
-.tv-status-badge-dot {
-    position: absolute;
-    bottom: -1px;
-    right: -1px;
-    width: 13px;
-    height: 13px;
+.tv-status-indicator {
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    border: 2px solid var(--tv-bg-card);
+    flex-shrink: 0;
+    display: inline-block;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-body[dir="ltr"] .tv-status-badge-dot {
-    right: auto;
-    left: -1px;
+.tv-status-indicator.status-present {
+    background: var(--tv-emerald);
+    box-shadow: 0 0 8px var(--tv-emerald-glow);
 }
 
-.status-present .tv-status-badge-dot { background: var(--tv-emerald); box-shadow: 0 0 8px var(--tv-emerald); }
-.status-absent .tv-status-badge-dot { background: var(--tv-rose); box-shadow: 0 0 8px var(--tv-rose); }
-.status-on_break .tv-status-badge-dot { background: var(--tv-amber); }
-.status-camera_offline .tv-status-badge-dot { background: #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5); }
+.tv-status-indicator.status-absent {
+    background: var(--tv-rose);
+    box-shadow: 0 0 10px var(--tv-rose-glow);
+    animation: tv-pulse-red 1.6s infinite ease-in-out;
+}
+
+.tv-status-indicator.status-on_break {
+    background: var(--tv-amber);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.tv-status-indicator.status-camera_offline {
+    background: #eab308;
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);
+}
+
+@keyframes tv-pulse-red {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 8px var(--tv-rose-glow);
+    }
+    50% {
+        transform: scale(1.22);
+        box-shadow: 0 0 14px var(--tv-rose);
+    }
+}
 
 .tv-card-meta {
     flex: 1 1 auto;
@@ -908,26 +902,9 @@ body[dir="ltr"] .tv-status-badge-dot {
     gap: 18px;
 }
 
-.tv-roster-grid.is-single-card .tv-avatar-wrap {
-    width: 84px;
-    height: 84px;
-}
-
-.tv-roster-grid.is-single-card .tv-avatar-placeholder {
-    font-size: 2.6rem;
-}
-
-.tv-roster-grid.is-single-card .tv-status-badge-dot {
-    width: 20px;
-    height: 20px;
-    border-width: 3px;
-    bottom: 0;
-    right: 0;
-}
-
-body[dir="ltr"] .tv-roster-grid.is-single-card .tv-status-badge-dot {
-    right: auto;
-    left: 0;
+.tv-roster-grid.is-single-card .tv-status-indicator {
+    width: 16px;
+    height: 16px;
 }
 
 .tv-roster-grid.is-single-card .tv-person-name {
@@ -1054,18 +1031,9 @@ body[dir="ltr"] .tv-roster-grid.is-single-card .tv-status-badge-dot {
     gap: 14px;
 }
 
-.tv-roster-grid.is-two-cards .tv-avatar-wrap {
-    width: 68px;
-    height: 68px;
-}
-
-.tv-roster-grid.is-two-cards .tv-avatar-placeholder {
-    font-size: 2.1rem;
-}
-
-.tv-roster-grid.is-two-cards .tv-status-badge-dot {
-    width: 17px;
-    height: 17px;
+.tv-roster-grid.is-two-cards .tv-status-indicator {
+    width: 14px;
+    height: 14px;
 }
 
 .tv-roster-grid.is-two-cards .tv-person-name {
@@ -1138,9 +1106,9 @@ body[dir="ltr"] .tv-roster-grid.is-single-card .tv-status-badge-dot {
     gap: 12px;
 }
 
-.tv-roster-grid.is-three-cards .tv-avatar-wrap {
-    width: 58px;
-    height: 58px;
+.tv-roster-grid.is-three-cards .tv-status-indicator {
+    width: 12px;
+    height: 12px;
 }
 
 .tv-roster-grid.is-three-cards .tv-person-name {
@@ -1183,9 +1151,9 @@ body[dir="ltr"] .tv-roster-grid.is-single-card .tv-status-badge-dot {
     border-radius: 14px;
 }
 
-.tv-roster-grid.is-four-cards .tv-avatar-wrap {
-    width: 52px;
-    height: 52px;
+.tv-roster-grid.is-four-cards .tv-status-indicator {
+    width: 11px;
+    height: 11px;
 }
 
 .tv-roster-grid.is-four-cards .tv-person-name {

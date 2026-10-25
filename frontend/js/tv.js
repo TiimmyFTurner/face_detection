@@ -542,10 +542,6 @@ const TVBoard = {
             }
         }
 
-        const avatarMarkup = person.avatar_url
-            ? `<img class="tv-avatar-img" src="${person.avatar_url}" alt="${person.person_name}" onerror="this.outerHTML='<div class=\\'tv-avatar-placeholder\\'>👤</div>'">`
-            : `<div class="tv-avatar-placeholder">👤</div>`;
-
         const compliance = Math.round(person.shift_compliance_pct ?? 100);
         const compColor = compliance >= 90 ? 'var(--tv-emerald)' : (compliance >= 70 ? 'var(--tv-amber)' : 'var(--tv-rose)');
 
@@ -557,13 +553,12 @@ const TVBoard = {
         return `
             <div class="tv-card status-${person.status}">
                 <div class="tv-card-header">
-                    <div class="tv-avatar-wrap">
-                        ${avatarMarkup}
-                        <div class="tv-status-badge-dot"></div>
-                    </div>
                     <div class="tv-card-meta">
                         <div class="tv-name-row">
-                            <span class="tv-person-name" title="${person.person_name}">${person.person_name}</span>
+                            <div class="tv-name-cluster">
+                                <span class="tv-status-indicator status-${person.status}"></span>
+                                <span class="tv-person-name" title="${person.person_name}">${person.person_name}</span>
+                            </div>
                             ${person.person_id ? `<span class="tv-id-badge" title="${this.t('personnel_id')} ${person.person_id}">#${this.toDigits(person.person_id)}</span>` : ''}
                         </div>
                         <div class="tv-role-row">

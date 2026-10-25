@@ -69,6 +69,15 @@ const App = {
         if (typeof DutyPage !== 'undefined' && DutyPage.cleanup) {
             DutyPage.cleanup();
         }
+        if (typeof SupervisorCockpit !== 'undefined' && SupervisorCockpit.cleanup) {
+            SupervisorCockpit.cleanup();
+        }
+
+        // Strict Supervisor Lockdown: Only allow dashboard
+        if (typeof Auth !== 'undefined' && Auth.isSupervisor() && page !== 'dashboard') {
+            App.showToast(I18n.t('supervisor_dashboard_only') || 'سرپرست فقط به پیشخوان دسترسی دارد.', 'info');
+            page = 'dashboard';
+        }
 
         // Permission check
         if (typeof Auth !== 'undefined' && Auth.isAuthenticated()) {
@@ -131,7 +140,8 @@ const App = {
     // ─── WebSocket Connection ──────────────────────────────
     connectWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/events`;
+        const token = (typeof Auth !== 'undefined' && Auth.getToken()) ? Auth.getToken() : '';
+        const wsUrl = `${protocol}//${window.location.host}/ws/events${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
         try {
             App._ws = new WebSocket(wsUrl);
@@ -145,6 +155,34 @@ const App = {
             App._ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    const isSup = typeof Auth !== 'undefined' && Auth.isSupervisor();
+
+                    // If supervisor, only process events & notifications for assigned persons
+                    if (isSup) {
+                        const ev = data.event || {};
+                        const personId = ev.person_id || data.person_id;
+                        const camId = ev.camera_id || data.camera_id;
+
+                        if (typeof SupervisorCockpit !== 'undefined' && typeof SupervisorCockpit.isPersonAssigned === 'function') {
+                            if (!SupervisorCockpit.isPersonAssigned(personId, camId)) {
+                                return; // Silently drop notifications for unassigned persons
+                            }
+                        }
+
+                        if (data.type === 'zone_alert') {
+                            App.showZoneAlert(data);
+                            if (typeof SupervisorCockpit !== 'undefined' && SupervisorCockpit.fetchData) {
+                                SupervisorCockpit.fetchData(true);
+                            }
+                        } else if (data.type === 'new_event') {
+                            if (typeof SupervisorCockpit !== 'undefined' && SupervisorCockpit.fetchData) {
+                                SupervisorCockpit.fetchData(true);
+                            }
+                        }
+                        return;
+                    }
+
+                    // Standard (Admin / All-access) handling
                     if (data.type === 'new_event') {
                         DashboardPage.addRealtimeEvent(data.event);
                         if (data.event && (data.event.alert_type === 'out_of_zone' || data.event.alert_type === 'unauthorized_entry' || data.event.alert_type === 'absence_timeout' || data.event.alert_type === 'camera_disconnected')) {
@@ -397,6 +435,18 @@ const App = {
     },
 
     showZoneAlert(data) {
+        // If logged in as supervisor, only play audio & show toast for assigned persons
+        if (typeof Auth !== 'undefined' && Auth.isSupervisor()) {
+            const ev = data.event || {};
+            const personId = ev.person_id || data.person_id;
+            const camId = ev.camera_id || data.camera_id;
+            if (typeof SupervisorCockpit !== 'undefined' && typeof SupervisorCockpit.isPersonAssigned === 'function') {
+                if (!SupervisorCockpit.isPersonAssigned(personId, camId)) {
+                    return; // Dropped: person not assigned to this supervisor
+                }
+            }
+        }
+
         const localizedMsg = (typeof I18n !== 'undefined' && I18n.formatAlertNotification)
             ? I18n.formatAlertNotification(data)
             : (data.message || '⚠️ Zone Alert');
@@ -418,6 +468,26 @@ const App = {
         } catch (e) {
             // Audio context muted / blocked by browser policy
         }
+    },
+
+    escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    },
+
+    escapeAttr(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/'/g, '&#39;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     },
 };
 

@@ -167,6 +167,12 @@ const DashboardPage = {
      * Load and render the dashboard page.
      */
     async load() {
+        if (typeof Auth !== 'undefined' && Auth.isSupervisor()) {
+            if (typeof SupervisorCockpit !== 'undefined' && SupervisorCockpit.load) {
+                return SupervisorCockpit.load();
+            }
+        }
+
         document.getElementById('page-title').textContent = I18n.t('dashboard_title');
         document.getElementById('header-actions').innerHTML = `
             <div style="display: flex; align-items: center; gap: 0.65rem;">

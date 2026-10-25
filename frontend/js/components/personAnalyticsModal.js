@@ -238,7 +238,7 @@ const PersonAnalyticsModal = {
                     </div>
                 </div>
 
-                <div class="kpi-card emerald">
+                <div class="kpi-card ${comp.compliance_rate >= 85 ? 'emerald' : (comp.compliance_rate >= 70 ? 'amber' : 'rose')}">
                     <div class="kpi-icon">⏰</div>
                     <div class="kpi-content">
                         <div class="kpi-value">${complianceStr}%</div>
@@ -538,7 +538,7 @@ const PersonAnalyticsModal = {
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1rem;">
                     <div class="info-block" style="background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); text-align: center;">
-                        <div style="font-size: 1.8rem; font-weight: 900; color: var(--accent-emerald);">${isFa ? I18n.toPersianDigits(comp.compliance_rate) : comp.compliance_rate}%</div>
+                        <div style="font-size: 1.8rem; font-weight: 900; color: ${comp.compliance_rate >= 85 ? 'var(--accent-emerald)' : (comp.compliance_rate >= 70 ? 'var(--accent-amber)' : 'var(--accent-rose)')};">${isFa ? I18n.toPersianDigits(comp.compliance_rate) : comp.compliance_rate}%</div>
                         <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-top: 0.3rem;">${I18n.t('kpi_shift_compliance')}</div>
                         <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.2rem;">${comp.present_shift_days} / ${comp.scheduled_shift_days} ${isFa ? 'روز حضور' : 'days present'}</div>
                     </div>

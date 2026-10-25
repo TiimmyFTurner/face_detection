@@ -219,6 +219,23 @@ class PersonPhotoItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class LeaveCreate(BaseModel):
+    start_date: str = Field(..., description="Start date (YYYY-MM-DD)")
+    end_date: str = Field(..., description="End date (YYYY-MM-DD)")
+    leave_type: str = Field("daily_leave", description="daily_leave | off_duty | sick | other")
+    note: str = Field("", description="Optional note or reason")
+
+
+class LeaveRecord(BaseModel):
+    id: str
+    start_date: str
+    end_date: str
+    leave_type: str = "daily_leave"
+    note: str = ""
+    created_at: str
+    created_by: str = ""
+
+
 class PersonResponse(BaseModel):
     """Schema for person API responses."""
     id: int
@@ -227,6 +244,7 @@ class PersonResponse(BaseModel):
     section: str = ""
     shift_template_id: Optional[int] = None
     custom_shift: Optional[dict] = None
+    leaves: list[dict] = []
     embedding_count: int = 0
     reference_photos: list[str] = []
     photos: list[PersonPhotoItem] = []
@@ -567,6 +585,7 @@ class DutyRosterResponse(BaseModel):
     absent_count: int
     camera_offline_count: int = 0
     on_break_count: int = 0
+    on_leave_count: int = 0
     total_absence_incidents: int = 0
     total_shift_absence_minutes: int
     total_shift_absence_str: str

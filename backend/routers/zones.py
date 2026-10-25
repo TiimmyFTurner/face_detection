@@ -515,7 +515,7 @@ async def compute_duty_roster_data(
                 person_role = person.role if person else None
                 avatar_url = avatar_map.get(pid)
 
-                # Resolve rotational shift if assigned to this person
+                # Resolve shift for this person: supervisor shift (custom or template) overrides zone defaults
                 cur_in_schedule = in_schedule
                 cur_shift_start_dt = shift_start_dt
                 cur_shift_end_dt = shift_end_dt
@@ -526,33 +526,95 @@ async def compute_duty_roster_data(
                 cur_elapsed_shift_mins = elapsed_shift_mins
                 cur_shift_name = s_name
                 cur_is_overnight = is_overnight
+                cur_grace = s_grace
+                cur_timeout = s_timeout
+                cur_days = s_days
+                person_breaks = []
                 rot_state = None
 
                 if person:
-                    rot_pattern = None
+                    # 1. Custom shift set directly by supervisor
                     if person.custom_shift and isinstance(person.custom_shift, dict):
-                        if person.custom_shift.get("shift_type") in ("rotational", "rotation"):
-                            rot_pattern = person.custom_shift.get("rotation_pattern")
+                        cs = person.custom_shift
+                        shift_kind = cs.get("shift_type", "fixed")
+                        rot_pattern = cs.get("rotation_pattern") if shift_kind in ("rotational", "rotation") else None
+
+                        if rot_pattern and isinstance(rot_pattern, dict):
+                            rot_state = get_rotation_day_state(rot_pattern, now_local)
+                            cur_shift_name = rot_state.get("shift_name", "نوبت‌کاری چرخشی")
+                            cur_shift_window_str = rot_state.get("time_range", shift_window_str)
+                            cur_in_schedule = rot_state.get("is_active_now", False)
+                            cur_is_overnight = rot_state.get("is_overnight", False)
+                            cur_elapsed_shift_mins = rot_state.get("elapsed_minutes", 0)
+                            if rot_state.get("shift_start"):
+                                cur_shift_start_dt = rot_state["shift_start"]
+                                cur_start_str = cur_shift_start_dt.strftime("%H:%M")
+                            if rot_state.get("shift_end"):
+                                cur_shift_end_dt = rot_state["shift_end"]
+                                cur_end_str = cur_shift_end_dt.strftime("%H:%M")
+                            if cur_shift_start_dt and cur_shift_end_dt:
+                                cur_dur_h = max(0.1, round((cur_shift_end_dt - cur_shift_start_dt).total_seconds() / 3600.0, 1))
+                        else:
+                            p_start = str(cs.get("start_time") or "08:00").strip()
+                            p_end = str(cs.get("end_time") or "17:00").strip()
+                            p_days = _parse_list_field(cs.get("active_days"), ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu"])
+                            cur_days = p_days
+                            cur_in_schedule, cur_shift_start_dt, cur_shift_end_dt, cur_is_overnight, cur_dur_h, cur_elapsed_shift_mins = get_shift_window(
+                                p_start, p_end, p_days, now_local
+                            )
+                            cur_start_str = p_start
+                            cur_end_str = p_end
+                            cur_shift_window_str = f"{p_start} - {p_end}"
+                            cur_shift_name = cs.get("name") or "شیفت سفارشی"
+
+                        if cs.get("grace_period_minutes") is not None:
+                            cur_grace = int(cs["grace_period_minutes"])
+                        if cs.get("absence_timeout_minutes") is not None:
+                            cur_timeout = int(cs["absence_timeout_minutes"])
+                        person_breaks = _parse_list_field(cs.get("free_times"), [])
+
+                    # 2. Shift template assigned by supervisor
                     elif person.shift_template_id and person.shift_template_id in shift_templates_map:
                         st = shift_templates_map[person.shift_template_id]
                         if getattr(st, "shift_type", "fixed") in ("rotational", "rotation") and st.rotation_pattern:
                             rot_pattern = st.rotation_pattern
+                            if rot_pattern and isinstance(rot_pattern, dict):
+                                rot_state = get_rotation_day_state(rot_pattern, now_local)
+                                cur_shift_name = rot_state.get("shift_name", st.name)
+                                cur_shift_window_str = rot_state.get("time_range", shift_window_str)
+                                cur_in_schedule = rot_state.get("is_active_now", False)
+                                cur_is_overnight = rot_state.get("is_overnight", False)
+                                cur_elapsed_shift_mins = rot_state.get("elapsed_minutes", 0)
+                                if rot_state.get("shift_start"):
+                                    cur_shift_start_dt = rot_state["shift_start"]
+                                    cur_start_str = cur_shift_start_dt.strftime("%H:%M")
+                                if rot_state.get("shift_end"):
+                                    cur_shift_end_dt = rot_state["shift_end"]
+                                    cur_end_str = cur_shift_end_dt.strftime("%H:%M")
+                                if cur_shift_start_dt and cur_shift_end_dt:
+                                    cur_dur_h = max(0.1, round((cur_shift_end_dt - cur_shift_start_dt).total_seconds() / 3600.0, 1))
+                        else:
+                            p_start = str(st.start_time or "08:00").strip()
+                            p_end = str(st.end_time or "17:00").strip()
+                            p_days = _parse_list_field(st.active_days, ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu"])
+                            cur_days = p_days
+                            cur_in_schedule, cur_shift_start_dt, cur_shift_end_dt, cur_is_overnight, cur_dur_h, cur_elapsed_shift_mins = get_shift_window(
+                                p_start, p_end, p_days, now_local
+                            )
+                            cur_start_str = p_start
+                            cur_end_str = p_end
+                            cur_shift_window_str = f"{p_start} - {p_end}"
+                            cur_shift_name = st.name
 
-                    if rot_pattern and isinstance(rot_pattern, dict):
-                        rot_state = get_rotation_day_state(rot_pattern, now_local)
-                        cur_shift_name = rot_state.get("shift_name", s_name)
-                        cur_shift_window_str = rot_state.get("time_range", shift_window_str)
-                        cur_in_schedule = rot_state.get("is_active_now", False)
-                        cur_is_overnight = rot_state.get("is_overnight", False)
-                        cur_elapsed_shift_mins = rot_state.get("elapsed_minutes", 0)
-                        if rot_state.get("shift_start"):
-                            cur_shift_start_dt = rot_state["shift_start"]
-                            cur_start_str = cur_shift_start_dt.strftime("%H:%M")
-                        if rot_state.get("shift_end"):
-                            cur_shift_end_dt = rot_state["shift_end"]
-                            cur_end_str = cur_shift_end_dt.strftime("%H:%M")
-                        if cur_shift_start_dt and cur_shift_end_dt:
-                            cur_dur_h = max(0.1, round((cur_shift_end_dt - cur_shift_start_dt).total_seconds() / 3600.0, 1))
+                        if getattr(st, "grace_period_minutes", None) is not None:
+                            cur_grace = int(st.grace_period_minutes)
+                        if getattr(st, "absence_timeout_minutes", None) is not None:
+                            cur_timeout = int(st.absence_timeout_minutes)
+                        person_breaks = _parse_list_field(st.free_times, [])
+                    elif person.shift_template_id == 0 and not person.custom_shift:
+                        # Explicitly set to floating/flexible shift
+                        cur_shift_name = "شیفت شناور"
+                        cur_shift_window_str = "شناور"
 
                 if only_active and not cur_in_schedule:
                     continue
@@ -564,22 +626,35 @@ async def compute_duty_roster_data(
                 shift_start_ts = cur_shift_start_dt.timestamp() if cur_shift_start_dt else 0
                 seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
-                # Check person-specific breaks in addition to zone breaks
-                person_breaks = []
-                if person:
-                    if person.custom_shift and isinstance(person.custom_shift, dict):
-                        person_breaks = _parse_list_field(person.custom_shift.get("free_times"), [])
-                    elif person.shift_template_id and person.shift_template_id in shift_templates_map:
-                        st = shift_templates_map[person.shift_template_id]
-                        if st and getattr(st, "free_times", None):
-                            person_breaks = _parse_list_field(st.free_times, [])
-
                 combined_free = list(s_free) + person_breaks
                 cur_in_free_time, cur_break_name = is_time_in_free_time(combined_free, now_local)
                 is_within_grace = False
-                timeout_secs = float(s_timeout * 60)
+                timeout_secs = float(cur_timeout * 60)
+                s_timeout = cur_timeout
+                s_grace = cur_grace
+                s_days = cur_days
 
-                if rot_state and rot_state.get("shift_kind") == "off":
+                today_str = now_local.strftime("%Y-%m-%d")
+                is_on_leave = False
+                leave_record = None
+                if person and getattr(person, "leaves", None):
+                    for l in person.leaves:
+                        if isinstance(l, dict):
+                            s_date = str(l.get("start_date", "")).strip()
+                            e_date = str(l.get("end_date", "")).strip() or s_date
+                            if s_date <= today_str <= e_date:
+                                is_on_leave = True
+                                leave_record = l
+                                break
+
+                if is_on_leave:
+                    status_str = "on_leave"
+                    is_in_zone = False
+                    last_seen_sec = None
+                    l_type_fa = "مرخصی" if leave_record.get("leave_type") == "daily_leave" else ("استعلاجی" if leave_record.get("leave_type") == "sick" else "آف شیفت")
+                    last_seen_str = f"مرخصی / آف ({l_type_fa})"
+                    curr_absence_mins = 0
+                elif rot_state and rot_state.get("shift_kind") == "off":
                     status_str = "off_duty"
                     is_in_zone = False
                     last_seen_sec = None
@@ -839,6 +914,7 @@ async def compute_duty_roster_data(
     absent_count = len([r for r in roster if r.status == "absent"])
     camera_offline_count = len([r for r in roster if r.status == "camera_offline"])
     on_break_count = len([r for r in roster if r.status == "on_break"])
+    on_leave_count = len([r for r in roster if r.status == "on_leave"])
     total_absence_incidents = sum(r.absence_count for r in roster)
     total_shift_absence_minutes = sum(r.shift_absence_minutes for r in roster)
     avg_compliance = round(sum(r.shift_compliance_pct for r in roster) / len(roster), 1) if roster else 100.0
@@ -850,6 +926,7 @@ async def compute_duty_roster_data(
         absent_count=absent_count,
         camera_offline_count=camera_offline_count,
         on_break_count=on_break_count,
+        on_leave_count=on_leave_count,
         total_absence_incidents=total_absence_incidents,
         total_shift_absence_minutes=total_shift_absence_minutes,
         total_shift_absence_str=_format_duration(total_shift_absence_minutes * 60),
@@ -878,17 +955,22 @@ async def get_duty_roster(
             if (scope.person_ids and r.person_id in scope.person_ids) or
                (scope.camera_ids and r.camera_id in scope.camera_ids)
         ]
-        duty_data.total_scheduled = len(duty_data.roster)
-        duty_data.on_duty_count = sum(1 for r in duty_data.roster if r.status in ("present", "absent", "on_break"))
-        duty_data.absent_count = sum(1 for r in duty_data.roster if r.status == "absent")
-        duty_data.on_station_count = sum(1 for r in duty_data.roster if r.status == "present")
-        duty_data.offline_camera_count = sum(1 for r in duty_data.roster if r.status == "camera_offline")
-        if duty_data.roster:
-            duty_data.compliance_rate = round(
-                sum(r.compliance_rate for r in duty_data.roster) / len(duty_data.roster), 1
-            )
-        else:
-            duty_data.compliance_rate = 100.0
+        duty_data.total_on_duty = len([r for r in duty_data.roster if r.is_in_duty_hours])
+        duty_data.present_count = len([r for r in duty_data.roster if r.status == "present"])
+        duty_data.absent_count = len([r for r in duty_data.roster if r.status == "absent"])
+        duty_data.camera_offline_count = len([r for r in duty_data.roster if r.status == "camera_offline"])
+        duty_data.on_break_count = len([r for r in duty_data.roster if r.status == "on_break"])
+        duty_data.on_leave_count = len([r for r in duty_data.roster if r.status == "on_leave"])
+        duty_data.total_absence_incidents = sum(r.absence_count for r in duty_data.roster)
+        duty_data.total_shift_absence_minutes = sum(r.shift_absence_minutes for r in duty_data.roster)
+        duty_data.avg_compliance_pct = round(
+            sum(r.shift_compliance_pct for r in duty_data.roster) / len(duty_data.roster), 1
+        ) if duty_data.roster else 100.0
+
+    # Redact avatar photo URLs for supervisor role
+    if getattr(_user, "role", None) and _user.role.name == "supervisor":
+        for r in duty_data.roster:
+            r.avatar_url = None
 
     return duty_data
 
@@ -1150,6 +1232,7 @@ async def create_shift_template(
     db.add(tmpl)
     await db.commit()
     await db.refresh(tmpl)
+    await stream_processor.refresh_zones()
     return tmpl
 
 
@@ -1201,6 +1284,7 @@ async def update_shift_template(
 
     await db.commit()
     await db.refresh(tmpl)
+    await stream_processor.refresh_zones()
     return tmpl
 
 
@@ -1217,3 +1301,4 @@ async def delete_shift_template(
 
     await db.delete(tmpl)
     await db.commit()
+    await stream_processor.refresh_zones()

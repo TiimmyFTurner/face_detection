@@ -54,6 +54,8 @@ async def list_cameras(
     for c in cameras:
         cr = CameraResponse.model_validate(c)
         cr.is_online = stream_processor.is_camera_online(c.id) if c.is_active else False
+        if getattr(_user, "role", None) and _user.role.name == "supervisor":
+            cr.rtsp_url = ""
         response.append(cr)
     return response
 
@@ -238,6 +240,8 @@ async def test_camera(
     _user=Depends(require_permission("cameras:test")),
 ):
     """Test an RTSP connection and return a thumbnail if successful."""
+    if getattr(_user, "role", None) and _user.role.name == "supervisor":
+        raise HTTPException(status_code=403, detail="Supervisors are not permitted to test or view camera feeds.")
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -251,6 +255,8 @@ async def test_camera_url(
     _user=Depends(require_permission("cameras:test")),
 ):
     """Test an RTSP URL without saving the camera."""
+    if getattr(_user, "role", None) and _user.role.name == "supervisor":
+        raise HTTPException(status_code=403, detail="Supervisors are not permitted to test or view camera feeds.")
     return await _test_rtsp_connection(data.rtsp_url)
 
 
@@ -318,6 +324,8 @@ async def get_camera_snapshot(
     _user=Depends(require_permission("cameras:view")),
 ):
     """Return a single JPEG snapshot of the camera's current view."""
+    if getattr(_user, "role", None) and _user.role.name == "supervisor":
+        raise HTTPException(status_code=403, detail="Supervisors are not permitted to view camera snapshots.")
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -359,6 +367,8 @@ async def get_camera_stream(
     _user=Depends(require_permission("cameras:view")),
 ):
     """Stream live camera frames as MJPEG video."""
+    if getattr(_user, "role", None) and _user.role.name == "supervisor":
+        raise HTTPException(status_code=403, detail="Supervisors are not permitted to view camera streams.")
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")

@@ -97,6 +97,8 @@ async def init_db() -> None:
                         sync_conn.exec_driver_sql("ALTER TABLE persons ADD COLUMN shift_template_id INTEGER")
                     if "custom_shift" not in p_cols:
                         sync_conn.exec_driver_sql("ALTER TABLE persons ADD COLUMN custom_shift JSON")
+                    if "leaves" not in p_cols:
+                        sync_conn.exec_driver_sql("ALTER TABLE persons ADD COLUMN leaves JSON")
 
                 # Shift templates table migration
                 st_res = sync_conn.exec_driver_sql("PRAGMA table_info(shift_templates)")
@@ -184,12 +186,10 @@ async def _seed_defaults() -> None:
             {
                 "name": "supervisor",
                 "display_name": "سرپرست کارخانه / ناظر",
-                "description": "دسترسی به پیشخوان، شیفت‌ها، منطقه‌ها، دوربین‌ها و پرسنل بدون دسترسی به کاربران",
+                "description": "دسترسی به پیشخوان سرپرست، شیفت‌ها و مرخصی‌های پرسنل منتسب (بدون دسترسی به تصویر یا دوربین)",
                 "permissions": [
-                    "dashboard:view", "events:export", "duty:view", "duty:manage",
-                    "zones:view", "zones:create", "zones:edit", "zones:delete",
-                    "cameras:view", "cameras:create", "cameras:edit", "cameras:test",
-                    "persons:view", "persons:create", "persons:edit", "settings:view",
+                    "dashboard:view", "duty:view", "duty:manage",
+                    "zones:view", "persons:view", "persons:edit",
                 ],
                 "is_system": False,
             },
@@ -224,6 +224,16 @@ async def _seed_defaults() -> None:
                     is_system=rdata["is_system"],
                 )
                 session.add(role)
+
+        # Update existing supervisor role to ensure safe permissions (no cameras:view/cameras:test/events:export)
+        sup_role_res = await session.execute(select(Role).where(Role.name == "supervisor"))
+        sup_role = sup_role_res.scalar_one_or_none()
+        if sup_role:
+            sup_role.permissions = [
+                "dashboard:view", "duty:view", "duty:manage",
+                "zones:view", "persons:view", "persons:edit",
+            ]
+            sup_role.description = "دسترسی به پیشخوان سرپرست، شیفت‌ها و مرخصی‌های پرسنل منتسب (بدون دسترسی به تصویر یا دوربین)"
 
         await session.commit()
 

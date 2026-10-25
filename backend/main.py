@@ -12,7 +12,8 @@ Sets up:
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from typing import Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -139,12 +140,41 @@ async def health_check():
 
 # ── WebSocket: Real-time Events ──────────────────────────
 @app.websocket("/ws/events")
-async def websocket_events(websocket: WebSocket):
+async def websocket_events(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),
+):
     """
     WebSocket endpoint for real-time event streaming.
     Clients connect here to receive instant notifications of new detection events.
+    Enforces supervisor scoping: supervisors only receive events and notifications for assigned persons.
     """
-    await ws_manager.connect(websocket)
+    auth_token = token or websocket.cookies.get("access_token")
+    user_scope = None
+    is_supervisor = False
+
+    if auth_token:
+        try:
+            from backend.auth import decode_access_token, get_user_scope
+            from backend.models import User
+            import backend.database as db_mod
+            import backend.stream_processor as sp_mod
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            session_factory = getattr(sp_mod, "async_session", None) or getattr(db_mod, "async_session", None)
+            payload = decode_access_token(auth_token)
+            if payload and payload.get("sub") and session_factory:
+                async with session_factory() as session:
+                    stmt = select(User).options(selectinload(User.role)).where(User.id == payload["sub"])
+                    user = (await session.execute(stmt)).scalar_one_or_none()
+                    if user:
+                        user_scope = await get_user_scope(user, session)
+                        is_supervisor = bool(user.role and user.role.name == "supervisor")
+        except Exception as e:
+            logger.warning("Failed to authenticate WebSocket connection: %s", e)
+
+    await ws_manager.connect(websocket, scope=user_scope, is_supervisor=is_supervisor)
     try:
         # Keep connection alive, listen for client messages (e.g., ping)
         while True:

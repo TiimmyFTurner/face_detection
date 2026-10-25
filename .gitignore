@@ -60,6 +60,7 @@ env.bak/
 venv.bak/
 
 # Data and SQLite databases
+*.db
 data/*.db
 data/snapshots/*
 !data/snapshots/.gitkeep

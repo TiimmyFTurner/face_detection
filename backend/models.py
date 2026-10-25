@@ -144,6 +144,7 @@ class Person(Base):
     section = Column(String(255), default="")
     shift_template_id = Column(Integer, ForeignKey("shift_templates.id", ondelete="SET NULL"), nullable=True)
     custom_shift = Column(JSON, default=None)
+    leaves = Column(JSON, default=list)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 

@@ -64,6 +64,11 @@ const Auth = {
         return this._user.role_name === 'admin' || (this._user.effective_permissions || []).includes('*');
     },
 
+    isSupervisor() {
+        if (!this._user) return false;
+        return this._user.role_name === 'supervisor';
+    },
+
     hasPermission(perm) {
         if (!this._user) return false;
         if (this.isAdmin()) return true;
@@ -88,7 +93,7 @@ const Auth = {
         this.updateUserBadge();
         App.closeModal();
         App.showToast(I18n.t('login_success') || 'خوش آمدید', 'success');
-        App.navigate(App._currentPage || 'dashboard');
+        App.navigate(this.isSupervisor() ? 'dashboard' : (App._currentPage || 'dashboard'));
     },
 
     async logout() {
@@ -110,34 +115,36 @@ const Auth = {
 
     // ─── Navigation Visibility Gating ──────────────────────
     updateNavVisibility() {
+        const isSup = this.isSupervisor();
+
         const navUsers = document.getElementById('nav-users');
         if (navUsers) {
-            navUsers.style.display = this.hasAnyPermission(['users:view', 'users:manage']) ? 'flex' : 'none';
+            navUsers.style.display = (!isSup && this.hasAnyPermission(['users:view', 'users:manage'])) ? 'flex' : 'none';
         }
 
         const navSettings = document.getElementById('nav-settings');
         if (navSettings) {
-            navSettings.style.display = this.hasPermission('settings:view') ? 'flex' : 'none';
+            navSettings.style.display = (!isSup && this.hasPermission('settings:view')) ? 'flex' : 'none';
         }
 
         const navCameras = document.getElementById('nav-cameras');
         if (navCameras) {
-            navCameras.style.display = this.hasPermission('cameras:view') ? 'flex' : 'none';
+            navCameras.style.display = (!isSup && this.hasPermission('cameras:view')) ? 'flex' : 'none';
         }
 
         const navPersons = document.getElementById('nav-persons');
         if (navPersons) {
-            navPersons.style.display = this.hasPermission('persons:view') ? 'flex' : 'none';
+            navPersons.style.display = (!isSup && this.hasPermission('persons:view')) ? 'flex' : 'none';
         }
 
         const navZones = document.getElementById('nav-zones');
         if (navZones) {
-            navZones.style.display = this.hasPermission('zones:view') ? 'flex' : 'none';
+            navZones.style.display = (!isSup && this.hasPermission('zones:view')) ? 'flex' : 'none';
         }
 
         const navDuty = document.getElementById('nav-duty');
         if (navDuty) {
-            navDuty.style.display = this.hasPermission('duty:view') ? 'flex' : 'none';
+            navDuty.style.display = (!isSup && this.hasPermission('duty:view')) ? 'flex' : 'none';
         }
 
         const navDashboard = document.getElementById('nav-dashboard');

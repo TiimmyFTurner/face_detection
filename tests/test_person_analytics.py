@@ -164,3 +164,87 @@ async def test_person_analytics_with_shift_and_events(client: AsyncClient):
 async def test_person_analytics_404(client: AsyncClient):
     resp = await client.get("/api/persons/99999/analytics")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_person_compliance_rate_duration_based(client: AsyncClient):
+    """
+    Verify that an employee who attended 1 out of 1 shift days,
+    but only worked 1h 9m out of an 8h shift (30m late, 380m early departure),
+    receives a duration-based compliance rate of ~14.4%, NOT a misleading 100%.
+    """
+    async with test_session() as session:
+        p = Person(name="Zahra Test", role="Operator")
+        session.add(p)
+        await session.flush()
+
+        cam = Camera(name="Station 1", rtsp_url="rtsp://test/st1", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Warranty One",
+            x=0.0,
+            y=0.0,
+            width=50.0,
+            height=50.0,
+            alert_mode="both",
+            assigned_person_ids=[p.id],
+            start_time="07:00",
+            end_time="15:00",
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        )
+        session.add(zone)
+        await session.flush()
+
+        # Yesterday's date so the shift is completely past and not clamped to live clock
+        target_dt = datetime.now(timezone.utc) - timedelta(days=1)
+        ev_start = target_dt.replace(hour=7, minute=30, second=34)
+        ev_end = target_dt.replace(hour=8, minute=40, second=32)
+
+        ev1 = Event(
+            timestamp=ev_start,
+            camera_id=cam.id,
+            person_id=p.id,
+            person_name=p.name,
+            confidence_score=0.95,
+            snapshot_path="snap1.jpg",
+            is_known=True,
+            zone_id=zone.id,
+            zone_name=zone.name,
+            alert_type="normal",
+        )
+        ev2 = Event(
+            timestamp=ev_end,
+            camera_id=cam.id,
+            person_id=p.id,
+            person_name=p.name,
+            confidence_score=0.93,
+            snapshot_path="snap2.jpg",
+            is_known=True,
+            zone_id=zone.id,
+            zone_name=zone.name,
+            alert_type="normal",
+        )
+        session.add_all([ev1, ev2])
+        await session.commit()
+        pid = p.id
+        y_str = target_dt.date().strftime("%Y-%m-%d")
+
+    resp = await client.get(f"/api/persons/{pid}/analytics?start_date={y_str}&end_date={y_str}")
+    assert resp.status_code == 200
+    data = resp.json()
+    comp = data["shift_compliance"]
+
+    # Attendance: attended 1 of 1 scheduled days
+    assert comp["scheduled_shift_days"] == 1
+    assert comp["present_shift_days"] == 1
+    assert comp["absent_shift_days"] == 0
+
+    # Compliance: duration-based, NOT 100%
+    # ~69 minutes worked out of 480 minutes shift -> ~14.4%
+    assert comp["compliance_rate"] < 25.0
+    assert comp["compliance_rate"] > 10.0
+    assert comp["total_absence_minutes"] >= 400
+

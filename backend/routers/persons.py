@@ -18,9 +18,10 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Query, Response
 from sqlalchemy import select, func, and_, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from backend.reporting import generate_person_analytics_xlsx, generate_person_analytics_csv
 
 from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.config import settings
@@ -45,6 +46,7 @@ from backend.schemas import (
     PersonShiftZoneInfo,
     PersonShiftManageRequest,
     PersonShiftManageResponse,
+    LeaveCreate,
 )
 from backend.stream_processor import stream_processor
 from backend.routers.zones import is_time_in_timetable, _parse_list_field
@@ -80,16 +82,22 @@ def _build_person_response(
     person: Person,
     embeddings: list[PersonEmbedding],
     summary: PersonSummaryStats | None = None,
+    is_supervisor: bool = False,
 ) -> dict:
-    """Build a PersonResponse dict from ORM objects."""
-    photo_items = [
-        {
-            "id": e.id,
-            "url": f"/api/snapshots/ref_{Path(e.reference_photo_path).name}",
-            "created_at": e.created_at,
-        }
-        for e in embeddings
-    ]
+    """Build a PersonResponse dict from ORM objects, redacting photos for supervisors."""
+    if is_supervisor:
+        photo_items = []
+        if summary:
+            summary.last_seen_snapshot_url = None
+    else:
+        photo_items = [
+            {
+                "id": e.id,
+                "url": f"/api/snapshots/ref_{Path(e.reference_photo_path).name}",
+                "created_at": e.created_at,
+            }
+            for e in embeddings
+        ]
     return {
         "id": person.id,
         "name": person.name,
@@ -97,6 +105,7 @@ def _build_person_response(
         "section": getattr(person, "section", "") or "",
         "shift_template_id": getattr(person, "shift_template_id", None),
         "custom_shift": getattr(person, "custom_shift", None),
+        "leaves": getattr(person, "leaves", []) or [],
         "embedding_count": len(embeddings),
         "reference_photos": [p["url"] for p in photo_items],
         "photos": photo_items,
@@ -243,7 +252,8 @@ async def list_persons(
             today_absence_hours_str=_format_duration(today_absence_mins * 60),
         )
 
-        responses.append(_build_person_response(person, embeddings, summary))
+        is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
+        responses.append(_build_person_response(person, embeddings, summary, is_supervisor=is_sup))
 
     return responses
 
@@ -484,7 +494,8 @@ async def update_person(
     )
     embeddings = emb_result.scalars().all()
 
-    return _build_person_response(person, embeddings)
+    is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
+    return _build_person_response(person, embeddings, is_supervisor=is_sup)
 
 
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -641,6 +652,9 @@ async def get_person_photos(
     _user=Depends(require_permission("persons:view")),
 ):
     """Get all reference photos and embedding IDs for a person."""
+    if getattr(_user, "role", None) and _user.role.name == "supervisor":
+        return []
+
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -659,6 +673,86 @@ async def get_person_photos(
         )
         for e in embeddings
     ]
+
+
+# ── Leave / Off-Duty Management ────────────────────────────────────
+
+@router.get("/{person_id}/leaves", response_model=list[dict])
+async def get_person_leaves(
+    person_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("persons:view")),
+):
+    """Get all scheduled leaves and off-duty days for a person (scoped)."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به اطلاعات این فرد برای شما مجاز نیست.")
+
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    leaves = getattr(person, "leaves", None) or []
+    return leaves
+
+
+@router.post("/{person_id}/leaves", response_model=list[dict], status_code=status.HTTP_201_CREATED)
+async def create_person_leave(
+    person_id: int,
+    data: LeaveCreate,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("persons:edit")),
+):
+    """Add a leave / off-duty record for a person (scoped for supervisors)."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به ویرایش این فرد برای شما مجاز نیست.")
+
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    current_leaves = list(getattr(person, "leaves", None) or [])
+    new_leave = {
+        "id": str(uuid.uuid4())[:8],
+        "start_date": data.start_date.strip(),
+        "end_date": data.end_date.strip(),
+        "leave_type": data.leave_type.strip(),
+        "note": (data.note or "").strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": getattr(_user, "full_name", None) or getattr(_user, "username", "supervisor"),
+    }
+    current_leaves.append(new_leave)
+    person.leaves = current_leaves
+    await db.commit()
+    await db.refresh(person)
+    await stream_processor.refresh_zones()
+    return person.leaves
+
+
+@router.delete("/{person_id}/leaves/{leave_id}", response_model=list[dict])
+async def delete_person_leave(
+    person_id: int,
+    leave_id: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("persons:edit")),
+):
+    """Cancel / remove a scheduled leave or off-duty record."""
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به ویرایش این فرد برای شما مجاز نیست.")
+
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    current_leaves = list(getattr(person, "leaves", None) or [])
+    updated_leaves = [l for l in current_leaves if l.get("id") != leave_id]
+    person.leaves = updated_leaves
+    await db.commit()
+    await db.refresh(person)
+    await stream_processor.refresh_zones()
+    return person.leaves
 
 
 @router.delete("/{person_id}/photos/{photo_id}")
@@ -717,12 +811,16 @@ async def delete_person_photo(
 @router.get("/{person_id}/analytics", response_model=PersonAnalyticsResponse)
 async def get_person_analytics(
     person_id: int,
+    days: Optional[int] = Query(30, ge=1, le=365),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("persons:view")),
 ):
     """
     Get in-depth analytics, shift punctuality compliance, 24-hour activity
-    distribution, 14-day attendance log, and camera distribution for a person.
+    distribution, daily attendance log, and camera distribution for a person.
+    Scoped to assigned personnel and strictly Zero-Photo for supervisors.
     """
     scope = await get_user_scope(_user, db)
     if not scope.can_access_person(person_id):
@@ -732,15 +830,20 @@ async def get_person_analytics(
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
-    # Fetch reference photos
-    emb_result = await db.execute(
-        select(PersonEmbedding).where(PersonEmbedding.person_id == person.id)
-    )
-    embeddings = emb_result.scalars().all()
-    ref_photos = [
-        f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
-        for e in embeddings
-    ]
+    is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
+
+    # Fetch reference photos (strictly redacted for supervisors - Zero-Photo privacy)
+    if is_sup:
+        ref_photos = []
+    else:
+        emb_result = await db.execute(
+            select(PersonEmbedding).where(PersonEmbedding.person_id == person.id)
+        )
+        embeddings = emb_result.scalars().all()
+        ref_photos = [
+            f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
+            for e in embeddings
+        ]
 
     # Fetch cameras
     cameras_result = await db.execute(select(Camera))
@@ -870,7 +973,7 @@ async def get_person_analytics(
         total_alerts=out_of_zone + unauth + absence,
     )
 
-    # 4. Daily activity & shift attendance analysis (last 14 days)
+    # 4. Daily activity & shift attendance analysis across requested time frame
     local_now = datetime.now()
     p_timeout = 2
     p_grace = 10
@@ -883,6 +986,37 @@ async def get_person_analytics(
         p_timeout = getattr(person_zones[0], "absence_timeout_minutes", 2) or 2
         p_grace = getattr(person_zones[0], "grace_period_minutes", 10) or 10
         p_free = _parse_list_field(person_zones[0].free_times, [])
+
+    # Resolve target dates list (descending from end_date down to start_date)
+    target_dates: list = []
+    if start_date and end_date:
+        try:
+            s_d = datetime.strptime(start_date, "%Y-%m-%d").date()
+            e_d = datetime.strptime(end_date, "%Y-%m-%d").date()
+            if s_d > e_d:
+                s_d, e_d = e_d, s_d
+            delta_days = (e_d - s_d).days
+            if delta_days > 365:
+                s_d = e_d - timedelta(days=365)
+                delta_days = 365
+            target_dates = [e_d - timedelta(days=k) for k in range(delta_days + 1)]
+        except Exception:
+            n_days = min(365, max(1, days or 30))
+            target_dates = [local_now.date() - timedelta(days=k) for k in range(n_days)]
+    elif start_date:
+        try:
+            s_d = datetime.strptime(start_date, "%Y-%m-%d").date()
+            e_d = local_now.date()
+            if s_d > e_d:
+                s_d = e_d
+            delta_days = min(365, (e_d - s_d).days)
+            target_dates = [e_d - timedelta(days=k) for k in range(delta_days + 1)]
+        except Exception:
+            n_days = min(365, max(1, days or 30))
+            target_dates = [local_now.date() - timedelta(days=k) for k in range(n_days)]
+    else:
+        n_days = min(365, max(1, days or 30))
+        target_dates = [local_now.date() - timedelta(days=k) for k in range(n_days)]
 
     daily_activity: list[PersonDailyActivity] = []
 
@@ -898,14 +1032,27 @@ async def get_person_analytics(
     in_shift_detections_total = 0
     out_of_shift_detections_total = 0
 
-    for i in range(30):
-        target_date = (local_now - timedelta(days=i)).date()
+    for target_date in target_dates:
+        i = (local_now.date() - target_date).days
         date_str = target_date.strftime("%Y-%m-%d")
         day_name = target_date.strftime("%a")
 
+        # Check leave record for this person on target_date
+        is_on_leave = False
+        leave_record = None
+        if person and getattr(person, "leaves", None):
+            for l in person.leaves:
+                if isinstance(l, dict):
+                    s_date = str(l.get("start_date", "")).strip()
+                    e_date = str(l.get("end_date", "")).strip() or s_date
+                    if s_date <= date_str <= e_date:
+                        is_on_leave = True
+                        leave_record = l
+                        break
+
         # Find matching shift for this day of week
         matching_shift = None
-        if has_assigned_shift:
+        if has_assigned_shift and not is_on_leave:
             for s in shifts_info:
                 if day_name in s.active_days:
                     matching_shift = s
@@ -989,6 +1136,7 @@ async def get_person_analytics(
 
             # Shift duration and absence from shift minutes
             shift_dur_mins = 0
+            req_shift_mins = 0
             day_absence_mins = 0
             day_absence_str = "0m"
             day_absence_intervals: list[AbsenceInterval] = []
@@ -1003,12 +1151,32 @@ async def get_person_analytics(
                 except Exception:
                     shift_dur_mins = 480
 
+                # Determine expected required minutes up to now if shift is active today
+                if target_date == local_now.date():
+                    now_m = local_now.hour * 60 + local_now.minute
+                    if end_m >= start_m:
+                        if now_m < start_m:
+                            req_shift_mins = 0
+                        elif now_m >= end_m:
+                            req_shift_mins = shift_dur_mins
+                        else:
+                            req_shift_mins = max(0, now_m - start_m)
+                    else:
+                        if now_m >= start_m:
+                            req_shift_mins = max(0, now_m - start_m)
+                        elif now_m < end_m:
+                            req_shift_mins = min(shift_dur_mins, (24 * 60 - start_m) + now_m)
+                        else:
+                            req_shift_mins = shift_dur_mins
+                else:
+                    req_shift_mins = shift_dur_mins
+
                 pres_mins = min(shift_dur_mins, max(0, dur_secs // 60))
                 is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
                 if i == 0 and is_cam_offline:
                     day_absence_mins = 0
                 else:
-                    day_absence_mins = max(0, shift_dur_mins - pres_mins)
+                    day_absence_mins = max(0, req_shift_mins - pres_mins)
                 day_absence_str = _format_duration(day_absence_mins * 60)
 
                 # Record distinct absence intervals
@@ -1062,7 +1230,7 @@ async def get_person_analytics(
                     is_scheduled_shift_day=is_sched_day,
                     shift_start_time=matching_shift.start_time if matching_shift else None,
                     shift_end_time=matching_shift.end_time if matching_shift else None,
-                    shift_duration_minutes=shift_dur_mins,
+                    shift_duration_minutes=req_shift_mins,
                     absence_from_shift_minutes=day_absence_mins,
                     absence_from_shift_str=day_absence_str,
                     absence_count=len(day_absence_intervals),
@@ -1084,6 +1252,7 @@ async def get_person_analytics(
             )
         else:
             shift_dur_mins = 0
+            req_shift_mins = 0
             day_absence_intervals = []
             if is_sched_day and matching_shift:
                 is_cam_offline = any(not stream_processor.is_camera_online(z.camera_id) for z in person_zones)
@@ -1102,17 +1271,42 @@ async def get_person_analytics(
                         shift_dur_mins = (end_m - start_m) if end_m >= start_m else ((24 * 60 - start_m) + end_m)
                     except Exception:
                         shift_dur_mins = 480
-                    day_absence_mins = shift_dur_mins
-                    day_absence_str = _format_duration(shift_dur_mins * 60)
-                    day_absence_intervals.append(
-                        AbsenceInterval(
-                            start_time=matching_shift.start_time,
-                            end_time=matching_shift.end_time,
-                            duration_minutes=shift_dur_mins,
-                            duration_str=day_absence_str,
-                            interval_type="unseen",
+
+                    if target_date == local_now.date():
+                        now_m = local_now.hour * 60 + local_now.minute
+                        if end_m >= start_m:
+                            if now_m < start_m:
+                                req_shift_mins = 0
+                            elif now_m >= end_m:
+                                req_shift_mins = shift_dur_mins
+                            else:
+                                req_shift_mins = max(0, now_m - start_m)
+                        else:
+                            if now_m >= start_m:
+                                req_shift_mins = max(0, now_m - start_m)
+                            elif now_m < end_m:
+                                req_shift_mins = min(shift_dur_mins, (24 * 60 - start_m) + now_m)
+                            else:
+                                req_shift_mins = shift_dur_mins
+                    else:
+                        req_shift_mins = shift_dur_mins
+
+                    day_absence_mins = req_shift_mins
+                    day_absence_str = _format_duration(day_absence_mins * 60)
+                    if req_shift_mins > 0:
+                        day_absence_intervals.append(
+                            AbsenceInterval(
+                                start_time=matching_shift.start_time,
+                                end_time=matching_shift.end_time,
+                                duration_minutes=req_shift_mins,
+                                duration_str=day_absence_str,
+                                interval_type="unseen",
+                            )
                         )
-                    )
+            elif is_on_leave:
+                arr_stat = "on_leave"
+                day_absence_mins = 0
+                day_absence_str = "0m"
             else:
                 arr_stat = "rest_day"
                 day_absence_mins = 0
@@ -1125,7 +1319,7 @@ async def get_person_analytics(
                     is_scheduled_shift_day=is_sched_day,
                     shift_start_time=matching_shift.start_time if matching_shift else None,
                     shift_end_time=matching_shift.end_time if matching_shift else None,
-                    shift_duration_minutes=shift_dur_mins,
+                    shift_duration_minutes=req_shift_mins,
                     absence_from_shift_minutes=day_absence_mins,
                     absence_from_shift_str=day_absence_str,
                     absence_count=len(day_absence_intervals),
@@ -1137,10 +1331,26 @@ async def get_person_analytics(
                 )
             )
 
-    # 5. Shift Compliance & Total Absence calculations (Day / Week / Month)
-    compliance_rate = round((present_shift_days / scheduled_shift_days) * 100.0, 1) if scheduled_shift_days > 0 else (100.0 if not has_assigned_shift else 0.0)
+    # 5. Shift Compliance & Total Absence calculations across time frame
+    total_scheduled_shift_mins = sum(
+        day.shift_duration_minutes
+        for day in daily_activity
+        if day.is_scheduled_shift_day and day.arrival_status not in ("on_leave", "rest_day", "camera_offline")
+    )
+    total_absence_mins = sum(
+        day.absence_from_shift_minutes
+        for day in daily_activity
+        if day.is_scheduled_shift_day and day.arrival_status not in ("on_leave", "rest_day", "camera_offline")
+    )
 
-    today_absence_mins = daily_activity[0].absence_from_shift_minutes if daily_activity and daily_activity[0].is_scheduled_shift_day else 0
+    if total_scheduled_shift_mins > 0:
+        actual_presence_shift_mins = max(0, total_scheduled_shift_mins - total_absence_mins)
+        compliance_rate = min(100.0, max(0.0, round((actual_presence_shift_mins / total_scheduled_shift_mins) * 100.0, 1)))
+    else:
+        compliance_rate = 100.0 if not has_assigned_shift else 100.0
+
+    today_str = local_now.date().strftime("%Y-%m-%d")
+    today_absence_mins = daily_activity[0].absence_from_shift_minutes if (daily_activity and daily_activity[0].date == today_str and daily_activity[0].is_scheduled_shift_day) else 0
     today_absence_hours_str = _format_duration(today_absence_mins * 60)
 
     week_absence_mins = sum(day.absence_from_shift_minutes for day in daily_activity[:7] if day.is_scheduled_shift_day)
@@ -1149,10 +1359,10 @@ async def get_person_analytics(
     month_absence_mins = sum(day.absence_from_shift_minutes for day in daily_activity[:30] if day.is_scheduled_shift_day)
     month_absence_hours_str = _format_duration(month_absence_mins * 60)
 
-    total_absence_mins = month_absence_mins
-    total_absence_hours_str = month_absence_hours_str
+    total_absence_mins = sum(day.absence_from_shift_minutes for day in daily_activity if day.is_scheduled_shift_day)
+    total_absence_hours_str = _format_duration(total_absence_mins * 60)
 
-    today_presence_mins = (daily_activity[0].estimated_duration_seconds // 60) if daily_activity and daily_activity[0].estimated_duration_seconds else 0
+    today_presence_mins = (daily_activity[0].estimated_duration_seconds // 60) if (daily_activity and daily_activity[0].date == today_str and daily_activity[0].estimated_duration_seconds) else 0
 
     primary_shift_str = None
     if shifts_info:
@@ -1215,8 +1425,8 @@ async def get_person_analytics(
                     current_status = "absent"
                     current_absence_mins = elapsed_arr
 
-    absence_count_today = daily_activity[0].absence_count if daily_activity and daily_activity[0].is_scheduled_shift_day else 0
-    today_absence_intervals = daily_activity[0].absence_intervals if daily_activity and daily_activity[0].is_scheduled_shift_day else []
+    absence_count_today = daily_activity[0].absence_count if (daily_activity and daily_activity[0].date == today_str and daily_activity[0].is_scheduled_shift_day) else 0
+    today_absence_intervals = daily_activity[0].absence_intervals if (daily_activity and daily_activity[0].date == today_str and daily_activity[0].is_scheduled_shift_day) else []
 
     shift_compliance = PersonShiftCompliance(
         has_assigned_shift=has_assigned_shift,
@@ -1291,7 +1501,9 @@ async def get_person_analytics(
         last_seen=last_seen_dt,
         last_seen_camera=camera_map.get(last_seen_ev.camera_id, f"Camera #{last_seen_ev.camera_id}") if last_seen_ev and last_seen_ev.camera_id else None,
         last_seen_zone=getattr(last_seen_ev, "zone_name", None) if last_seen_ev else None,
-        last_seen_snapshot_url=f"/api/snapshots/{last_seen_ev.snapshot_path}" if last_seen_ev and last_seen_ev.snapshot_path else None,
+        last_seen_snapshot_url=(
+            None if is_sup else (f"/api/snapshots/{last_seen_ev.snapshot_path}" if last_seen_ev and last_seen_ev.snapshot_path else None)
+        ),
         avg_confidence=avg_conf,
         max_confidence=max_conf,
         min_confidence=min_conf,
@@ -1310,8 +1522,7 @@ async def get_person_analytics(
         today_presence_minutes=today_presence_mins,
     )
 
-
-    # 7. Recent events list (up to 15)
+    # 7. Recent events list (up to 15) - Redacted for supervisors
     recent_event_responses: list[EventResponse] = []
     for ev in events[:15]:
         ts = ev.timestamp
@@ -1326,8 +1537,8 @@ async def get_person_analytics(
                 person_id=person.id,
                 person_name=person.name,
                 confidence_score=ev.confidence_score or 0.0,
-                snapshot_path=ev.snapshot_path or "",
-                snapshot_url=f"/api/snapshots/{ev.snapshot_path}" if ev.snapshot_path else "",
+                snapshot_path="" if is_sup else (ev.snapshot_path or ""),
+                snapshot_url="" if is_sup else (f"/api/snapshots/{ev.snapshot_path}" if ev.snapshot_path else ""),
                 is_known=True,
                 zone_id=getattr(ev, "zone_id", None),
                 zone_name=getattr(ev, "zone_name", "") or "",
@@ -1351,6 +1562,74 @@ async def get_person_analytics(
         alerts=alert_stats,
         recent_events=recent_event_responses,
     )
+
+
+@router.get("/{person_id}/analytics/export")
+async def export_person_analytics(
+    person_id: int,
+    format: str = Query("xlsx", pattern="^(xlsx|csv)$"),
+    days: Optional[int] = Query(30, ge=1, le=365),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("persons:view")),
+):
+    """
+    Export an executive, zero-photo attendance & compliance analytics report
+    for an individual person across the requested time frame (Excel .xlsx or CSV).
+    Strictly scoped to assigned persons for supervisors.
+    """
+    scope = await get_user_scope(_user, db)
+    if not scope.can_access_person(person_id):
+        raise HTTPException(status_code=403, detail="دسترسی به گزارش تحلیلی این فرد برای شما مجاز نیست.")
+
+    person = await db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    analytics = await get_person_analytics(
+        person_id=person_id,
+        days=days,
+        start_date=start_date,
+        end_date=end_date,
+        db=db,
+        _user=_user,
+    )
+
+    analytics_dict = analytics.model_dump()
+    s_date = start_date or (analytics.daily_activity_last_14_days[-1].date if analytics.daily_activity_last_14_days else "")
+    e_date = end_date or (analytics.daily_activity_last_14_days[0].date if analytics.daily_activity_last_14_days else "")
+
+    if format == "csv":
+        content = generate_person_analytics_csv(
+            analytics=analytics_dict,
+            person_name=person.name,
+            role=person.role or "",
+            section=person.section or "",
+            start_date_str=s_date,
+            end_date_str=e_date,
+        )
+        filename = f"analytics_{person_id}_{s_date}_to_{e_date}.csv"
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    else:
+        content = generate_person_analytics_xlsx(
+            analytics=analytics_dict,
+            person_name=person.name,
+            role=person.role or "",
+            section=person.section or "",
+            start_date_str=s_date,
+            end_date_str=e_date,
+        )
+        filename = f"analytics_{person_id}_{s_date}_to_{e_date}.xlsx"
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
 
 @router.post("/reindex-embeddings")

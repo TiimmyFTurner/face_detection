@@ -187,6 +187,10 @@ async def list_events(
         if ts and ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
 
+        is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
+        s_path = "" if is_sup else (event.snapshot_path or "")
+        s_url = "" if is_sup else (f"/api/snapshots/{event.snapshot_path}" if event.snapshot_path else "")
+
         event_responses.append(
             EventResponse(
                 id=event.id,
@@ -196,8 +200,8 @@ async def list_events(
                 person_id=event.person_id,
                 person_name=event.person_name or "Unknown",
                 confidence_score=event.confidence_score or 0.0,
-                snapshot_path=event.snapshot_path or "",
-                snapshot_url=f"/api/snapshots/{event.snapshot_path}" if event.snapshot_path else "",
+                snapshot_path=s_path,
+                snapshot_url=s_url,
                 is_known=bool(event.is_known),
                 zone_id=getattr(event, "zone_id", None),
                 zone_name=getattr(event, "zone_name", "") or "",
@@ -354,14 +358,15 @@ async def get_grouped_events(
         group["total_detections"] += 1
 
         if len(group["events"]) < limit_per_group:
+            is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
             group["events"].append({
                 "id": event.id,
                 "timestamp": ts,
                 "camera_id": event.camera_id,
                 "camera_name": camera_name,
                 "confidence_score": event.confidence_score,
-                "snapshot_path": event.snapshot_path,
-                "snapshot_url": f"/api/snapshots/{event.snapshot_path}",
+                "snapshot_path": "" if is_sup else event.snapshot_path,
+                "snapshot_url": "" if is_sup else f"/api/snapshots/{event.snapshot_path}",
                 "is_known": event.is_known,
                 "person_name": event.person_name,
                 "person_id": event.person_id,

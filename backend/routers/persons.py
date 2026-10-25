@@ -275,6 +275,8 @@ async def create_person(
         except Exception as e:
             logger.warning("Failed to parse event_ids '%s': %s", event_ids, e)
 
+    parsed_event_ids = list(dict.fromkeys(parsed_event_ids))
+
     parsed_snapshot_files: list[str] = []
     if snapshot_filenames:
         try:
@@ -285,8 +287,21 @@ async def create_person(
                 parsed_snapshot_files = [x.strip() for x in snapshot_filenames.split(",") if x.strip()]
         except Exception as e:
             logger.warning("Failed to parse snapshot_filenames '%s': %s", snapshot_filenames, e)
+    parsed_snapshot_files = list(dict.fromkeys(parsed_snapshot_files))
 
-    valid_photos = [p for p in (photos or []) if getattr(p, "filename", None)]
+    valid_photos = []
+    for p in (photos or []):
+        if not getattr(p, "filename", None):
+            continue
+        if p.filename.startswith("event_"):
+            try:
+                ev_id_str = p.filename[len("event_") :].split(".")[0]
+                if ev_id_str.isdigit() and int(ev_id_str) in parsed_event_ids:
+                    continue
+            except Exception:
+                pass
+        valid_photos.append(p)
+
     if not valid_photos and not parsed_event_ids and not parsed_snapshot_files:
         raise HTTPException(
             status_code=400,
@@ -530,7 +545,21 @@ async def add_photos(
         except Exception as e:
             logger.warning("Failed to parse event_ids '%s': %s", event_ids, e)
 
-    valid_photos = [p for p in (photos or []) if getattr(p, "filename", None)]
+    parsed_event_ids = list(dict.fromkeys(parsed_event_ids))
+
+    valid_photos = []
+    for p in (photos or []):
+        if not getattr(p, "filename", None):
+            continue
+        if p.filename.startswith("event_"):
+            try:
+                ev_id_str = p.filename[len("event_") :].split(".")[0]
+                if ev_id_str.isdigit() and int(ev_id_str) in parsed_event_ids:
+                    continue
+            except Exception:
+                pass
+        valid_photos.append(p)
+
     if not valid_photos and not parsed_event_ids:
         raise HTTPException(status_code=400, detail="At least one photo or event is required.")
 

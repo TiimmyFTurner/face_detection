@@ -15,6 +15,8 @@ const PersonForm = {
     _unknownLogsLimit: 36,
     _hasMoreUnknownLogs: true,
     _isLoadingUnknownLogs: false,
+    _currentPersonId: null,
+    _currentPersonName: null,
 
     /**
      * Entry point to enroll a person directly from one or more event snapshots.
@@ -388,6 +390,13 @@ const PersonForm = {
     },
 
     /**
+     * On snapshot type filter change (unknown vs person vs all).
+     */
+    onSnapshotTypeFilterChange() {
+        PersonForm.loadUnknownLogs(true);
+    },
+
+    /**
      * Load unknown detection logs from backend.
      */
     async loadUnknownLogs(reset = false) {
@@ -403,7 +412,9 @@ const PersonForm = {
         const grid = document.getElementById('unknown-logs-grid');
         const loadMoreBtn = document.getElementById('unknown-logs-load-more');
         const camFilter = document.getElementById('unknown-camera-filter');
+        const typeFilter = document.getElementById('unknown-type-filter');
         const camId = camFilter ? camFilter.value : '';
+        const filterType = typeFilter ? typeFilter.value : 'unknown';
 
         if (reset && grid) {
             grid.innerHTML = `
@@ -415,7 +426,12 @@ const PersonForm = {
         }
 
         try {
-            let url = `/api/events?is_known=false&has_snapshot=true&limit=${PersonForm._unknownLogsLimit}&offset=${PersonForm._unknownLogsOffset}`;
+            let url = `/api/events?has_snapshot=true&limit=${PersonForm._unknownLogsLimit}&offset=${PersonForm._unknownLogsOffset}`;
+            if (filterType === 'unknown') {
+                url += '&is_known=false';
+            } else if (filterType === 'person' && PersonForm._currentPersonId) {
+                url += `&person_id=${PersonForm._currentPersonId}`;
+            }
             if (camId) url += `&camera_id=${camId}`;
 
             const data = await App.api(url);
@@ -477,17 +493,18 @@ const PersonForm = {
         grid.innerHTML = events.map(ev => {
             const isSelected = PersonForm._selectedPhotos.some(p => p.type === 'event' && p.eventId === ev.id);
             const snapUrl = ev.snapshot_url || (ev.snapshot_path ? `/api/snapshots/${ev.snapshot_path}` : '');
+            const displayName = ev.person_name ? `${PersonForm.escapeHtml(ev.person_name)} • ` : '';
             return `
                 <div
-                    class="unknown-log-card"
+                    class="unknown-log-card ${isSelected ? 'selected' : ''}"
                     id="unknown-card-${ev.id}"
                     onclick="PersonForm.toggleUnknownEvent(${ev.id})"
                     style="position: relative; border-radius: var(--radius-sm); overflow: hidden; cursor: pointer; border: ${isSelected ? '2px solid var(--accent-blue)' : '1px solid var(--border-subtle)'}; background: #0c1020; transition: all 0.15s ease;"
-                    title="${PersonForm.escapeAttr(I18n.t('toggle_select_tooltip'))}"
+                    title="${PersonForm.escapeAttr(ev.person_name ? `${ev.person_name} (${ev.camera_name || ''})` : (ev.camera_name || I18n.t('toggle_select_tooltip')))}"
                 >
                     <img src="${snapUrl}" style="width: 100%; height: 68px; object-fit: cover; display: block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23161f36%22 width=%22100%22 height=%22100%22/></svg>'" />
                     <div style="font-size: 0.6rem; text-align: center; background: rgba(0,0,0,0.8); color: #fff; padding: 2px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        ${I18n.formatTimestamp(ev.timestamp)}
+                        ${displayName}${I18n.formatTimestamp(ev.timestamp)}
                     </div>
                     <div class="card-select-badge" style="position: absolute; top: 3px; ${I18n.isRTL() ? 'left: 3px' : 'right: 3px'}; width: 20px; height: 20px; border-radius: 50%; background: ${isSelected ? 'var(--accent-blue)' : 'rgba(0,0,0,0.65)'}; border: 1.5px solid ${isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #fff; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.4);">
                         ${isSelected ? '✓' : ''}
@@ -537,6 +554,7 @@ const PersonForm = {
         const card = document.getElementById(`unknown-card-${eventId}`);
         if (card) {
             card.style.borderColor = isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)';
+            card.classList.toggle('selected', isSelected);
             const badge = card.querySelector('.card-select-badge');
             if (badge) {
                 badge.style.background = isSelected ? 'var(--accent-blue)' : 'rgba(0,0,0,0.65)';
@@ -549,6 +567,7 @@ const PersonForm = {
         const relCard = document.getElementById(`rel-card-${eventId}`);
         if (relCard) {
             relCard.style.borderColor = isSelected ? 'var(--accent-blue)' : 'var(--border-subtle)';
+            relCard.classList.toggle('selected', isSelected);
             const relBadge = relCard.querySelector('.card-select-badge');
             if (relBadge) {
                 relBadge.style.background = isSelected ? 'var(--accent-blue)' : 'rgba(0,0,0,0.6)';
@@ -640,23 +659,28 @@ const PersonForm = {
     updatePreview() {
         const container = document.getElementById('upload-preview');
         const badge = document.getElementById('selected-photos-badge');
-        const submitBtn = document.getElementById('btn-submit-person');
+        const submitBtnPerson = document.getElementById('btn-submit-person');
+        const submitBtnPhotos = document.getElementById('btn-submit-photos');
         const count = PersonForm._selectedPhotos.length;
         const countDisplay = I18n.isRTL() ? I18n.toPersianDigits(count) : count;
 
         if (badge) {
             badge.textContent = I18n.t('selected_photos_count', { count: countDisplay });
         }
-        if (submitBtn) {
-            submitBtn.innerHTML = `<span>${I18n.t('enroll_btn_with_count', { count: countDisplay })}</span>`;
+        if (submitBtnPerson) {
+            submitBtnPerson.innerHTML = `<span>${I18n.t('enroll_btn_with_count', { count: countDisplay })}</span>`;
+        }
+        if (submitBtnPhotos) {
+            const countSuffix = count > 0 ? ` (${countDisplay})` : '';
+            submitBtnPhotos.innerHTML = `<span>⬆️</span> <span>${I18n.t('btn_add_photos')}${countSuffix}</span>`;
         }
 
         if (!container) return;
 
         if (PersonForm._selectedPhotos.length === 0) {
             container.innerHTML = `
-                <div style="width: 100%; text-align: center; color: var(--text-tertiary); font-size: 0.8rem; padding: 1rem 0;">
-                    <span>📸 ${I18n.t('err_select_photo')}</span>
+                <div style="width: 100%; text-align: center; color: var(--text-tertiary); font-size: 0.8rem; padding: 0.85rem 0;">
+                    <span>📸 ${I18n.t('no_photos_selected_yet')}</span>
                 </div>
             `;
             return;
@@ -737,9 +761,13 @@ const PersonForm = {
 
             PersonForm._selectedPhotos.forEach(p => {
                 if (p.type === 'event' && p.eventId) {
-                    eventIds.push(p.eventId);
+                    if (!eventIds.includes(p.eventId)) {
+                        eventIds.push(p.eventId);
+                    }
                 } else if (p.type === 'file' && p.file) {
-                    localFiles.push(p.file);
+                    if (!localFiles.includes(p.file)) {
+                        localFiles.push(p.file);
+                    }
                 }
             });
 
@@ -750,25 +778,6 @@ const PersonForm = {
             localFiles.forEach(file => {
                 formData.append('photos', file);
             });
-
-            // Fallback safety: if no local files were attached, convert event snapshot images
-            // into blobs so the backend 'photos' field is also populated for strict backward-compatibility
-            if (localFiles.length === 0 && eventIds.length > 0) {
-                for (let i = 0; i < PersonForm._selectedPhotos.length; i++) {
-                    const p = PersonForm._selectedPhotos[i];
-                    if (p.type === 'event' && p.snapshotUrl) {
-                        try {
-                            const res = await fetch(p.snapshotUrl);
-                            if (res.ok) {
-                                const blob = await res.blob();
-                                formData.append('photos', blob, `event_${p.eventId}.jpg`);
-                            }
-                        } catch (fetchErr) {
-                            console.warn('Could not fetch snapshot blob fallback:', fetchErr);
-                        }
-                    }
-                }
-            }
 
             const response = await App.api('/api/persons', 'POST', formData);
 
@@ -809,11 +818,18 @@ const PersonForm = {
     },
 
     /**
-     * Render the "Add Photos" modal for an existing person with existing photos grid & delete actions.
+     * Render the "Add Photos" modal for an existing person with existing photos grid & delete actions,
+     * plus options to upload from device OR select from captured face snapshots.
      */
     renderAddPhotosModal(personId, personName) {
+        PersonForm._currentPersonId = personId;
+        PersonForm._currentPersonName = personName;
+        const count = PersonForm._selectedPhotos.length;
+        const countDisplay = I18n.isRTL() ? I18n.toPersianDigits(count) : count;
+        const countSuffix = count > 0 ? ` (${countDisplay})` : '';
+
         return `
-            <div class="modal-header">
+            <div class="modal-header" style="padding: 1.15rem 1.5rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <span style="font-size: 1.4rem;">📸</span>
                     <div>
@@ -822,10 +838,10 @@ const PersonForm = {
                 </div>
                 <button class="modal-close" onclick="App.closeModal()">✕</button>
             </div>
-            <div class="modal-body" style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+            <div class="modal-body" style="padding: 1.25rem 1.5rem; max-height: 74vh; overflow-y: auto; display: flex; flex-direction: column; gap: 1.25rem;">
                 <!-- Section 1: Existing Photos -->
                 <div class="existing-photos-section">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
                         <label class="form-label" style="margin-bottom: 0; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">
                             <span>🖼️</span>
                             <span id="existing-photos-title">${I18n.t('existing_photos_title', { count: '...' })}</span>
@@ -833,7 +849,7 @@ const PersonForm = {
                         <span id="existing-photos-counter" style="font-size: 0.75rem; color: var(--text-tertiary);"></span>
                     </div>
 
-                    <div id="existing-photos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.75rem; min-height: 110px; max-height: 250px; overflow-y: auto; padding: 0.75rem; background: var(--bg-surface-hover); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <div id="existing-photos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.65rem; min-height: 100px; max-height: 200px; overflow-y: auto; padding: 0.65rem; background: var(--bg-surface-hover); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
                         <div style="grid-column: 1 / -1; text-align: center; color: var(--text-tertiary); padding: 1.5rem 0; font-size: 0.85rem;">
                             <div class="spinner" style="width: 24px; height: 24px; margin: 0 auto 0.5rem auto;"></div>
                             ${I18n.t('loading')}
@@ -841,47 +857,131 @@ const PersonForm = {
                     </div>
                 </div>
 
-                <!-- Section 2: Upload New Photos -->
-                <div class="add-new-photos-section" style="border-top: 1px solid var(--border-subtle); padding-top: 1.25rem;">
-                    <label class="form-label" style="margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">
-                        <span>➕</span>
-                        <span>${I18n.t('add_more_photos_section')}</span>
-                    </label>
-                    
-                    <form id="add-photos-form" onsubmit="PersonForm.handleAddPhotos(event, ${personId})">
-                        <div
-                            class="upload-zone"
-                            id="upload-zone"
-                            onclick="document.getElementById('photo-input').click()"
-                            ondragover="PersonForm.handleDragOver(event)"
-                            ondragleave="PersonForm.handleDragLeave(event)"
-                            ondrop="PersonForm.handleDrop(event)"
-                            style="padding: 1.25rem 1rem;"
-                        >
-                            <div class="upload-zone-icon" style="font-size: 2rem; margin-bottom: 0.35rem;">📸</div>
-                            <div class="upload-zone-text" style="font-size: 0.88rem;">${I18n.t('upload_drag_text')}</div>
-                            <div class="upload-zone-hint" style="font-size: 0.75rem; margin-top: 0.25rem;">${I18n.t('upload_hint_2')}</div>
+                <!-- Section 2: Selected Photos Preview Strip -->
+                <div class="add-new-photos-section" style="border-top: 1px solid var(--border-subtle); padding-top: 1.1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+                        <label class="form-label" style="margin-bottom: 0; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">
+                            <span>➕</span>
+                            <span>${I18n.t('selected_new_photos_title')}</span>
+                        </label>
+                        <span id="selected-photos-badge" style="font-size: 0.75rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.2rem 0.6rem; border-radius: 12px; font-weight: 700;">
+                            ${I18n.t('selected_photos_count', { count: countDisplay })}
+                        </span>
+                    </div>
+
+                    <div id="upload-preview" style="display: flex; flex-wrap: wrap; gap: 0.65rem; min-height: 76px; max-height: 160px; overflow-y: auto; padding: 0.45rem; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); border: 1px dashed var(--border-subtle); align-items: center; margin-bottom: 1rem;"></div>
+
+                    <!-- Source Selector: Snapshots vs Device Upload -->
+                    <div style="border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface); overflow: hidden;">
+                        <div style="display: flex; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface-hover);">
+                            <button
+                                type="button"
+                                id="btn-tab-unknown"
+                                onclick="PersonForm.switchPhotoTab('unknown')"
+                                style="flex: 1; padding: 0.75rem 1rem; border: none; background: transparent; font-size: 0.83rem; font-weight: 700; cursor: pointer; color: var(--accent-blue); border-bottom: 2px solid var(--accent-blue); display: flex; align-items: center; justify-content: center; gap: 0.45rem; transition: all 0.15s ease;"
+                            >
+                                <span>📸</span>
+                                <span>${I18n.t('select_from_snapshots')}</span>
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-tab-upload"
+                                onclick="PersonForm.switchPhotoTab('upload')"
+                                style="flex: 1; padding: 0.75rem 1rem; border: none; background: transparent; font-size: 0.83rem; font-weight: 600; cursor: pointer; color: var(--text-tertiary); border-bottom: 2px solid transparent; display: flex; align-items: center; justify-content: center; gap: 0.45rem; transition: all 0.15s ease;"
+                            >
+                                <span>📁</span>
+                                <span>${I18n.t('photos_from_device')}</span>
+                            </button>
                         </div>
-                        <input
-                            type="file"
-                            id="photo-input"
-                            accept="image/*"
-                            multiple
-                            hidden
-                            onchange="PersonForm.handleFileSelect(event)"
-                        />
-                        <div class="upload-preview" id="upload-preview" style="margin-top: 0.75rem;"></div>
-                    </form>
+
+                        <!-- Panel A: Snapshots Picker -->
+                        <div id="panel-unknown-logs" style="padding: 0.85rem; display: block;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; gap: 0.5rem; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 0.45rem; align-items: center; flex: 1; min-width: 220px; flex-wrap: wrap;">
+                                    <select id="unknown-type-filter" class="form-input" onchange="PersonForm.onSnapshotTypeFilterChange(this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; height: 30px; width: auto; min-width: 140px;">
+                                        <option value="unknown">${I18n.t('filter_unknown_only')}</option>
+                                        <option value="person">${I18n.t('filter_person_only')}</option>
+                                        <option value="all">${I18n.t('filter_all_snapshots')}</option>
+                                    </select>
+                                    <select id="unknown-camera-filter" class="form-input" onchange="PersonForm.onCameraFilterChange(this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; height: 30px; width: auto; min-width: 120px;">
+                                        <option value="">${I18n.t('filter_by_camera')}</option>
+                                    </select>
+                                </div>
+                                <button type="button" class="btn btn-xs btn-secondary" onclick="PersonForm.loadUnknownLogs(true)" title="Refresh" style="height: 30px; padding: 0 0.55rem;">
+                                    🔄
+                                </button>
+                            </div>
+
+                            <div id="unknown-logs-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 0.55rem; max-height: 220px; overflow-y: auto; padding: 0.55rem; background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+                                <div style="grid-column: 1 / -1; text-align: center; color: var(--text-tertiary); padding: 1.5rem 0; font-size: 0.8rem;">
+                                    <div class="spinner" style="width: 22px; height: 22px; margin: 0 auto 0.4rem auto;"></div>
+                                    ${I18n.t('loading')}
+                                </div>
+                            </div>
+
+                            <div id="unknown-logs-load-more" style="text-align: center; margin-top: 0.6rem; display: none;">
+                                <button type="button" class="btn btn-xs btn-secondary" onclick="PersonForm.loadMoreUnknownLogs()" style="font-size: 0.72rem; padding: 0.25rem 0.8rem;">
+                                    ⬇️ ${I18n.t('load_more_logs')}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Panel B: Local Device File Upload -->
+                        <div id="panel-device-upload" style="padding: 1.15rem; display: none;">
+                            <div
+                                class="upload-zone"
+                                id="upload-zone"
+                                onclick="document.getElementById('photo-input').click()"
+                                ondragover="PersonForm.handleDragOver(event)"
+                                ondragleave="PersonForm.handleDragLeave(event)"
+                                ondrop="PersonForm.handleDrop(event)"
+                                style="padding: 1.25rem 1rem;"
+                            >
+                                <div class="upload-zone-icon" style="font-size: 2rem; margin-bottom: 0.35rem;">📸</div>
+                                <div class="upload-zone-text" style="font-size: 0.88rem;">${I18n.t('upload_drag_text')}</div>
+                                <div class="upload-zone-hint" style="font-size: 0.75rem; margin-top: 0.25rem;">${I18n.t('upload_hint_2')}</div>
+                            </div>
+                            <input
+                                type="file"
+                                id="photo-input"
+                                accept="image/*"
+                                multiple
+                                hidden
+                                onchange="PersonForm.handleFileSelect(event)"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem;">
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle);">
                 <button class="btn btn-secondary" onclick="App.closeModal()">${I18n.t('close')}</button>
-                <button class="btn btn-primary" type="submit" form="add-photos-form" id="btn-submit-photos">
+                <button class="btn btn-primary" type="button" onclick="PersonForm.handleAddPhotos(event, ${personId})" id="btn-submit-photos">
                     <span>⬆️</span>
-                    <span>${I18n.t('btn_add_photos')}</span>
+                    <span>${I18n.t('btn_add_photos')}${countSuffix}</span>
                 </button>
             </div>
         `;
+    },
+
+    /**
+     * Initialize modal state after rendering Add Photos modal.
+     */
+    async initAddPhotosModalState(personId) {
+        PersonForm.updatePreview();
+        await PersonForm.loadExistingPhotos(personId);
+        await PersonForm.populateCameraDropdown();
+        PersonForm.loadUnknownLogs(true);
+    },
+
+    /**
+     * Entrypoint to show Add Photos modal for an existing person.
+     */
+    showAddPhotosModal(personId, personName) {
+        PersonForm.reset();
+        PersonForm._currentPersonId = personId;
+        PersonForm._currentPersonName = personName;
+        App.openModal(PersonForm.renderAddPhotosModal(personId, personName), 'modal-lg');
+        PersonForm.initAddPhotosModalState(personId);
     },
 
     /**
@@ -1004,11 +1104,15 @@ const PersonForm = {
         const localFiles = [];
 
         PersonForm._selectedPhotos.forEach(p => {
-            if (p.type === 'event' && p.eventId) eventIds.push(p.eventId);
-            else if (p.type === 'file' && p.file) localFiles.push(p.file);
-        });
-        PersonForm._selectedFiles.forEach(f => {
-            if (!localFiles.includes(f)) localFiles.push(f);
+            if (p.type === 'event' && p.eventId) {
+                if (!eventIds.includes(p.eventId)) {
+                    eventIds.push(p.eventId);
+                }
+            } else if (p.type === 'file' && p.file) {
+                if (!localFiles.includes(p.file)) {
+                    localFiles.push(p.file);
+                }
+            }
         });
 
         if (eventIds.length > 0) {
@@ -1023,23 +1127,49 @@ const PersonForm = {
 
             await App.api(`/api/persons/${personId}/photos`, 'POST', formData);
 
-            PersonForm.reset();
+            // Update cached events
+            if (eventIds.length > 0) {
+                eventIds.forEach(id => {
+                    if (EventCard._cache[id]) {
+                        EventCard._cache[id].person_name = PersonForm._currentPersonName || '';
+                        EventCard._cache[id].is_known = true;
+                        EventCard._cache[id].person_id = personId;
+                    }
+                });
+            }
+
+            // Clear selected photos for the next batch
+            PersonForm._selectedPhotos = [];
+            PersonForm._selectedFiles = [];
             PersonForm.updatePreview();
+
             App.toast(I18n.t('photos_added_success'), 'success');
 
             // Refresh existing photos in modal
             await PersonForm.loadExistingPhotos(personId);
 
+            // Refresh snapshot grid
+            PersonForm.loadUnknownLogs(true);
+
             // Also reload persons in background to keep stats updated
             if (typeof PersonsPage !== 'undefined' && PersonsPage.loadPersons) {
                 PersonsPage.loadPersons();
+            }
+
+            // Refresh Dashboard events if on Dashboard
+            if (typeof DashboardPage !== 'undefined' && DashboardPage.loadEvents) {
+                DashboardPage.loadEvents();
+                if (DashboardPage.loadStats) DashboardPage.loadStats();
             }
         } catch (err) {
             App.toast(I18n.t('err_generic', { msg: err.message }), 'error');
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = `<span>⬆️</span> <span>${I18n.t('btn_add_photos')}</span>`;
+                const count = PersonForm._selectedPhotos.length;
+                const countDisplay = I18n.isRTL() ? I18n.toPersianDigits(count) : count;
+                const countSuffix = count > 0 ? ` (${countDisplay})` : '';
+                submitBtn.innerHTML = `<span>⬆️</span> <span>${I18n.t('btn_add_photos')}${countSuffix}</span>`;
             }
         }
     },
@@ -1057,6 +1187,9 @@ const PersonForm = {
         PersonForm._unknownLogsOffset = 0;
         PersonForm._hasMoreUnknownLogs = true;
         PersonForm._isLoadingUnknownLogs = false;
+        PersonForm._currentPersonId = null;
+        PersonForm._currentPersonName = null;
+        PersonForm._activeTab = 'unknown';
     },
 
     /**

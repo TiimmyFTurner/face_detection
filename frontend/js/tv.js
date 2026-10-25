@@ -65,6 +65,9 @@ const TVBoard = {
             station_operator: 'اپراتور ایستگاه',
             shift_night: 'شیفت شب',
             grace_period: 'مهلت ورود',
+            status_in_grace: 'در مهلت ورود',
+            grace_progress: '{el} از {gr} دقیقه',
+            seen_ago_m: 'آخرین رویت: {m} دقیقه قبل',
         },
         en: {
             title: 'Factory Live Shift & Attendance Monitor',
@@ -111,7 +114,14 @@ const TVBoard = {
             station_operator: 'Station Operator',
             shift_night: 'Night Shift',
             grace_period: 'Grace Period',
+            status_in_grace: 'In Grace Period',
+            grace_progress: '{el}/{gr}m',
+            seen_ago_m: 'Last seen: {m}m ago',
         }
+    },
+
+    get isRtl() {
+        return this._lang === 'fa';
     },
 
     t(key, params = {}) {
@@ -528,15 +538,15 @@ const TVBoard = {
         } else {
             // Present
             if (person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) {
-                statusText = this.isRtl ? 'در مهلت ورود' : 'In Grace Period';
+                statusText = this.t('status_in_grace');
                 const el = Math.round(person.shift_elapsed_minutes || 0);
                 const gr = person.grace_period_minutes || 10;
-                statusSub = `${this.toDigits(el)}/${this.toDigits(gr)}m`;
+                statusSub = this.t('grace_progress', { el: this.toDigits(el), gr: this.toDigits(gr) });
             } else if (person.last_seen_seconds_ago !== null && person.last_seen_seconds_ago !== undefined) {
                 const s = Math.round(person.last_seen_seconds_ago);
                 statusSub = s < 5
                     ? this.t('seen_just_now')
-                    : (s < 60 ? this.t('seen_ago', { s: this.toDigits(s) }) : `${this.toDigits(Math.round(s / 60))}m ago`);
+                    : (s < 60 ? this.t('seen_ago', { s: this.toDigits(s) }) : this.t('seen_ago_m', { m: this.toDigits(Math.round(s / 60)) }));
             } else {
                 statusSub = this.t('seen_just_now');
             }

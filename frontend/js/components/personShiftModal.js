@@ -10,6 +10,7 @@ const PersonShiftModal = {
     _sections: [],
     _cameras: [],
     _allZones: [],
+    _outsideScopeAssignedZones: [],
     _selectedZoneIds: new Set(),
     _selectedTemplateId: null,
     _isCustomShift: false,
@@ -40,6 +41,7 @@ const PersonShiftModal = {
     async show(personId) {
         this._personId = personId;
         this._selectedZoneIds = new Set();
+        this._outsideScopeAssignedZones = [];
         this._selectedTemplateId = null;
         this._isCustomShift = false;
         this._customSubtype = 'fixed';
@@ -78,7 +80,10 @@ const PersonShiftModal = {
             this._sections = sections || [];
             this._cameras = cameras || [];
 
-            // Combine all defined zones and assigned zones into a unified list
+            const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin();
+            const allowedCamIds = new Set((this._cameras || []).map(c => Number(c.id)));
+
+            // Separate zones: Accessible to this supervisor vs. outside-scope
             const zoneMap = new Map();
             (allZones || []).forEach(z => zoneMap.set(z.id, z));
             (shiftData.assigned_zones || []).forEach(z => {
@@ -86,10 +91,28 @@ const PersonShiftModal = {
                     zoneMap.set(z.id, z);
                 }
             });
-            this._allZones = Array.from(zoneMap.values());
 
-            // Pre-select assigned zones
-            this._selectedZoneIds = new Set((shiftData.assigned_zones || []).map(z => z.id));
+            const accessibleZones = [];
+            const outsideScopeAssignedZones = [];
+
+            zoneMap.forEach(z => {
+                const camId = Number(z.camera_id);
+                if (isAdmin || allowedCamIds.has(camId)) {
+                    accessibleZones.push(z);
+                } else if ((shiftData.assigned_zones || []).some(az => az.id === z.id)) {
+                    outsideScopeAssignedZones.push(z);
+                }
+            });
+
+            this._allZones = accessibleZones;
+            this._outsideScopeAssignedZones = outsideScopeAssignedZones;
+
+            // Pre-select assigned zones within the supervisor's accessible camera scope
+            this._selectedZoneIds = new Set(
+                (shiftData.assigned_zones || [])
+                    .filter(z => isAdmin || allowedCamIds.has(Number(z.camera_id)))
+                    .map(z => z.id)
+            );
 
             // Initialize shift timetable and breaks
             if (shiftData.custom_shift) {
@@ -238,10 +261,19 @@ const PersonShiftModal = {
         // 1. Sections options with robust matching and fallback
         const currentSec = (d.section || '').replace(/\r?\n+/g, ' ').trim();
         const norm = s => (s || '').replace(/\r?\n+/g, ' ').replace(/\u200c/g, ' ').trim().toLowerCase();
+        const curUser = (typeof Auth !== 'undefined' && Auth.getUser()) || {};
+        const isSupervisorUser = typeof Auth !== 'undefined' && Auth.isSupervisor();
+        const supervisorSections = isSupervisorUser ? (curUser.assigned_sections || []) : [];
+
+        // If supervisor has assigned sections, only allow picking their assigned sections (or current person section)
+        const filteredSections = (isSupervisorUser && supervisorSections.length > 0)
+            ? this._sections.filter(s => supervisorSections.includes(s.name) || norm(s.name) === norm(currentSec))
+            : this._sections;
+
         let sectionOptions = `<option value="">— ${isFa ? 'بدون بخش (عمومی)' : 'No Section (General)'} —</option>`;
         let matched = false;
 
-        this._sections.forEach(s => {
+        filteredSections.forEach(s => {
             const sName = (s.name || '').replace(/\r?\n+/g, ' ').trim();
             if (!sName) return;
             const isSel = (norm(sName) === norm(currentSec));
@@ -339,16 +371,21 @@ const PersonShiftModal = {
         `).join('');
 
         // 4. Admin-Defined Workstations (Camera Zones) List
+        const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin();
+        const allowedCamIds = new Set((this._cameras || []).map(c => Number(c.id)));
         const camMap = new Map();
         this._cameras.forEach(c => camMap.set(c.id, c));
 
         let workstationsHtml = '';
         if (this._allZones.length === 0) {
+            const noCamMsg = !isAdmin && allowedCamIds.size === 0
+                ? (isFa ? 'هیچ دوربینی برای نظارت به حساب سرپرستی شما اختصاص نیافته است.' : 'No cameras are currently assigned to your supervisor account.')
+                : (isFa ? 'هیچ ایستگاه کاری فعالی روی دوربین‌های اختصاص‌یافته به شما تعریف نشده است.' : 'No workstation zones are configured on your assigned cameras.');
             workstationsHtml = `
                 <div class="p-3 text-center card-glass" style="border-radius: var(--radius-sm); border: 1px dashed var(--border-subtle);" dir="auto">
                     <span style="font-size: 1.5rem; display: block; margin-bottom: 0.35rem; opacity: 0.7;">📹</span>
-                    <strong style="display: block; font-size: 0.86rem; color: var(--text-secondary);">${isFa ? 'ایستگاه‌های کاری دوربین توسط مدیر سیستم در بخش دوربین‌ها و مناطق تعریف می‌شوند.' : 'Workstation camera zones are configured by the system administrator.'}</strong>
-                    <small class="text-muted" style="display: block; margin-top: 3px;">${isFa ? 'در حال حاضر منطقه‌ای در سامانه یافت نشد. به محض تعریف مناطق توسط مدیر، در اینجا قابل مشاهده خواهند بود.' : 'No zones are currently defined. Once created by admin, they will appear here.'}</small>
+                    <strong style="display: block; font-size: 0.86rem; color: var(--text-secondary);">${noCamMsg}</strong>
+                    <small class="text-muted" style="display: block; margin-top: 3px;">${isFa ? 'به محض تعریف مناطق روی دوربین‌های شما توسط مدیر سامانه، در اینجا قابل انتخاب خواهند بود.' : 'Once workstation zones are created on your cameras by the administrator, they will appear here.'}</small>
                 </div>
             `;
         } else {
@@ -393,10 +430,20 @@ const PersonShiftModal = {
                 `;
             }).join('');
 
+            const outsideNotice = (this._outsideScopeAssignedZones && this._outsideScopeAssignedZones.length > 0) ? `
+                <div class="mt-2 p-2 rounded text-xs d-flex align-items-center gap-2" style="background: rgba(56, 189, 248, 0.06); border: 1px dashed rgba(56, 189, 248, 0.25); color: #94a3b8;" dir="auto">
+                    <span style="font-size: 1rem;">🔒</span>
+                    <span>${isFa 
+                        ? `این فرد در ${this._outsideScopeAssignedZones.length} ایستگاه کاری روی سایر دوربین‌های خارج از نظارت شما نیز فعال است (تعریف‌شده توسط مدیر سامانه). این انتساب‌ها به صورت خودکار حفظ می‌شوند.` 
+                        : `This person is also active in ${this._outsideScopeAssignedZones.length} workstation(s) on other cameras outside your supervisory scope (managed by admin). These assignments will be preserved.`}</span>
+                </div>
+            ` : '';
+
             workstationsHtml = `
                 <div class="zones-subgrid">
                     ${zoneItemsHtml}
                 </div>
+                ${outsideNotice}
             `;
         }
 
@@ -429,9 +476,11 @@ const PersonShiftModal = {
                             <select id="person-shift-section" class="form-control form-select" style="height: 38px; padding: 6px 12px; font-weight: 600; font-size: 0.88rem; flex: 1;">
                                 ${sectionOptions}
                             </select>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="PersonShiftModal.quickAddSection()" title="${isFa ? 'افزودن بخش جدید' : 'Add New Section'}" style="padding: 0 14px; height: 38px;">
-                                ➕
-                            </button>
+                            ${(isAdmin || (typeof Auth !== 'undefined' && Auth.hasPermission('sections:manage'))) ? `
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="PersonShiftModal.quickAddSection()" title="${isFa ? 'افزودن بخش جدید' : 'Add New Section'}" style="padding: 0 14px; height: 38px;">
+                                    ➕
+                                </button>
+                            ` : ''}
                         </div>
                         <small class="text-muted d-block text-xs mt-1" dir="auto" style="line-height: 1.4;">
                             ${isFa ? 'انتساب فرد به بخش کارخانه، باعث دسترسی خودکار سرپرست این بخش به سوابق و وضعیت حضور او می‌شود.' : 'Assigning a person to a factory section automatically grants that section\'s supervisor access to their records and attendance status.'}
@@ -1046,11 +1095,14 @@ const PersonShiftModal = {
             }
         }
 
+        const outsideIds = (this._outsideScopeAssignedZones || []).map(z => z.id);
+        const finalZoneIds = Array.from(new Set([...this._selectedZoneIds, ...outsideIds]));
+
         const payload = {
             section: sectionVal,
             shift_template_id: shiftTemplateIdPayload,
             custom_shift: customShiftPayload,
-            assigned_zone_ids: Array.from(this._selectedZoneIds),
+            assigned_zone_ids: finalZoneIds,
         };
 
         try {

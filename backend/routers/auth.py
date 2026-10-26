@@ -37,6 +37,10 @@ def _build_user_response(user: User) -> UserResponse:
     role_name = user.role.name if user.role else ""
     role_display = user.role.display_name if user.role else ""
     effective_perms = list(get_user_permissions(user))
+    assigned_secs = user.assigned_sections or []
+    assigned_cams = user.assigned_camera_ids or []
+    assigned_pers = user.assigned_person_ids or []
+    is_scoped = bool((role_name == "supervisor" or assigned_secs or assigned_cams or assigned_pers) and role_name != "admin")
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -45,6 +49,10 @@ def _build_user_response(user: User) -> UserResponse:
         role_name=role_name,
         role_display_name=role_display,
         custom_permissions=user.custom_permissions or [],
+        assigned_sections=assigned_secs,
+        assigned_camera_ids=assigned_cams,
+        assigned_person_ids=assigned_pers,
+        is_scoped=is_scoped,
         effective_permissions=effective_perms,
         permissions=effective_perms,
         is_active=user.is_active,

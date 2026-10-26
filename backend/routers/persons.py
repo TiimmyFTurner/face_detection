@@ -1717,6 +1717,9 @@ async def get_person_shift_config(
 
     assigned_zones: list[PersonShiftZoneInfo] = []
     for z in all_zones:
+        # If user is scoped (supervisor), only include assigned zones that belong to cameras within supervisor's scope
+        if scope.is_scoped and not scope.can_access_camera(z.camera_id):
+            continue
         pids = [int(x) for x in _parse_list_field(z.assigned_person_ids, []) if str(x).isdigit()]
         if person.id in pids:
             assigned_zones.append(
@@ -1827,7 +1830,27 @@ async def update_person_shift_config(
         target_zone_ids = set(data.assigned_zone_ids)
         zones_res = await db.execute(select(CameraZone))
         all_zones = zones_res.scalars().all()
+
+        # If user is scoped (supervisor), validate that all target zones belong to cameras in supervisor's scope
+        if scope.is_scoped and scope.camera_ids is not None:
+            zone_cam_map = {z.id: z.camera_id for z in all_zones}
+            for zid in target_zone_ids:
+                cam_id = zone_cam_map.get(zid)
+                if cam_id is not None and not scope.can_access_camera(cam_id):
+                    # Check if this person was ALREADY assigned to this outside zone (preservation)
+                    z_obj = next((z for z in all_zones if z.id == zid), None)
+                    prev_pids = [int(x) for x in _parse_list_field(z_obj.assigned_person_ids, []) if str(x).isdigit()] if z_obj else []
+                    if person_id not in prev_pids:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="شما فقط مجاز به انتساب ایستگاه‌های کاری دوربین‌های تخصیص‌یافته به خود هستید.",
+                        )
+
         for z in all_zones:
+            # If user is scoped, only modify assignments for cameras in supervisor's scope
+            if scope.is_scoped and not scope.can_access_camera(z.camera_id):
+                continue
+
             current_pids = [int(x) for x in _parse_list_field(z.assigned_person_ids, []) if str(x).isdigit()]
             if z.id in target_zone_ids and person_id not in current_pids:
                 current_pids.append(person_id)

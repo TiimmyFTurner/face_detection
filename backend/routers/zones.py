@@ -222,9 +222,13 @@ def is_time_in_free_time(
 async def list_camera_zones(
     camera_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:view")),
+    _user: User = Depends(require_permission("zones:view")),
 ):
     """List all important areas/zones defined on a specific camera."""
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped and not scope.can_access_camera(camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به این دوربین برای شما مجاز نیست.")
+
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -242,9 +246,13 @@ async def create_camera_zone(
     camera_id: int,
     data: CameraZoneCreate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:create")),
+    _user: User = Depends(require_permission("zones:create")),
 ):
     """Create a new important area/zone on a camera with timetable, free times, and assigned persons."""
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped and not scope.can_access_camera(camera_id):
+        raise HTTPException(status_code=403, detail="ایجاد منطقه روی این دوربین برای شما مجاز نیست.")
+
     camera = await db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -284,13 +292,17 @@ async def create_camera_zone(
 @router.get("/api/zones/status", response_model=list[ZoneStatusResponse])
 async def get_zones_status(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:view")),
+    _user: User = Depends(require_permission("zones:view")),
 ):
     """
     Get the real-time presence status board for all configured camera zones.
     Shows whether assigned persons are currently in their zones, absent, or off-duty.
     """
-    zones_result = await db.execute(select(CameraZone).order_by(CameraZone.created_at.asc()))
+    scope = await get_user_scope(_user, db)
+    query = select(CameraZone).order_by(CameraZone.created_at.asc())
+    if scope.is_scoped and scope.camera_ids is not None:
+        query = query.where(CameraZone.camera_id.in_(scope.camera_ids))
+    zones_result = await db.execute(query)
     zones = zones_result.scalars().all()
 
     cameras_result = await db.execute(select(Camera))
@@ -1104,10 +1116,14 @@ async def get_zone_logs(
 @router.get("/api/zones", response_model=list[CameraZoneResponse])
 async def list_all_zones(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:view")),
+    _user: User = Depends(require_permission("zones:view")),
 ):
-    """List all defined camera zones across the system."""
-    result = await db.execute(select(CameraZone).order_by(CameraZone.created_at.desc()))
+    """List all defined camera zones across the system (scoped for supervisors)."""
+    scope = await get_user_scope(_user, db)
+    query = select(CameraZone).order_by(CameraZone.created_at.desc())
+    if scope.is_scoped and scope.camera_ids is not None:
+        query = query.where(CameraZone.camera_id.in_(scope.camera_ids))
+    result = await db.execute(query)
     return result.scalars().all()
 
 
@@ -1115,12 +1131,15 @@ async def list_all_zones(
 async def get_zone(
     zone_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:view")),
+    _user: User = Depends(require_permission("zones:view")),
 ):
     """Get details for a specific camera zone."""
     zone = await db.get(CameraZone, zone_id)
     if not zone:
         raise HTTPException(status_code=404, detail="Zone not found")
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped and not scope.can_access_camera(zone.camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به این منطقه برای شما مجاز نیست.")
     return zone
 
 
@@ -1129,12 +1148,15 @@ async def update_zone(
     zone_id: int,
     data: CameraZoneUpdate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:edit")),
+    _user: User = Depends(require_permission("zones:edit")),
 ):
     """Update a camera zone's coordinates, name, assigned persons, timetable, or alert mode."""
     zone = await db.get(CameraZone, zone_id)
     if not zone:
         raise HTTPException(status_code=404, detail="Zone not found")
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped and not scope.can_access_camera(zone.camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به ویرایش این منطقه برای شما مجاز نیست.")
 
     if data.name is not None:
         zone.name = data.name
@@ -1182,12 +1204,15 @@ async def update_zone(
 async def delete_zone(
     zone_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:delete")),
+    _user: User = Depends(require_permission("zones:delete")),
 ):
     """Delete a camera zone."""
     zone = await db.get(CameraZone, zone_id)
     if not zone:
         raise HTTPException(status_code=404, detail="Zone not found")
+    scope = await get_user_scope(_user, db)
+    if scope.is_scoped and not scope.can_access_camera(zone.camera_id):
+        raise HTTPException(status_code=403, detail="دسترسی به حذف این منطقه برای شما مجاز نیست.")
 
     await db.delete(zone)
     await db.commit()

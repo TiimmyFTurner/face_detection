@@ -211,3 +211,137 @@ async def test_supervisor_scope_isolation(client: AsyncClient):
         assert scope.can_access_camera(asmb_cam_id) is False
         assert scope.can_access_person(pack_per_id) is True
         assert scope.can_access_person(asmb_per_id) is False
+
+
+@pytest.mark.asyncio
+async def test_supervisor_camera_workstation_isolation(client: AsyncClient):
+    """Test that supervisors can only view and select workstations on cameras assigned to them."""
+    from backend.main import app
+    from backend.auth import get_current_user
+    from tests.test_api import mock_admin
+
+    async with test_session() as session:
+        # Create Camera 1 (Packaging - assigned to supervisor)
+        cam1 = Camera(name="Pack Cam #1", rtsp_url="rtsp://localhost/p1", section="بسته‌بندی", is_active=True)
+        session.add(cam1)
+
+        # Create Camera 2 (Security - NOT assigned to supervisor)
+        cam2 = Camera(name="Security Cam #2", rtsp_url="rtsp://localhost/sec", section="حراست", is_active=True)
+        session.add(cam2)
+
+        # Create Person in Packaging
+        person = Person(name="Worker Packaging", role="Packer", section="بسته‌بندی")
+        session.add(person)
+        await session.flush()
+
+        # Zone on Camera 1 (Packaging)
+        z1 = CameraZone(
+            camera_id=cam1.id,
+            name="Zone Pack 1",
+            x=10, y=10, width=50, height=50,
+            assigned_person_ids=[],
+            alert_mode="presence",
+        )
+        session.add(z1)
+
+        # Zone on Camera 2 (Security)
+        z2 = CameraZone(
+            camera_id=cam2.id,
+            name="Zone Security 2",
+            x=10, y=10, width=50, height=50,
+            assigned_person_ids=[],
+            alert_mode="presence",
+        )
+        session.add(z2)
+
+        # Supervisor User scoped to 'بسته‌بندی' and cam1
+        sup_role = Role(
+            name="supervisor",
+            display_name="سرپرست بسته‌بندی",
+            permissions=[
+                "dashboard:view", "duty:view", "duty:manage",
+                "cameras:view", "persons:view", "persons:edit",
+                "zones:view",
+            ],
+        )
+        session.add(sup_role)
+        await session.flush()
+
+        sup_user = User(
+            username="sup_packaging_user",
+            full_name="سرپرست بسته‌بندی",
+            password_hash="hash",
+            salt="salt",
+            role_id=sup_role.id,
+            is_active=True,
+            assigned_sections=["بسته‌بندی"],
+            assigned_camera_ids=[cam1.id],
+            assigned_person_ids=[person.id],
+        )
+        session.add(sup_user)
+        await session.commit()
+        await session.refresh(sup_user)
+
+        c1_id = cam1.id
+        c2_id = cam2.id
+        z1_id = z1.id
+        z2_id = z2.id
+        p_id = person.id
+        sup_id = sup_user.id
+
+    # Switch current user to supervisor
+    async def override_supervisor():
+        async with test_session() as s:
+            u = await s.get(User, sup_id)
+            u.role = await s.get(Role, u.role_id)
+            return u
+
+    app.dependency_overrides[get_current_user] = override_supervisor
+
+    try:
+        # 1. GET /api/cameras for supervisor should ONLY return Camera 1
+        cam_resp = await client.get("/api/cameras")
+        assert cam_resp.status_code == 200
+        cams = cam_resp.json()
+        cam_ids = [c["id"] for c in cams]
+        assert c1_id in cam_ids
+        assert c2_id not in cam_ids
+
+        # 2. GET /api/zones for supervisor should ONLY return Zone 1 (Camera 1)
+        zone_resp = await client.get("/api/zones")
+        assert zone_resp.status_code == 200
+        zones = zone_resp.json()
+        zone_ids = [z["id"] for z in zones]
+        assert z1_id in zone_ids
+        assert z2_id not in zone_ids
+
+        # 3. GET /api/cameras/{cam2_id}/zones should be 403 Forbidden
+        cam2_zones_resp = await client.get(f"/api/cameras/{c2_id}/zones")
+        assert cam2_zones_resp.status_code == 403
+
+        # 4. GET /api/cameras/{cam1_id}/zones should succeed
+        cam1_zones_resp = await client.get(f"/api/cameras/{c1_id}/zones")
+        assert cam1_zones_resp.status_code == 200
+        assert any(z["id"] == z1_id for z in cam1_zones_resp.json())
+
+        # 5. Supervisor trying to assign unauthorized zone (Zone 2 on Camera 2) must fail with 403
+        bad_put_resp = await client.put(f"/api/persons/{p_id}/shift", json={
+            "section": "بسته‌بندی",
+            "assigned_zone_ids": [z2_id],
+        })
+        assert bad_put_resp.status_code == 403
+
+        # 6. Supervisor assigning authorized zone (Zone 1 on Camera 1) succeeds
+        ok_put_resp = await client.put(f"/api/persons/{p_id}/shift", json={
+            "section": "بسته‌بندی",
+            "assigned_zone_ids": [z1_id],
+        })
+        assert ok_put_resp.status_code == 200
+        assigned = [z["id"] for z in ok_put_resp.json()["assigned_zones"]]
+        assert z1_id in assigned
+
+    finally:
+        # Restore mock admin override
+        async def override_admin():
+            return mock_admin
+        app.dependency_overrides[get_current_user] = override_admin

@@ -717,11 +717,11 @@ const DutyPage = {
                     <div style="display: flex; gap: 0.9rem; align-items: flex-start;">
                         ${avatarHtml}
                         <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.25rem;">
-                                <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${DutyPage.escapeAttr(person.person_name)}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
+                                <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0; word-break: break-word;" title="${DutyPage.escapeAttr(person.person_name)}">
                                     ${person.person_name}
                                 </h4>
-                                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                <div style="display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap;">
                                     ${statusBadgeHtml}
                                     ${graceBadgeHtml}
                                 </div>
@@ -736,16 +736,24 @@ const DutyPage = {
                     </div>
 
                     <!-- Shift Time Window Badge -->
-                    <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border: 1px solid rgba(255, 255, 255, 0.1);">
-                        <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
-                            <span>🕐</span>
-                            <strong>${I18n.t('th_shift_hours')}:</strong>
-                            ${shiftNameHtml ? `${shiftNameHtml}` : ''}
-                            ${overnightBadgeHtml}
-                        </span>
-                        <span style="font-weight: 700; color: #38bdf8; direction: ltr;">
-                            ${windowStr} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 0.75rem;">(${shiftDurHours}h)</span>
-                        </span>
+                    <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; border: 1px solid rgba(255, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.35rem;">
+                            <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                                <span>🕐</span>
+                                <strong>${I18n.t('th_shift_hours')}:</strong>
+                                ${shiftNameHtml ? `${shiftNameHtml}` : ''}
+                                ${overnightBadgeHtml}
+                            </span>
+                            <span style="font-weight: 700; color: #38bdf8; direction: ltr;">
+                                ${windowStr} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 0.75rem;">(${shiftDurHours}h)</span>
+                            </span>
+                        </div>
+                        ${person.absence_timeout_minutes ? `
+                        <div style="font-size: 0.72rem; color: var(--text-tertiary); display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 0.25rem;">
+                            <span style="color: #60a5fa;">⏱️ ${I18n.t('threshold_and_grace', { threshold: isRtl ? I18n.toPersianDigits(person.absence_timeout_minutes || 5) : (person.absence_timeout_minutes || 5), grace: isRtl ? I18n.toPersianDigits(person.grace_period_minutes || 10) : (person.grace_period_minutes || 10) })}</span>
+                            ${person.absence_type === 'not_arrived' ? `<span class="badge" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(244,63,94,0.15); color: #fb7185;">${I18n.t('absence_type_not_arrived') || 'عدم ورود به شیفت'}</span>` : (person.absence_type === 'left_station' ? `<span class="badge" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(244,63,94,0.15); color: #fb7185;">${I18n.t('absence_type_left_station') || 'ترک ایستگاه کاری'}</span>` : '')}
+                        </div>
+                        ` : ''}
                     </div>
 
                     <!-- 2 Main Absence / Status Metrics -->

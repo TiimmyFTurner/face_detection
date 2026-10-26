@@ -672,7 +672,8 @@ async def compute_duty_roster_data(
                     last_seen_sec = None
                     last_seen_str = f"آف چرخشی ({cur_shift_name})"
                     curr_absence_mins = 0
-                elif not cur_in_schedule:
+                absence_type: Optional[str] = None
+                if not cur_in_schedule:
                     status_str = "off_duty"
                     is_in_zone = False
                     last_seen_sec = None
@@ -680,6 +681,7 @@ async def compute_duty_roster_data(
                     curr_absence_mins = 0
                 elif not is_cam_online:
                     status_str = "camera_offline"
+                    absence_type = "camera_offline"
                     is_in_zone = False
                     last_seen_sec = None
                     last_seen_str = "Camera Disconnected"
@@ -694,6 +696,7 @@ async def compute_duty_roster_data(
                         curr_absence_mins = 0
                     else:
                         status_str = "on_break"
+                        absence_type = "on_break"
                         is_in_zone = False
                         last_seen_sec = round(now_ts - last_seen, 1) if seen_in_shift else None
                         last_seen_str = f"On Break ({cur_break_name})"
@@ -728,11 +731,13 @@ async def compute_duty_roster_data(
                             last_seen_str = f"In Zone (seen {raw_missing_mins}m ago)"
                         else:
                             status_str = "absent"
+                            absence_type = "left_station"
                             is_in_zone = False
                             curr_absence_mins = net_missing
                             last_seen_str = f"Missing for {curr_absence_mins}m"
                     else:
                         status_str = "absent"
+                        absence_type = "not_arrived"
                         is_in_zone = False
                         last_seen_sec = None
                         last_seen_str = "Not Seen Yet"
@@ -911,6 +916,7 @@ async def compute_duty_roster_data(
                         absence_intervals=absence_intervals,
                         arrival_delay_minutes=raw_arrival_delay,
                         is_within_grace_period=is_within_grace,
+                        absence_type=absence_type,
                     )
                 )
 

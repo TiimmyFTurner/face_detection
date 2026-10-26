@@ -575,6 +575,7 @@ class PersonDutyStatus(BaseModel):
     absence_intervals: list[AbsenceInterval] = []
     arrival_delay_minutes: int = 0
     is_within_grace_period: bool = False
+    absence_type: Optional[str] = None  # "not_arrived", "left_station", "camera_offline", "on_break"
 
 
 class DutyRosterResponse(BaseModel):

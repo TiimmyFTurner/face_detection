@@ -28,6 +28,7 @@ const SupervisorCockpit = {
     _keyListener: null,
     _countdown: 10,
     _isLoading: false,
+    _expandedWindows: new Set(),
 
     escapeHtml(str) {
         if (!str) return '';
@@ -814,119 +815,388 @@ const SupervisorCockpit = {
         }
     },
 
+    /**
+     * Toggle expanded state of absence time windows drawer for a person.
+     */
+    toggleAbsenceWindows(personId) {
+        const idNum = Number(personId);
+        if (this._expandedWindows.has(idNum)) {
+            this._expandedWindows.delete(idNum);
+        } else {
+            this._expandedWindows.add(idNum);
+        }
+        this.renderRoster();
+    },
+
+    /**
+     * Render the expandable drawer listing detailed absence time windows.
+     */
+    renderAbsenceWindowsDrawer(duty) {
+        if (!duty) return '';
+        const isRtl = I18n.isRTL();
+        const intervals = duty.absence_intervals || [];
+        if (intervals.length === 0) {
+            return `
+                <div class="duty-absence-windows-drawer">
+                    <div class="duty-windows-header">
+                        <span>🕒 ${I18n.t('absence_windows_title') || 'بازه‌های زمانی عدم حضور در منطقه'}</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-tertiary); text-align: center; padding: 0.4rem;">
+                        ${I18n.t('no_absence_intervals') || 'بدون ثبت غیبت در این شیفت'}
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="duty-absence-windows-drawer">
+                <div class="duty-windows-header">
+                    <span>🕒 ${I18n.t('absence_windows_title') || 'بازه‌های زمانی عدم حضور در منطقه'}</span>
+                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">(${isRtl ? I18n.toPersianDigits(intervals.length) : intervals.length} ${isRtl ? 'بازه' : 'intervals'})</span>
+                </div>
+                <div class="duty-windows-list">
+                    ${intervals.map(w => {
+                        const startT = isRtl ? I18n.toPersianDigits(w.start_time) : w.start_time;
+                        const endT = w.interval_type === 'current'
+                            ? (I18n.t('window_now') || 'هم‌اکنون')
+                            : (isRtl ? I18n.toPersianDigits(w.end_time) : w.end_time);
+                        const durStr = isRtl ? I18n.toPersianDigits(w.duration_str) : w.duration_str;
+                        const typeKey = `interval_type_${w.interval_type}`;
+                        const typeLabel = I18n.t(typeKey) || (w.interval_type === 'unseen' ? (isRtl ? 'عدم ثبت حضور' : 'Never Seen Yet') : w.interval_type);
+                        const isCurrent = w.interval_type === 'current';
+                        return `
+                            <div class="duty-window-item ${isCurrent ? 'is-current' : ''}">
+                                <div class="duty-window-type-tag ${w.interval_type}">
+                                    ${isCurrent ? '🔴' : (w.interval_type === 'unseen' ? '⌛' : '⏳')} ${typeLabel}
+                                </div>
+                                <div class="duty-window-time" dir="ltr">
+                                    <span class="win-time">${startT}</span>
+                                    <span class="win-arrow">➜</span>
+                                    <span class="win-time ${isCurrent ? 'win-current' : ''}">${endT}</span>
+                                </div>
+                                <div class="duty-window-dur-pill">
+                                    ${durStr}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    },
+
     renderGridCard(item) {
         const { person, duty, status, isGrace } = item;
         const isRtl = I18n.isRTL();
         const initial = (person.name || 'P').trim().charAt(0).toUpperCase();
 
-        // Dynamic deterministic gradient based on person name (Zero-Photo privacy)
         const avatarGradient = this.getAvatarGradient(person.name);
         const badgeCfg = this.getStatusConfig(status, isGrace, duty);
 
-        const shiftWindowStr = duty ? duty.shift_window_str : (person.custom_shift ? 'سفارشی / چرخشی' : 'تعریف نشده');
-        const zoneName = duty ? duty.zone_name : 'ایستگاه منتسب ندارد';
+        const isPresent = status === 'present' && !isGrace;
+        const isAbsent = status === 'absent';
+        const isOffline = status === 'camera_offline';
+        const isOnBreak = status === 'on_break';
+        const isOnLeave = status === 'on_leave';
 
-        // Compliance rate
-        const compliancePct = duty ? (duty.shift_compliance_pct ?? 100) : 100;
-        let compPillClass = 'high';
-        if (compliancePct < 70) compPillClass = 'low';
-        else if (compliancePct < 85) compPillClass = 'medium';
+        const cardClass = isAbsent ? 'duty-absent' : (isPresent ? 'duty-present' : (isOffline ? 'duty-camera-offline' : (isOnBreak ? 'duty-on-break' : '')));
+
+        // Avatar: Image or Privacy Deterministic Gradient Badge with Live Beacon
+        const avatarUrl = (duty && duty.avatar_url) || person.avatar_url;
+        const avatarHtml = avatarUrl
+            ? `<img src="${this.escapeAttr(avatarUrl)}" alt="${this.escapeAttr(person.name)}" style="width: 52px; height: 52px; border-radius: 12px; object-fit: cover; border: 2px solid ${badgeCfg.dotColor}; flex-shrink: 0;" />`
+            : `<div class="sup-avatar-badge" style="width: 52px; height: 52px; font-size: 1.35rem; background: ${avatarGradient}; border: 2px solid ${badgeCfg.dotColor}; border-radius: 12px; flex-shrink: 0; position: relative;">
+                ${initial}
+                <span class="sup-beacon-dot ${badgeCfg.pulse ? 'pulse' : ''}" style="background: ${badgeCfg.dotColor}; --beacon-glow: ${badgeCfg.dotColor};"></span>
+               </div>`;
+
+        // Live status badge html
+        let statusBadgeHtml = '';
+        if (isPresent) {
+            const secAgo = (duty && duty.last_seen_seconds_ago !== null && duty.last_seen_seconds_ago !== undefined) ? Math.round(duty.last_seen_seconds_ago) : null;
+            const timeAgoText = secAgo !== null
+                ? (secAgo < 60 ? (isRtl ? `${I18n.toPersianDigits(secAgo)} ثانیه پیش` : `${secAgo}s ago`) : (isRtl ? `${I18n.toPersianDigits(Math.round(secAgo / 60))} دقیقه پیش` : `${Math.round(secAgo / 60)}m ago`))
+                : '';
+            statusBadgeHtml = `
+                <span class="badge-status-pill on-station" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                    🟢 ${timeAgoText ? (isRtl ? `حاضر در ایستگاه (${timeAgoText})` : `In Zone (${timeAgoText})`) : (isRtl ? 'حاضر در ایستگاه' : 'In Zone')}
+                </span>
+            `;
+        } else if (isGrace) {
+            const elapsed = duty ? duty.shift_elapsed_minutes : 0;
+            const grace = duty ? duty.grace_period_minutes : 15;
+            statusBadgeHtml = `
+                <span class="badge-status-pill in-grace" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);">
+                    ⏱️ ${isRtl ? `در مهلت مجاز ورود (${I18n.toPersianDigits(elapsed)} از ${I18n.toPersianDigits(grace)} دقیقه)` : `Arrival Grace (${elapsed}/${grace}m)`}
+                </span>
+            `;
+        } else if (isOnBreak) {
+            statusBadgeHtml = `
+                <span class="badge-status-pill on-break" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4);">
+                    ☕ ${duty && duty.current_break_name ? (isRtl ? `استراحت (${duty.current_break_name})` : `On Break (${duty.current_break_name})`) : (isRtl ? 'زمان استراحت مجاز' : 'On Break')}
+                </span>
+            `;
+        } else if (isOffline) {
+            statusBadgeHtml = `
+                <span class="badge-status-pill camera-offline" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.45);">
+                    🟡 ${isRtl ? 'دوربین قطع است' : 'Camera Disconnected'}
+                </span>
+            `;
+        } else if (isAbsent) {
+            const minsAbsent = duty ? (duty.current_absence_minutes || 0) : 0;
+            statusBadgeHtml = `
+                <span class="badge-status-pill absent" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; animation: pulse 2s infinite; background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4);">
+                    🔴 ${minsAbsent > 0 ? (isRtl ? `غایب از منطقه (${I18n.toPersianDigits(minsAbsent)} دقیقه)` : `Missing from Zone (${minsAbsent}m)`) : (isRtl ? 'غایب از منطقه' : 'Absent from Zone')}
+                </span>
+            `;
+        } else if (isOnLeave) {
+            statusBadgeHtml = `
+                <span class="badge-status-pill on-leave" style="font-size: 0.72rem; padding: 4px 10px; font-weight: 700; background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.4);">
+                    🏖️ ${isRtl ? 'مرخصی / آف' : 'On Leave / Off-Duty'}
+                </span>
+            `;
+        } else {
+            statusBadgeHtml = `
+                <span class="badge-status-pill off-duty" style="font-size: 0.72rem; padding: 4px 10px; background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25);">
+                    ⚪ ${isRtl ? 'خارج از شیفت' : 'Off-Duty'}
+                </span>
+            `;
+        }
 
         const cleanSection = (person.section || '').replace(/\r?\n+/g, ' ').trim() || (isRtl ? 'عمومی' : 'General');
-        const cleanRole = (person.role || '').replace(/\r?\n+/g, ' ').trim();
+        const cleanRole = (person.role || (duty && duty.person_role) || '').replace(/\r?\n+/g, ' ').trim();
+        const cameraName = duty ? (duty.camera_name || '—') : '—';
+        const zoneName = duty ? (duty.zone_name || 'ایستگاه منتسب ندارد') : 'ایستگاه منتسب ندارد';
+
+        // Shift metrics
+        const shiftWindowStr = duty ? duty.shift_window_str : (person.custom_shift ? (person.custom_shift.name || 'سفارشی') : 'تعریف نشده');
+        const windowStr = isRtl ? I18n.toPersianDigits(shiftWindowStr) : shiftWindowStr;
+        const shiftDurHours = duty ? (isRtl ? I18n.toPersianDigits(duty.shift_duration_hours) : duty.shift_duration_hours) : '—';
+        const shiftName = duty ? duty.shift_name : (person.custom_shift ? person.custom_shift.name : null);
+        const shiftNameHtml = shiftName
+            ? `<span style="color: var(--accent-cyan); font-weight: 700; font-size: 0.75rem;">${this.escapeHtml(shiftName)}</span>`
+            : '';
+        const isOvernight = duty ? duty.is_overnight : false;
+        const overnightBadgeHtml = isOvernight
+            ? `<span style="background: rgba(168, 85, 247, 0.18); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">🌙 ${I18n.t('overnight_badge') || 'شبانه'}</span>`
+            : '';
+
+        const timeoutMins = duty ? duty.absence_timeout_minutes : 0;
+        const graceMins = duty ? duty.grace_period_minutes : 0;
+
+        let absenceTypeTagHtml = '';
+        if (duty) {
+            if (duty.absence_type === 'not_arrived' || duty.last_seen_str === 'Not Seen Yet') {
+                absenceTypeTagHtml = `<span class="badge" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(244,63,94,0.15); color: #fb7185;">${I18n.t('absence_type_not_arrived') || 'عدم ورود به شیفت'}</span>`;
+            } else if (duty.absence_type === 'left_station') {
+                absenceTypeTagHtml = `<span class="badge" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(244,63,94,0.15); color: #fb7185;">${I18n.t('absence_type_left_station') || 'ترک ایستگاه کاری'}</span>`;
+            }
+        }
+
+        // Current Absence & Sum Displays
+        const currAbsenceDisplay = isOnBreak
+            ? (isRtl ? 'استراحت (مجاز)' : 'Break (Excused)')
+            : (isPresent
+                ? (isGrace ? (isRtl ? 'مهلت ورود (مجاز)' : 'Grace Period') : (isRtl ? '۰ دقیقه (حاضر)' : '0m (Present)'))
+                : (duty ? (isRtl ? I18n.toPersianDigits(duty.current_absence_str) : duty.current_absence_str) : '—'));
+
+        const sumShiftAbsenceDisplay = duty
+            ? (isRtl ? I18n.toPersianDigits(duty.shift_absence_str) : duty.shift_absence_str)
+            : '—';
+
+        const elapsedStr = duty
+            ? (isRtl ? I18n.toPersianDigits(Math.round(duty.shift_elapsed_minutes || 0)) : Math.round(duty.shift_elapsed_minutes || 0))
+            : '0';
+
+        let currentSubtext = '—';
+        if (isPresent) {
+            currentSubtext = isRtl ? '🟢 حاضر در محل خدمت' : 'In zone (Present)';
+        } else if (isAbsent && duty) {
+            if (duty.absence_type === 'not_arrived' || duty.last_seen_str === 'Not Seen Yet') {
+                currentSubtext = isRtl ? 'عدم ورود به شیفت (تاخیر ورود)' : 'Not Seen Yet';
+            } else if (duty.absence_type === 'left_station') {
+                currentSubtext = isRtl ? 'ترک ایستگاه کاری' : 'Left Workstation';
+            } else {
+                currentSubtext = duty.last_seen_str || (isRtl ? 'عدم حضور' : 'Absent');
+            }
+        } else if (duty) {
+            currentSubtext = duty.last_seen_str || '—';
+        }
+
+        // Intervals & Expand
+        const absenceCount = duty ? (duty.absence_count || 0) : 0;
+        const absenceCountDisp = isRtl ? I18n.toPersianDigits(absenceCount) : absenceCount;
+        const hasIntervals = duty && Array.isArray(duty.absence_intervals) && duty.absence_intervals.length > 0;
+        const isExpanded = this._expandedWindows.has(person.id);
+
+        // Compliance
+        const complianceNum = duty ? Math.min(100, Math.max(0, duty.shift_compliance_pct ?? 100)) : 100;
+        const compliancePct = isRtl ? I18n.toPersianDigits(complianceNum.toFixed(1)) : complianceNum.toFixed(1);
 
         return `
-            <div class="sup-roster-card" style="border-inline-start: 4px solid ${badgeCfg.dotColor};">
-                <!-- Top Row: Avatar + Name + Live Badge -->
-                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.65rem;">
-                    <div style="display: flex; align-items: center; gap: 0.85rem;">
-                        <!-- Deterministic Privacy Avatar Badge -->
-                        <div class="sup-avatar-badge" style="background: ${avatarGradient};">
-                            ${initial}
-                            <!-- Live status beacon dot with pulse -->
-                            <span class="sup-beacon-dot ${badgeCfg.pulse ? 'pulse' : ''}" style="background: ${badgeCfg.dotColor}; --beacon-glow: ${badgeCfg.dotColor};"></span>
-                        </div>
-                        <div>
-                            <strong style="display: block; font-size: 1rem; color: var(--text-primary); margin-bottom: 2px;">
+            <div class="duty-card ${cardClass}" id="sup-card-${person.id}">
+                <!-- Top Info Row: Avatar + Name + Live Badge + Station -->
+                <div style="display: flex; gap: 0.9rem; align-items: flex-start;">
+                    ${avatarHtml}
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
+                            <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0; word-break: break-word;" title="${this.escapeAttr(person.name)}">
                                 ${this.escapeHtml(person.name)}
-                            </strong>
-                            <div class="sup-card-tags-row">
-                                <span class="sup-card-section-badge" title="${this.escapeAttr(cleanSection)}">
-                                    <span>🏢</span>
-                                    <span>${this.escapeHtml(cleanSection)}</span>
-                                </span>
-                                ${cleanRole ? `
-                                    <span class="sup-card-role-badge" title="${this.escapeAttr(cleanRole)}">
-                                        <span>🏷️</span>
-                                        <span>${this.escapeHtml(cleanRole)}</span>
-                                    </span>
-                                ` : ''}
+                            </h4>
+                            <div style="display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                ${statusBadgeHtml}
                             </div>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-tertiary); margin-bottom: 0.35rem;">
+                            <span>💼 ${this.escapeHtml(cleanRole || (isRtl ? 'بدون سمت مشخص' : 'No role assigned'))}</span>
+                            <span class="sup-card-section-badge" style="padding: 1px 7px; font-size: 0.72rem;" title="${this.escapeAttr(cleanSection)}">
+                                🏢 ${this.escapeHtml(cleanSection)}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); padding: 3px 8px; border-radius: 6px; display: inline-block;">
+                            📍 <strong>${this.escapeHtml(cameraName)}</strong> — ${this.escapeHtml(zoneName)}
+                        </div>
                     </div>
-
-                    <!-- Status Pill -->
-                    <span class="badge" style="font-size: 0.74rem; padding: 4px 10px; background: ${badgeCfg.badgeBg}; color: ${badgeCfg.badgeColor}; border: 1px solid ${badgeCfg.badgeBorder}; border-radius: 9999px; white-space: nowrap; font-weight: 700;">
-                        ${badgeCfg.label}
-                    </span>
                 </div>
 
-                <!-- Middle Cluster: Shift, Zone, Real-Time Details -->
-                <div class="sup-card-meta">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
-                        <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;">
-                            <span>⏰</span>
-                            <span>${I18n.t('shift_label') || 'شیفت کاری'}:</span>
+                <!-- Shift Time Window Badge -->
+                <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.35rem;">
+                        <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                            <span>🕐</span>
+                            <strong>${I18n.t('th_shift_hours') || 'ساعات شیفت'}:</strong>
+                            ${shiftNameHtml ? `${shiftNameHtml}` : ''}
+                            ${overnightBadgeHtml}
                         </span>
-                        <strong style="color: var(--text-primary); direction: ltr; font-family: monospace; font-size: 0.82rem; white-space: nowrap;">${this.escapeHtml(shiftWindowStr)}</strong>
+                        <span style="font-weight: 700; color: #38bdf8; direction: ltr;">
+                            ${windowStr} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 0.75rem;">(${shiftDurHours}h)</span>
+                        </span>
                     </div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
-                        <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;">
-                            <span>🎯</span>
-                            <span>${I18n.t('workstation_label') || 'ایستگاه کاری'}:</span>
-                        </span>
-                        <span style="color: var(--accent-blue); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;" title="${this.escapeAttr(zoneName)}">${this.escapeHtml(zoneName)}</span>
-                    </div>
-
-                    ${badgeCfg.detailText ? `
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.78rem; border-top: 1px dashed var(--border-subtle); padding-top: 0.35rem; margin-top: 0.15rem;">
-                        <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;">
-                            <span>📡</span>
-                            <span>${I18n.t('status_detail') || 'وضعیت تردد'}:</span>
-                        </span>
-                        <span style="color: ${badgeCfg.detailColor}; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this.escapeHtml(badgeCfg.detailText)}</span>
+                    ${timeoutMins ? `
+                    <div style="font-size: 0.72rem; color: var(--text-tertiary); display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 0.25rem;">
+                        <span style="color: #60a5fa;">⏱️ ${I18n.t('threshold_and_grace', { threshold: isRtl ? I18n.toPersianDigits(timeoutMins) : timeoutMins, grace: isRtl ? I18n.toPersianDigits(graceMins) : graceMins }) || `آستانه غیبت: ${timeoutMins}دقیقه | مهلت ورود: ${graceMins}دقیقه`}</span>
+                        ${absenceTypeTagHtml}
                     </div>
                     ` : ''}
+                </div>
 
-                    <!-- Compliance Bar -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.75rem; margin-top: 2px;">
-                        <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;">
-                            <span>📊</span>
-                            <span>${I18n.t('kpi_compliance_rate') || 'انضباط شیفت'}:</span>
-                        </span>
-                        <span class="sup-compliance-pill ${compPillClass}">
-                            ${isRtl ? I18n.toPersianDigits(compliancePct) : compliancePct}%
-                        </span>
+                <!-- 2 Main Absence / Status Metrics (Exact Match with Executive Deck) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <!-- Status / Current Absence -->
+                    ${isOnBreak ? `
+                        <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                                ${I18n.t('status') || 'وضعیت'}
+                            </div>
+                            <div style="font-size: 1.05rem; font-weight: 800; color: #38bdf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeAttr(duty?.current_break_name || '')}">
+                                ${this.escapeHtml(duty?.current_break_name || (isRtl ? 'زمان استراحت' : 'Break Time'))}
+                            </div>
+                            <div style="font-size: 0.68rem; color: #7dd3fc; margin-top: 0.15rem;">
+                                ${isRtl ? 'غیبت معاف است (مجاز)' : 'Absence exempt (Excused)'}
+                            </div>
+                        </div>
+                    ` : (isOffline ? `
+                        <div style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                                ${I18n.t('status') || 'وضعیت'}
+                            </div>
+                            <div style="font-size: 1.05rem; font-weight: 800; color: #facc15;">
+                                ${I18n.t('status_camera_offline') || 'دوربین قطع'}
+                            </div>
+                            <div style="font-size: 0.68rem; color: #fef08a; margin-top: 0.15rem;">
+                                ${I18n.t('camera_feed_unavailable') || 'تصویر در دسترس نیست'}
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="background: ${isPresent ? 'rgba(16, 185, 129, 0.09)' : 'rgba(244, 63, 94, 0.09)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                                ${I18n.t('current_absence_title') || 'غیبت لحظه‌ای (عدم حضور)'}
+                            </div>
+                            <div style="font-size: 1.2rem; font-weight: 800; color: ${isPresent ? '#34d399' : '#fb7185'};">
+                                ${currAbsenceDisplay}
+                            </div>
+                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                                ${currentSubtext}
+                            </div>
+                        </div>
+                    `)}
+
+                    <!-- Sum of Current Shift Absence -->
+                    <div style="background: rgba(245, 158, 11, 0.09); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                            ${I18n.t('sum_shift_absence_title') || 'مجموع غیبت در شیفت'}
+                        </div>
+                        <div style="font-size: 1.2rem; font-weight: 800; color: #fbbf24;">
+                            ${sumShiftAbsenceDisplay}
+                        </div>
+                        <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                            ${isOffline
+                                ? (duty && duty.shift_absence_minutes === 0
+                                    ? (isRtl ? 'زمان قطعی جزو غیبت محاسبه نمی‌شود' : 'Offline time not counted as absence')
+                                    : (isRtl ? 'از ساعات آنلاین دوربین' : 'during online camera hours'))
+                                : (isRtl ? `از ${elapsedStr} دقیقه سپری شده` : `of ${elapsedStr}m elapsed`)}
+                        </div>
                     </div>
                 </div>
 
-                <!-- Action Bar: Shift Config + Leave Management + Analytics & Report + Today Events Log -->
-                <div class="sup-action-bar">
-                    <button type="button" class="btn btn-secondary sup-action-btn" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('manage_shift') || 'تنظیمات شیفت و ایستگاه'}">
-                        <span>⏰</span>
-                        <span>${I18n.t('shift') || 'شیفت'}</span>
-                    </button>
-                    <button type="button" class="btn btn-outline-primary sup-action-btn" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('manage_leaves_title') || 'مدیریت مرخصی و آف'}">
-                        <span>🏖️</span>
-                        <span>${I18n.t('leave') || 'مرخصی'}</span>
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary sup-action-btn" onclick="SupervisorAnalyticsModal.show(${person.id}, '${this.escapeAttr(person.name)}', '${this.escapeAttr(person.section || '')}', '${this.escapeAttr(person.role || '')}')" title="${I18n.t('analytics_and_report') || 'تحلیل جامع و گزارش'}">
+                <!-- Absence Count & Time Windows Bar -->
+                <div class="duty-absence-count-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.65rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.07); font-size: 0.76rem;">
+                    <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
+                        <span>📍</span>
+                        <strong style="color: ${absenceCount > 0 ? '#fbbf24' : 'var(--text-secondary)'};">
+                            ${I18n.t('absence_count_badge', { count: absenceCountDisp }) || `${absenceCountDisp} بار غیبت در این شیفت`}
+                        </strong>
+                    </span>
+                    ${hasIntervals ? `
+                        <button class="duty-windows-toggle-btn ${isExpanded ? 'active' : ''}" onclick="SupervisorCockpit.toggleAbsenceWindows(${person.id})">
+                            <span>${isExpanded ? '▲ ' + (I18n.t('hide_windows') || 'بستن بازه‌ها') : '🕒 ' + (I18n.t('absence_windows_btn') || 'بازه‌های غیبت')}</span>
+                            <span class="duty-window-badge-count">${isRtl ? I18n.toPersianDigits(duty.absence_intervals.length) : duty.absence_intervals.length}</span>
+                        </button>
+                    ` : `
+                        <span style="color: var(--text-tertiary); font-size: 0.7rem;">
+                            ${isOffline ? (isRtl ? 'دوربین قطع' : 'Camera offline') : (isRtl ? 'بدون خروج' : 'No absence')}
+                        </span>
+                    `}
+                </div>
+
+                ${isExpanded ? this.renderAbsenceWindowsDrawer(duty) : ''}
+
+                <!-- Shift Presence Progress Bar -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                        <span>${I18n.t('shift_presence_title') || 'Shift Presence'}: ${compliancePct}%</span>
+                        <span style="font-weight: 700; color: ${complianceNum >= 85 ? 'var(--accent-emerald)' : (complianceNum >= 60 ? 'var(--accent-amber)' : 'var(--accent-rose)')};">
+                            ${compliancePct}%
+                        </span>
+                    </div>
+                    <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden; display: flex;">
+                        <div style="width: ${complianceNum}%; height: 100%; background: linear-gradient(90deg, var(--accent-emerald), var(--accent-cyan)); transition: width 0.3s ease;"></div>
+                        <div style="width: ${Math.max(0, 100 - complianceNum)}%; height: 100%; background: var(--accent-rose); opacity: 0.6;"></div>
+                    </div>
+                </div>
+
+                <!-- Supervisor Actions Deck -->
+                <div style="display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.25rem;">
+                    <!-- Prominent Analytics & Summary Button (matching user screenshot) -->
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="SupervisorAnalyticsModal.show(${person.id}, '${this.escapeAttr(person.name)}', '${this.escapeAttr(person.section || '')}', '${this.escapeAttr(person.role || '')}')" style="width: 100%; justify-content: center; font-size: 0.82rem; padding: 7px 12px; font-weight: 700; border-radius: 8px; display: flex; align-items: center; gap: 6px;">
                         <span>📊</span>
-                        <span>${I18n.t('analytics_report_short') || 'گزارش'}</span>
+                        <span>${I18n.t('analytics_and_summary') || 'Analytics & Summary'}</span>
                     </button>
-                    <button type="button" class="btn btn-ghost sup-action-btn sup-action-btn-icon" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}">
-                        <span>📜</span>
-                    </button>
+
+                    <!-- Quick Action Bar for Supervisor tools -->
+                    <div class="sup-action-bar" style="display: grid; grid-template-columns: 1fr 1fr 38px; gap: 0.45rem;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'تنظیمات شیفت'}" style="font-size: 0.76rem; padding: 5px 8px; justify-content: center;">
+                            <span>⏰</span>
+                            <span>${I18n.t('shift') || 'شیفت'}</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="font-size: 0.76rem; padding: 5px 8px; justify-content: center;">
+                            <span>🏖️</span>
+                            <span>${I18n.t('leave') || 'مرخصی'}</span>
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="padding: 5px 6px; font-size: 0.8rem; justify-content: center;">
+                            <span>📜</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -939,26 +1209,41 @@ const SupervisorCockpit = {
         const avatarGradient = this.getAvatarGradient(person.name);
         const badgeCfg = this.getStatusConfig(status, isGrace, duty);
 
-        const shiftWindowStr = duty ? duty.shift_window_str : (person.custom_shift ? 'سفارشی / چرخشی' : 'تعریف نشده');
+        const avatarUrl = (duty && duty.avatar_url) || person.avatar_url;
+        const avatarHtml = avatarUrl
+            ? `<img src="${this.escapeAttr(avatarUrl)}" alt="${this.escapeAttr(person.name)}" style="width: 38px; height: 38px; border-radius: 8px; object-fit: cover; border: 2px solid ${badgeCfg.dotColor}; flex-shrink: 0;" />`
+            : `<div class="sup-avatar-badge" style="width: 38px; height: 38px; font-size: 0.95rem; background: ${avatarGradient}; flex-shrink: 0;">
+                ${initial}
+                <span class="sup-beacon-dot ${badgeCfg.pulse ? 'pulse' : ''}" style="width: 9px; height: 9px; background: ${badgeCfg.dotColor}; --beacon-glow: ${badgeCfg.dotColor};"></span>
+               </div>`;
+
+        const shiftWindowStr = duty ? duty.shift_window_str : (person.custom_shift ? (person.custom_shift.name || 'سفارشی') : 'تعریف نشده');
+        const shiftDurHours = duty ? (isRtl ? I18n.toPersianDigits(duty.shift_duration_hours) : duty.shift_duration_hours) : '—';
         const zoneName = duty ? duty.zone_name : '—';
-        const compliancePct = duty ? (duty.shift_compliance_pct ?? 100) : 100;
+        const cameraName = duty ? duty.camera_name : '';
+        const complianceNum = duty ? Math.min(100, Math.max(0, duty.shift_compliance_pct ?? 100)) : 100;
+        const compliancePct = isRtl ? I18n.toPersianDigits(complianceNum.toFixed(1)) : complianceNum.toFixed(1);
         let compPillClass = 'high';
-        if (compliancePct < 70) compPillClass = 'low';
-        else if (compliancePct < 85) compPillClass = 'medium';
+        if (complianceNum < 70) compPillClass = 'low';
+        else if (complianceNum < 85) compPillClass = 'medium';
 
         const cleanSection = (person.section || '').replace(/\r?\n+/g, ' ').trim() || (isRtl ? 'عمومی' : 'General');
-        const cleanRole = (person.role || '').replace(/\r?\n+/g, ' ').trim();
+        const cleanRole = (person.role || (duty && duty.person_role) || '').replace(/\r?\n+/g, ' ').trim();
+
+        const absenceCount = duty ? (duty.absence_count || 0) : 0;
+        const absenceCountDisp = isRtl ? I18n.toPersianDigits(absenceCount) : absenceCount;
+        const hasIntervals = duty && Array.isArray(duty.absence_intervals) && duty.absence_intervals.length > 0;
+        const isExpanded = this._expandedWindows.has(person.id);
+
+        const sumAbsenceDisp = duty ? (isRtl ? I18n.toPersianDigits(duty.shift_absence_str) : duty.shift_absence_str) : '0m';
 
         return `
             <tr style="background: var(--bg-surface); border-radius: var(--radius-sm); border-bottom: 1px solid var(--border-subtle);">
                 <td style="padding: 10px 14px;">
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <div class="sup-avatar-badge" style="width: 36px; height: 36px; font-size: 0.95rem; background: ${avatarGradient};">
-                            ${initial}
-                            <span class="sup-beacon-dot ${badgeCfg.pulse ? 'pulse' : ''}" style="width: 9px; height: 9px; background: ${badgeCfg.dotColor}; --beacon-glow: ${badgeCfg.dotColor};"></span>
-                        </div>
+                        ${avatarHtml}
                         <div>
-                            <strong style="display: block; font-size: 0.9rem; color: var(--text-primary);">${this.escapeHtml(person.name)}</strong>
+                            <strong style="display: block; font-size: 0.92rem; color: var(--text-primary); word-break: break-word;">${this.escapeHtml(person.name)}</strong>
                             ${cleanRole ? `<span class="sup-card-role-badge text-xs" style="margin-top: 3px;">🏷️ ${this.escapeHtml(cleanRole)}</span>` : ''}
                         </div>
                     </div>
@@ -966,35 +1251,58 @@ const SupervisorCockpit = {
                 <td style="padding: 10px 14px;">
                     <span class="sup-card-section-badge" title="${this.escapeAttr(cleanSection)}">🏢 ${this.escapeHtml(cleanSection)}</span>
                 </td>
-                <td style="padding: 10px 14px; direction: ltr; font-family: monospace; font-size: 0.82rem;">
-                    ${this.escapeHtml(shiftWindowStr)}
-                </td>
-                <td style="padding: 10px 14px; color: var(--accent-blue); font-size: 0.85rem; font-weight: 600;">
-                    ${this.escapeHtml(zoneName)}
+                <td style="padding: 10px 14px;">
+                    <div style="direction: ltr; font-family: monospace; font-size: 0.82rem; font-weight: 700; color: #38bdf8;">
+                        ${this.escapeHtml(shiftWindowStr)} <small style="color: var(--text-tertiary); font-weight: 400;">(${shiftDurHours}h)</small>
+                    </div>
+                    ${duty && duty.absence_timeout_minutes ? `
+                    <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 2px;">
+                        ⏱️ ${I18n.t('absence_threshold_tag', { mins: isRtl ? I18n.toPersianDigits(duty.absence_timeout_minutes) : duty.absence_timeout_minutes }) || `آستانه: ${duty.absence_timeout_minutes}دقیقه`}
+                    </div>
+                    ` : ''}
                 </td>
                 <td style="padding: 10px 14px;">
-                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="color: var(--accent-blue); font-size: 0.85rem; font-weight: 600;">
+                        ${this.escapeHtml(zoneName)}
+                    </div>
+                    ${cameraName ? `<small style="font-size: 0.72rem; color: var(--text-tertiary);">📷 ${this.escapeHtml(cameraName)}</small>` : ''}
+                </td>
+                <td style="padding: 10px 14px;">
+                    <div style="display: flex; flex-direction: column; gap: 3px;">
                         <span class="badge" style="font-size: 0.72rem; padding: 3px 8px; background: ${badgeCfg.badgeBg}; color: ${badgeCfg.badgeColor}; border: 1px solid ${badgeCfg.badgeBorder}; width: fit-content; font-weight: 700;">
                             ${badgeCfg.label}
                         </span>
-                        ${badgeCfg.detailText ? `<small style="font-size: 0.72rem; color: ${badgeCfg.detailColor}; font-weight: 600;">${this.escapeHtml(badgeCfg.detailText)}</small>` : ''}
+                        ${duty ? `
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                            <span>⏱️ ${I18n.t('sum_shift_absence_title') || 'غیبت'}:</span>
+                            <strong style="color: ${duty.shift_absence_minutes > 0 ? '#fbbf24' : 'var(--text-primary)'};">${sumAbsenceDisp}</strong>
+                        </div>
+                        ` : ''}
                     </div>
                 </td>
                 <td style="padding: 10px 14px;">
-                    <span class="sup-compliance-pill ${compPillClass}">
-                        ${isRtl ? I18n.toPersianDigits(compliancePct) : compliancePct}%
-                    </span>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span class="sup-compliance-pill ${compPillClass}">
+                            ${compliancePct}%
+                        </span>
+                        ${hasIntervals ? `
+                            <button class="duty-windows-toggle-btn ${isExpanded ? 'active' : ''}" onclick="SupervisorCockpit.toggleAbsenceWindows(${person.id})" style="padding: 2px 6px; font-size: 0.68rem;" title="${I18n.t('absence_windows_btn') || 'بازه‌های غیبت'}">
+                                <span>${isExpanded ? '▲' : '🕒'}</span>
+                                <span class="duty-window-badge-count" style="min-width: 15px; height: 15px; font-size: 0.6rem;">${absenceCountDisp}</span>
+                            </button>
+                        ` : ''}
+                    </div>
                 </td>
                 <td style="padding: 10px 14px; text-align: center;">
                     <div style="display: inline-flex; gap: 0.4rem;">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'شیفت'}" style="padding: 4px 8px; font-size: 0.75rem;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="SupervisorAnalyticsModal.show(${person.id}, '${this.escapeAttr(person.name)}', '${this.escapeAttr(person.section || '')}', '${this.escapeAttr(person.role || '')}')" title="${I18n.t('analytics_and_report') || 'تحلیل جامع و گزارش'}" style="padding: 4px 8px; font-size: 0.75rem;">
+                            📊 ${I18n.t('analytics_report_short') || 'گزارش'}
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'شیفت'}" style="padding: 4px 8px; font-size: 0.75rem;">
                             ⏰ ${I18n.t('shift') || 'شیفت'}
                         </button>
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="padding: 4px 8px; font-size: 0.75rem;">
                             🏖️ ${I18n.t('leave') || 'مرخصی'}
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="SupervisorAnalyticsModal.show(${person.id}, '${this.escapeAttr(person.name)}', '${this.escapeAttr(person.section || '')}', '${this.escapeAttr(person.role || '')}')" title="${I18n.t('analytics_and_report') || 'تحلیل جامع و گزارش'}" style="padding: 4px 8px; font-size: 0.75rem;">
-                            📊 ${I18n.t('analytics_report_short') || 'گزارش'}
                         </button>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="padding: 4px 7px; font-size: 0.75rem;">
                             📜
@@ -1002,6 +1310,13 @@ const SupervisorCockpit = {
                     </div>
                 </td>
             </tr>
+            ${isExpanded ? `
+                <tr style="background: rgba(15, 23, 42, 0.4);">
+                    <td colspan="7" style="padding: 0 14px 10px 14px; border-bottom: 1px solid var(--border-subtle);">
+                        ${this.renderAbsenceWindowsDrawer(duty)}
+                    </td>
+                </tr>
+            ` : ''}
         `;
     },
 
@@ -1059,14 +1374,23 @@ const SupervisorCockpit = {
                 };
             case 'absent':
                 const absMins = duty ? duty.current_absence_minutes : 0;
+                let absentLabel = isRtl ? 'غیبت در شیفت' : 'Absent';
+                if (duty) {
+                    if (duty.absence_type === 'not_arrived' || duty.last_seen_str === 'Not Seen Yet') {
+                        absentLabel = isRtl ? 'عدم ورود به شیفت' : 'Not Arrived for Shift';
+                    } else if (duty.absence_type === 'left_station') {
+                        absentLabel = isRtl ? 'ترک ایستگاه کاری' : 'Left Workstation';
+                    }
+                }
+                const thresholdMins = duty ? (duty.absence_timeout_minutes || 5) : 5;
                 return {
-                    label: isRtl ? 'غیبت در شیفت' : 'Absent',
+                    label: absentLabel,
                     dotColor: '#f87171',
                     badgeBg: 'rgba(248, 113, 113, 0.15)',
                     badgeColor: '#f87171',
                     badgeBorder: 'rgba(248, 113, 113, 0.35)',
                     detailColor: '#f87171',
-                    detailText: isRtl ? `عدم حضور: ${I18n.toPersianDigits(absMins)} دقیقه` : `${absMins} min missing`,
+                    detailText: isRtl ? `عدم حضور: ${I18n.toPersianDigits(absMins)} دقیقه (آستانه: ${I18n.toPersianDigits(thresholdMins)}دقیقه)` : `${absMins}m missing (threshold: ${thresholdMins}m)`,
                     pulse: true,
                 };
             case 'camera_offline':

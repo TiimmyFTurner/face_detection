@@ -88,6 +88,7 @@ async def test_duty_roster_with_active_shift_absent(client: AsyncClient, monkeyp
     assert item["current_absence_minutes"] >= 0
     assert item["shift_absence_minutes"] >= 0
     assert item["shift_window_str"] == "00:00 - 23:59"
+    assert item["absence_type"] == "not_arrived"
 
 
 @pytest.mark.asyncio

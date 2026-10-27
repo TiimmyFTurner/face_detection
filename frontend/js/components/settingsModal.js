@@ -50,6 +50,7 @@ const SettingsModal = {
         const dutyWindowVal = s.duty_cycle_window ?? 30.0;
         const dutyBurstVal = s.duty_burst_duration ?? 2.0;
         const reconnectBackoffVal = s.max_reconnect_backoff ?? 30;
+        const archiveDirVal = s.archive_dir || './data/archives';
 
         const content = `
             <div class="modal-header">
@@ -255,6 +256,49 @@ const SettingsModal = {
                             />
                             <span style="font-size: 0.75rem; color: var(--text-tertiary);">${I18n.t('retention_days_label')}</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- 4b. Monthly Archives & Historical Data                      -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.1rem; display: flex; flex-direction: column; gap: 0.85rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <span>🗄️</span> <span>${I18n.t('monthly_archives_title')}</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 3px; line-height: 1.35;">
+                                ${I18n.t('monthly_archives_desc')}
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-archive-month" onclick="SettingsModal.archivePreviousMonthNow()" style="flex-shrink: 0; font-size: 0.75rem; padding: 0.35rem 0.75rem; border-color: rgba(59, 130, 246, 0.4); color: var(--accent-blue);">
+                            ${I18n.t('btn_archive_previous_month')}
+                        </button>
+                    </div>
+
+                    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <label for="setting-archive-dir" style="font-weight: 700; font-size: 0.83rem; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.4rem;">
+                                <span>📁</span> <span>${I18n.t('setting_archive_dir')}</span>
+                            </label>
+                            <span style="font-size: 0.7rem; color: var(--text-tertiary);">${I18n.t('setting_archive_dir_hint')}</span>
+                        </div>
+                        <input
+                            type="text"
+                            id="setting-archive-dir"
+                            class="form-input"
+                            value="${archiveDirVal}"
+                            placeholder="e.g. E:\\face_detection\\archives or ./data/archives"
+                            style="font-family: monospace; direction: ltr; text-align: left; font-size: 0.82rem; padding: 0.45rem 0.7rem;"
+                        />
+                        <div style="font-size: 0.72rem; color: var(--text-tertiary); line-height: 1.35;">
+                            ${I18n.t('setting_archive_dir_desc')}
+                        </div>
+                    </div>
+
+                    <div id="monthly-archives-container" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.75rem; font-size: 0.8rem; min-height: 50px;">
+                        <div style="text-align: center; color: var(--text-tertiary); padding: 0.5rem;">${I18n.t('loading')}</div>
                     </div>
                 </div>
 
@@ -634,6 +678,9 @@ const SettingsModal = {
             if (sizeEl) sizeEl.textContent = 'N/A';
             if (eventsEl) eventsEl.textContent = 'N/A';
         }
+
+        // Also load monthly archives
+        await SettingsModal.loadMonthlyArchives();
     },
 
     /**
@@ -716,6 +763,118 @@ const SettingsModal = {
             if (btn) {
                 btn.disabled = false;
                 btn.textContent = I18n.t('btn_cleanup_logs_now');
+            }
+        }
+    },
+
+    /**
+     * Fetch and render list of monthly archives.
+     */
+    async loadMonthlyArchives() {
+        const container = document.getElementById('monthly-archives-container');
+        if (!container) return;
+
+        try {
+            const res = await App.api('/api/settings/archives');
+            if (res && res.archive_dir) {
+                const archiveInput = document.getElementById('setting-archive-dir');
+                if (archiveInput && !archiveInput.matches(':focus')) {
+                    archiveInput.value = res.archive_dir;
+                }
+            }
+            if (!res || !res.archives || res.archives.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: var(--text-tertiary); padding: 0.6rem; font-size: 0.78rem;">
+                        ${I18n.t('no_archives_yet')}
+                        <div style="margin-top: 4px; font-size: 0.72rem; color: var(--text-secondary); opacity: 0.8;">
+                            📁 ${I18n.t('archive_path_label')} <code>${res ? res.archive_dir : 'data/archives'}</code>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-subtle); font-size: 0.72rem; color: var(--text-secondary);">
+                    <span>${I18n.t('archive_path_label')} <code>${res.archive_dir}</code></span>
+                    <span>${res.total_archives} ${I18n.isRTL() ? 'آرشیو ماهانه' : 'archives'}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto;">
+            `;
+
+            for (const arch of res.archives) {
+                const evStr = I18n.isRTL()
+                    ? I18n.toPersianDigits(arch.events_count.toLocaleString())
+                    : arch.events_count.toLocaleString();
+                const snapMbStr = I18n.isRTL()
+                    ? I18n.toPersianDigits(arch.snapshots_size_mb.toFixed(1))
+                    : arch.snapshots_size_mb.toFixed(1);
+                const dbMbStr = I18n.isRTL()
+                    ? I18n.toPersianDigits(arch.db_size_mb.toFixed(1))
+                    : arch.db_size_mb.toFixed(1);
+
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; background: var(--bg-surface-hover); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 0.4rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-weight: 700; color: var(--accent-blue); font-size: 0.82rem;">📅 ${arch.year_month}</span>
+                            <span class="badge badge-success" style="font-size: 0.65rem; padding: 2px 6px;">${I18n.isRTL() ? 'آماده جستجو' : 'Searchable'}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.85rem; font-size: 0.73rem; color: var(--text-secondary);">
+                            <span>📋 ${evStr} ${I18n.t('archive_card_events')}</span>
+                            <span>🖼️ ${snapMbStr} MB ${I18n.t('archive_card_snapshots')}</span>
+                            <span>💾 ${dbMbStr} MB ${I18n.t('archive_card_dbsize')}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        } catch (err) {
+            console.warn('Failed to load monthly archives:', err);
+            container.innerHTML = `
+                <div style="text-align: center; color: var(--text-tertiary); padding: 0.5rem; font-size: 0.75rem;">
+                    N/A
+                </div>
+            `;
+        }
+    },
+
+    /**
+     * Trigger manual archiving for previous month.
+     */
+    async archivePreviousMonthNow() {
+        const btn = document.getElementById('btn-archive-month');
+        const confirmMsg = I18n.t('archive_confirm_prompt', { month: I18n.isRTL() ? 'ماه گذشته' : 'previous month' });
+        if (!confirm(confirmMsg)) return;
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = I18n.t('archiving_month_progress');
+        }
+
+        try {
+            const res = await App.api('/api/settings/archives/run', 'POST');
+            if (res && res.success) {
+                App.toast(
+                    I18n.t('archive_run_success', {
+                        month: res.year_month,
+                        events: res.events_archived,
+                        snapshots: res.snapshots_moved,
+                    }),
+                    'success'
+                );
+                await SettingsModal.loadMonthlyArchives();
+                await SettingsModal.loadStorageStats();
+            } else {
+                App.toast(res.message || 'Archive error', 'error');
+            }
+        } catch (err) {
+            App.toast(I18n.t('err_generic', { msg: err.message || err }), 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = I18n.t('btn_archive_previous_month');
             }
         }
     },
@@ -971,6 +1130,9 @@ const SettingsModal = {
                 ? parseInt(reconnectEl.value, 10)
                 : 30;
 
+            const archiveDirEl = document.getElementById('setting-archive-dir');
+            const archiveDir = archiveDirEl ? archiveDirEl.value.trim() : null;
+
             const payload = {
                 save_snapshots: saveSnapshots,
                 log_unknown_faces: logUnknown,
@@ -986,6 +1148,10 @@ const SettingsModal = {
                 duty_burst_duration: dutyBurst,
                 max_reconnect_backoff: reconnectBackoff,
             };
+
+            if (archiveDir !== null && archiveDir !== '') {
+                payload.archive_dir = archiveDir;
+            }
 
             const updated = await App.api('/api/settings', 'PATCH', payload);
 

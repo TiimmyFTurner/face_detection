@@ -19,6 +19,15 @@ from backend.schemas import (
     SystemSettingsUpdate,
     StorageStatsResponse,
     CleanupResponse,
+    MonthlyArchiveListResponse,
+    ArchiveMonthRequest,
+    ArchiveMonthResponse,
+)
+from backend.archive_manager import (
+    list_monthly_archives,
+    archive_month,
+    get_previous_month,
+    get_archive_dir,
 )
 from backend.snapshot_cleanup import (
     get_storage_stats,
@@ -51,6 +60,8 @@ async def get_settings(
         duty_cycle_window=float(getattr(settings, "duty_cycle_window", 30.0)),
         duty_burst_duration=float(getattr(settings, "duty_burst_duration", 2.0)),
         max_reconnect_backoff=int(getattr(settings, "max_reconnect_backoff", 30)),
+        archive_dir=str(getattr(settings, "archive_dir", "./data/archives")),
+        auto_archive_monthly=bool(getattr(settings, "auto_archive_monthly", True)),
     )
 
 
@@ -130,6 +141,22 @@ async def update_settings(
         env_updates["MAX_RECONNECT_BACKOFF"] = str(settings.max_reconnect_backoff)
         logger.info("Setting 'max_reconnect_backoff' updated to: %d", settings.max_reconnect_backoff)
 
+    if update_data.archive_dir is not None:
+        clean_path = str(update_data.archive_dir).strip().strip('"\'')
+        if clean_path:
+            from pathlib import Path
+            from backend.archive_manager import invalidate_snapshot_cache
+            settings.archive_dir = clean_path
+            Path(clean_path).resolve().mkdir(parents=True, exist_ok=True)
+            env_updates["ARCHIVE_DIR"] = clean_path
+            invalidate_snapshot_cache()
+            logger.info("Setting 'archive_dir' updated to: %s", clean_path)
+
+    if update_data.auto_archive_monthly is not None:
+        settings.auto_archive_monthly = bool(update_data.auto_archive_monthly)
+        env_updates["AUTO_ARCHIVE_MONTHLY"] = str(update_data.auto_archive_monthly)
+        logger.info("Setting 'auto_archive_monthly' updated to: %s", settings.auto_archive_monthly)
+
     if env_updates:
         update_env_file(env_updates)
 
@@ -147,6 +174,8 @@ async def update_settings(
         duty_cycle_window=float(getattr(settings, "duty_cycle_window", 30.0)),
         duty_burst_duration=float(getattr(settings, "duty_burst_duration", 2.0)),
         max_reconnect_backoff=int(getattr(settings, "max_reconnect_backoff", 30)),
+        archive_dir=str(getattr(settings, "archive_dir", "./data/archives")),
+        auto_archive_monthly=bool(getattr(settings, "auto_archive_monthly", True)),
     )
 
 
@@ -186,4 +215,40 @@ async def trigger_event_logs_cleanup(
     """
     res = await cleanup_old_events(retention_days=retention_days)
     return CleanupResponse(**res)
+
+
+@router.get("/archives", response_model=MonthlyArchiveListResponse)
+async def get_monthly_archives(
+    _user=Depends(require_permission("settings:view")),
+) -> MonthlyArchiveListResponse:
+    """List all available monthly database and snapshot archives."""
+    archives = list_monthly_archives()
+    return MonthlyArchiveListResponse(
+        archives=archives,
+        total_archives=len(archives),
+        archive_dir=str(get_archive_dir()),
+        auto_archive_monthly=bool(getattr(settings, "auto_archive_monthly", True)),
+    )
+
+
+@router.post("/archives/run", response_model=ArchiveMonthResponse)
+async def trigger_archive_month(
+    req: Optional[ArchiveMonthRequest] = None,
+    _user=Depends(require_permission("settings:edit")),
+) -> ArchiveMonthResponse:
+    """
+    Manually trigger archiving for a specific year and month, or previous month by default.
+    Moves events to events_YYYY_MM.db and snapshots to archives/YYYY_MM/snapshots/.
+    """
+    if req is not None and req.year and req.month:
+        year = req.year
+        month = req.month
+        purge = req.purge_from_active
+    else:
+        year, month = get_previous_month()
+        purge = bool(getattr(settings, "archive_purge_active", True))
+
+    res = await archive_month(year=year, month=month, purge_from_active=purge)
+    return ArchiveMonthResponse(**res)
+
 

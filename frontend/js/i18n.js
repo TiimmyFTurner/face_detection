@@ -643,6 +643,22 @@ const I18n = {
             cleanup_snapshots_success: 'پاکسازی تصاویر با موفقیت انجام شد: {files} فایل حذف شد و {mb} مگابایت حافظه آزاد گردید.',
             cleanup_logs_success: 'پاکسازی لاگ‌ها با موفقیت انجام شد: {records} رکورد تردد از دیتابیس حذف گردید.',
 
+            // Monthly Archives Management
+            monthly_archives_title: '🗄️ آرشیوهای ماهانه و داده‌های تاریخی',
+            monthly_archives_desc: 'پارتیشن‌بندی خودکار و مستقل ماهانه رخدادها و تصاویر با امکان جستجو، گزارش‌گیری و لود عکس بدون قطعی.',
+            btn_archive_previous_month: '📦 آرشیو ماه قبل هم‌اکنون',
+            archiving_month_progress: 'در حال ایجاد آرشیو ماهانه...',
+            archive_path_label: 'مسیر ذخیره‌سازی آرشیوها:',
+            setting_archive_dir: 'مسیر فولدر ذخیره‌سازی آرشیو',
+            setting_archive_dir_hint: 'پشتیبانی از مسیر مطلق (مانند E:\\archives)، نسبی یا درایو خارجی',
+            setting_archive_dir_desc: 'مسیر ذخیره‌سازی مستقل برای دیتابیس‌های ماهانه (events_YYYY_MM.db) و تصاویر اسنپ‌شات گذشته. تغییر مسیر بلافاصله اعمال و ذخیره می‌شود.',
+            no_archives_yet: 'تاکنون آرشیو ماهانه‌ای ایجاد نشده است (داده‌ها در دیتابیس و پوشه جاری نگه‌داری می‌شوند).',
+            archive_card_events: 'رخداد ثبت‌شده',
+            archive_card_snapshots: 'تصاویر اسنپ‌شات',
+            archive_card_dbsize: 'حجم دیتابیس ماه',
+            archive_confirm_prompt: 'آیا مایلید رخدادها و تصاویر ماه قبل ({month}) به آرشیو مستقل منتقل شوند و دیتابیس اصلی بهینه‌سازی گردد؟',
+            archive_run_success: 'آرشیو ماه {month} با موفقیت انجام شد ({events} رخداد و {snapshots} عکس منتقل گردید).',
+
 
             // Pagination
             pagination_showing: 'نمایش {from} تا {to} از مجموع {total} رویداد',
@@ -1660,6 +1676,22 @@ const I18n = {
             cleanup_logs_confirm: 'Are you sure you want to permanently delete event logs and snapshots older than {days} days?',
             cleanup_snapshots_success: 'Snapshot cleanup completed: {files} files deleted, {mb} MB storage freed.',
             cleanup_logs_success: 'Event log cleanup completed: {records} records purged from database.',
+
+            // Monthly Archives Management
+            monthly_archives_title: '🗄️ Monthly Archives & Historical Partitions',
+            monthly_archives_desc: 'Automated monthly partitioning of events and snapshot images with seamless querying and zero broken links.',
+            btn_archive_previous_month: '📦 Archive Previous Month Now',
+            archiving_month_progress: 'Creating monthly archive...',
+            archive_path_label: 'Archive Storage Directory:',
+            setting_archive_dir: 'Archive Storage Directory Path',
+            setting_archive_dir_hint: 'Supports absolute paths (e.g. E:\\archives), relative paths or external drives',
+            setting_archive_dir_desc: 'Dedicated storage folder for monthly SQLite databases (events_YYYY_MM.db) and past face snapshots. Path updates take effect immediately.',
+            no_archives_yet: 'No monthly archives created yet (all data resides in active database and active snapshots folder).',
+            archive_card_events: 'logged events',
+            archive_card_snapshots: 'snapshots size',
+            archive_card_dbsize: 'DB file size',
+            archive_confirm_prompt: 'Are you sure you want to archive events and snapshots for previous month ({month}) and vacuum the active database?',
+            archive_run_success: 'Month {month} successfully archived ({events} events, {snapshots} snapshots moved).',
 
 
             // Pagination

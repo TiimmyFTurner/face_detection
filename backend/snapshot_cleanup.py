@@ -170,11 +170,17 @@ async def get_storage_stats(session_factory=None) -> Dict[str, Any]:
     except Exception as e:
         logger.warning("Failed to query DB event stats: %s", e)
 
+    from backend.archive_manager import list_monthly_archives
+    archives = list_monthly_archives()
+    total_arch_mb = sum(a["db_size_mb"] + a["snapshots_size_mb"] for a in archives)
+
     return {
         **disk_stats,
         "event_count": event_count,
         "oldest_event_date": oldest_ev_str,
         "newest_event_date": newest_ev_str,
+        "archive_count": len(archives),
+        "total_archive_mb": round(total_arch_mb, 2),
     }
 
 
@@ -435,6 +441,18 @@ class RetentionWorker:
                 if log_days > 0:
                     logger.info("Running automatic event log retention check (%d days)...", log_days)
                     await cleanup_old_events(log_days)
+
+                if getattr(settings, "auto_archive_monthly", True):
+                    from backend.archive_manager import get_previous_month, archive_month, get_archive_db_path
+                    prev_y, prev_m = get_previous_month()
+                    arch_db = get_archive_db_path(prev_y, prev_m)
+                    if not arch_db.exists():
+                        logger.info("Running automatic monthly archiving for %04d_%02d...", prev_y, prev_m)
+                        await archive_month(
+                            year=prev_y,
+                            month=prev_m,
+                            purge_from_active=getattr(settings, "archive_purge_active", True),
+                        )
             except Exception as e:
                 logger.error("Unexpected error in retention worker: %s", e)
 

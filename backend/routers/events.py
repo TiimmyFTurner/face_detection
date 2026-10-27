@@ -15,6 +15,7 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission, get_user_scope, UserScope
+from backend.archive_manager import query_events_multi_db
 from backend.database import get_db
 from backend.models import Event, Camera, User
 from backend.reporting import generate_events_xlsx, generate_events_csv
@@ -138,75 +139,62 @@ async def list_events(
     List detection events with optional filtering.
 
     Supports filtering by camera, person ID, person name, search term, known/unknown status, and time range.
+    Transparently queries across active database and historical monthly archives.
     Results are ordered newest-first with pagination.
     """
-    conditions = _build_event_filter_conditions(
+    scope = await get_user_scope(_user, db)
+
+    rows, total = await query_events_multi_db(
+        db=db,
         camera_id=camera_id,
         person_id=person_id,
         person_name=person_name,
         search=search,
         is_known=is_known,
+        has_snapshot=has_snapshot,
         start_time=start_time,
         end_time=end_time,
-        has_snapshot=has_snapshot,
+        limit=limit,
+        offset=offset,
+        is_scoped=scope.is_scoped,
+        scope_camera_ids=scope.camera_ids,
+        scope_person_ids=scope.person_ids,
     )
-    await _apply_user_scope_to_conditions(_user, db, conditions)
-
-    where_clause = and_(*conditions) if conditions else True
-
-    # Count total matching events
-    count_query = select(func.count(Event.id)).where(where_clause)
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Fetch paginated events
-    query = (
-        select(Event)
-        .where(where_clause)
-        .order_by(Event.timestamp.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await db.execute(query)
-    events = result.scalars().all()
 
     # Build response with camera names and snapshot URLs
     event_responses = []
-    # Cache camera names to avoid repeated lookups
     camera_cache: dict[int, str] = {}
+    is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
 
-    for event in events:
+    for r in rows:
+        cid = r.get("camera_id")
         camera_name = ""
-        if event.camera_id:
-            if event.camera_id not in camera_cache:
-                cam = await db.get(Camera, event.camera_id)
-                camera_cache[event.camera_id] = cam.name if cam else ""
-            camera_name = camera_cache[event.camera_id]
+        if cid:
+            if cid not in camera_cache:
+                cam = await db.get(Camera, cid)
+                camera_cache[cid] = cam.name if cam else ""
+            camera_name = camera_cache[cid]
 
-        ts = event.timestamp
-        if ts and ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-
-        is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
-        s_path = "" if is_sup else (event.snapshot_path or "")
-        s_url = "" if is_sup else (f"/api/snapshots/{event.snapshot_path}" if event.snapshot_path else "")
+        raw_snap = r.get("snapshot_path") or ""
+        s_path = "" if is_sup else raw_snap
+        s_url = "" if is_sup else (f"/api/snapshots/{raw_snap}" if raw_snap else "")
 
         event_responses.append(
             EventResponse(
-                id=event.id,
-                timestamp=ts,
-                camera_id=event.camera_id,
+                id=r["id"],
+                timestamp=r["timestamp"],
+                camera_id=cid,
                 camera_name=camera_name,
-                person_id=event.person_id,
-                person_name=event.person_name or "Unknown",
-                confidence_score=event.confidence_score or 0.0,
+                person_id=r.get("person_id"),
+                person_name=r.get("person_name") or "Unknown",
+                confidence_score=r.get("confidence_score") or 0.0,
                 snapshot_path=s_path,
                 snapshot_url=s_url,
-                is_known=bool(event.is_known),
-                zone_id=getattr(event, "zone_id", None),
-                zone_name=getattr(event, "zone_name", "") or "",
-                alert_type=getattr(event, "alert_type", "normal") or "normal",
-                duration_seconds=getattr(event, "duration_seconds", None),
+                is_known=bool(r.get("is_known")),
+                zone_id=r.get("zone_id"),
+                zone_name=r.get("zone_name") or "",
+                alert_type=r.get("alert_type") or "normal",
+                duration_seconds=r.get("duration_seconds"),
             )
         )
 
@@ -300,7 +288,9 @@ async def get_grouped_events(
     Returns a list of person groups containing detection count, latest timestamp,
     and a timeline gallery of snapshots & camera locations.
     """
-    conditions = _build_event_filter_conditions(
+    scope = await get_user_scope(_user, db)
+    rows, _ = await query_events_multi_db(
+        db=db,
         camera_id=camera_id,
         person_id=person_id,
         person_name=person_name,
@@ -308,47 +298,44 @@ async def get_grouped_events(
         is_known=is_known,
         start_time=start_time,
         end_time=end_time,
+        limit=300,
+        offset=0,
+        is_scoped=scope.is_scoped,
+        scope_camera_ids=scope.camera_ids,
+        scope_person_ids=scope.person_ids,
     )
-    await _apply_user_scope_to_conditions(_user, db, conditions)
-
-    where_clause = and_(*conditions) if conditions else True
-
-    query = (
-        select(Event)
-        .where(where_clause)
-        .order_by(Event.timestamp.desc())
-        .limit(300)
-    )
-    result = await db.execute(query)
-    events = result.scalars().all()
 
     camera_cache: dict[int, str] = {}
     grouped_map: dict[str, dict] = {}
 
-    for event in events:
+    for event in rows:
+        cid = event.get("camera_id")
         camera_name = "Camera"
-        if event.camera_id:
-            if event.camera_id not in camera_cache:
-                cam = await db.get(Camera, event.camera_id)
-                camera_cache[event.camera_id] = cam.name if cam else f"Camera #{event.camera_id}"
-            camera_name = camera_cache[event.camera_id]
+        if cid:
+            if cid not in camera_cache:
+                cam = await db.get(Camera, cid)
+                camera_cache[cid] = cam.name if cam else f"Camera #{cid}"
+            camera_name = camera_cache[cid]
 
-        ts = event.timestamp
-        if ts and ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+        ts = event["timestamp"]
 
         # Unique key for grouping
-        if event.is_known and event.person_id:
-            group_key = f"person_{event.person_id}"
+        is_known_ev = event.get("is_known")
+        pid = event.get("person_id")
+        pname = event.get("person_name") or "Unknown Person"
+        spath = event.get("snapshot_path") or ""
+
+        if is_known_ev and pid:
+            group_key = f"person_{pid}"
         else:
-            group_key = f"unknown_{event.person_name}_{event.snapshot_path}"
+            group_key = f"unknown_{pname}_{spath}"
 
         if group_key not in grouped_map:
             grouped_map[group_key] = {
                 "group_key": group_key,
-                "person_id": event.person_id,
-                "person_name": event.person_name or "Unknown Person",
-                "is_known": event.is_known,
+                "person_id": pid,
+                "person_name": pname,
+                "is_known": is_known_ev,
                 "total_detections": 0,
                 "latest_timestamp": ts,
                 "events": [],
@@ -360,16 +347,16 @@ async def get_grouped_events(
         if len(group["events"]) < limit_per_group:
             is_sup = bool(getattr(_user, "role", None) and _user.role.name == "supervisor")
             group["events"].append({
-                "id": event.id,
+                "id": event["id"],
                 "timestamp": ts,
-                "camera_id": event.camera_id,
+                "camera_id": cid,
                 "camera_name": camera_name,
-                "confidence_score": event.confidence_score,
-                "snapshot_path": "" if is_sup else event.snapshot_path,
-                "snapshot_url": "" if is_sup else f"/api/snapshots/{event.snapshot_path}",
-                "is_known": event.is_known,
-                "person_name": event.person_name,
-                "person_id": event.person_id,
+                "confidence_score": event.get("confidence_score") or 0.0,
+                "snapshot_path": "" if is_sup else spath,
+                "snapshot_url": "" if is_sup else (f"/api/snapshots/{spath}" if spath else ""),
+                "is_known": is_known_ev,
+                "person_name": pname,
+                "person_id": pid,
             })
 
     grouped_list = list(grouped_map.values())
@@ -395,27 +382,23 @@ async def export_events(
     """
     Export detection and security alert event logs to Excel (.xlsx) or CSV.
     """
-    conditions = _build_event_filter_conditions(
+    scope = await get_user_scope(_user, db)
+    rows, _ = await query_events_multi_db(
+        db=db,
         camera_id=camera_id,
         person_id=person_id,
         person_name=person_name,
         search=search,
         is_known=is_known,
+        has_snapshot=has_snapshot,
         start_time=start_time,
         end_time=end_time,
-        has_snapshot=has_snapshot,
+        limit=limit,
+        offset=0,
+        is_scoped=scope.is_scoped,
+        scope_camera_ids=scope.camera_ids,
+        scope_person_ids=scope.person_ids,
     )
-    await _apply_user_scope_to_conditions(_user, db, conditions)
-    where_clause = and_(*conditions) if conditions else True
-
-    query = (
-        select(Event)
-        .where(where_clause)
-        .order_by(Event.timestamp.desc())
-        .limit(limit)
-    )
-    result = await db.execute(query)
-    events = result.scalars().all()
 
     # Pre-fetch cameras
     cams_res = await db.execute(select(Camera))
@@ -438,21 +421,22 @@ async def export_events(
     filter_summary = " | ".join(filter_parts) if filter_parts else None
 
     events_data = []
-    for ev in events:
-        cam = cams.get(ev.camera_id)
+    for ev in rows:
+        cid = ev.get("camera_id")
+        cam = cams.get(cid)
         events_data.append({
-            "id": ev.id,
-            "timestamp": ev.timestamp,
-            "person_id": ev.person_id,
-            "person_name": ev.person_name or "Unknown",
-            "is_known": bool(ev.is_known),
-            "confidence_score": ev.confidence_score or 0.0,
-            "camera_id": ev.camera_id,
-            "camera_name": cam.name if cam else (f"Camera #{ev.camera_id}" if ev.camera_id else "—"),
+            "id": ev["id"],
+            "timestamp": ev["timestamp"],
+            "person_id": ev.get("person_id"),
+            "person_name": ev.get("person_name") or "Unknown",
+            "is_known": bool(ev.get("is_known")),
+            "confidence_score": ev.get("confidence_score") or 0.0,
+            "camera_id": cid,
+            "camera_name": cam.name if cam else (f"Camera #{cid}" if cid else "—"),
             "camera_location": cam.location if cam else "",
-            "zone_id": getattr(ev, "zone_id", None),
-            "zone_name": getattr(ev, "zone_name", "") or "",
-            "alert_type": getattr(ev, "alert_type", "normal") or "normal",
+            "zone_id": ev.get("zone_id"),
+            "zone_name": ev.get("zone_name") or "",
+            "alert_type": ev.get("alert_type") or "normal",
         })
 
     now = datetime.now()
@@ -483,11 +467,27 @@ async def delete_event(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("events:delete")),
 ):
-    """Delete a detection event log entry."""
+    """Delete a detection event log entry from active DB or archives."""
     event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+    if event:
+        await db.delete(event)
+        await db.commit()
+        return {"success": True, "message": "Event deleted"}
 
-    await db.delete(event)
-    await db.commit()
-    return {"success": True, "message": "Event deleted"}
+    # Search in monthly archive databases if not in active DB
+    import sqlite3
+    from backend.archive_manager import get_archive_dir, MONTH_SLUG_REGEX
+    archive_dir = get_archive_dir()
+    if archive_dir.is_dir():
+        for folder in archive_dir.iterdir():
+            if folder.is_dir() and MONTH_SLUG_REGEX.match(folder.name):
+                db_path = folder / f"events_{folder.name}.db"
+                if db_path.is_file():
+                    with sqlite3.connect(str(db_path)) as conn:
+                        cur = conn.cursor()
+                        cur.execute("DELETE FROM events WHERE id = ?", (event_id,))
+                        if cur.rowcount > 0:
+                            conn.commit()
+                            return {"success": True, "message": f"Event deleted from archive {folder.name}"}
+
+    raise HTTPException(status_code=404, detail="Event not found")

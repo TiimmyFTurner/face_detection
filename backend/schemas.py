@@ -665,6 +665,8 @@ class SystemSettingsResponse(BaseModel):
     duty_cycle_window: float = 30.0
     duty_burst_duration: float = 2.0
     max_reconnect_backoff: int = 30
+    archive_dir: str = "./data/archives"
+    auto_archive_monthly: bool = True
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -682,6 +684,8 @@ class SystemSettingsUpdate(BaseModel):
     duty_cycle_window: Optional[float] = None
     duty_burst_duration: Optional[float] = None
     max_reconnect_backoff: Optional[int] = None
+    archive_dir: Optional[str] = None
+    auto_archive_monthly: Optional[bool] = None
 
 
 class StorageStatsResponse(BaseModel):
@@ -694,6 +698,8 @@ class StorageStatsResponse(BaseModel):
     newest_snapshot_date: Optional[str] = None
     oldest_event_date: Optional[str] = None
     newest_event_date: Optional[str] = None
+    archive_count: Optional[int] = 0
+    total_archive_mb: Optional[float] = 0.0
 
 
 class CleanupResponse(BaseModel):
@@ -704,6 +710,47 @@ class CleanupResponse(BaseModel):
     freed_mb: float = 0.0
     records_removed: int = 0
     message: str
+
+
+# ═══════════════════════════════════════════════════════════
+# Monthly Archive Schemas
+# ═══════════════════════════════════════════════════════════
+
+class MonthlyArchiveInfo(BaseModel):
+    """Metadata about a single month's archived database and snapshot bundle."""
+    year_month: str
+    db_path: str
+    events_count: int = 0
+    db_size_mb: float = 0.0
+    snapshots_count: int = 0
+    snapshots_size_mb: float = 0.0
+    has_snapshots_folder: bool = True
+    created_at: Optional[str] = None
+
+
+class ArchiveMonthRequest(BaseModel):
+    """Request payload to manually archive a specific month's data."""
+    year: int = Field(..., ge=2020, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    purge_from_active: bool = True
+
+
+class ArchiveMonthResponse(BaseModel):
+    """Result of a monthly archiving operation."""
+    success: bool
+    year_month: str
+    events_archived: int = 0
+    snapshots_moved: int = 0
+    freed_mb: float = 0.0
+    message: str
+
+
+class MonthlyArchiveListResponse(BaseModel):
+    """List of all available monthly archives on disk."""
+    archives: list[MonthlyArchiveInfo]
+    total_archives: int
+    archive_dir: str
+    auto_archive_monthly: bool
 
 
 

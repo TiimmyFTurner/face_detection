@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy import select, desc, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth import require_permission, get_user_scope
+from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
@@ -1234,18 +1234,34 @@ async def delete_zone(
 @router.get("/api/shift-templates", response_model=list[ShiftTemplateResponse])
 async def list_shift_templates(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:view")),
+    _user=Depends(require_any_permission("zones:view", "persons:view")),
 ):
-    """List all available shift timetable templates."""
+    """List all available shift timetable templates with assigned person counts."""
+    # Count assigned persons per template
+    counts_stmt = (
+        select(Person.shift_template_id, func.count(Person.id))
+        .where(Person.shift_template_id.isnot(None))
+        .group_by(Person.shift_template_id)
+    )
+    counts_res = await db.execute(counts_stmt)
+    counts_map = dict(counts_res.all())
+
     result = await db.execute(select(ShiftTemplate).order_by(ShiftTemplate.id.asc()))
-    return result.scalars().all()
+    templates = result.scalars().all()
+
+    out = []
+    for tmpl in templates:
+        resp = ShiftTemplateResponse.model_validate(tmpl)
+        resp.assigned_persons_count = counts_map.get(tmpl.id, 0)
+        out.append(resp)
+    return out
 
 
 @router.post("/api/shift-templates", response_model=ShiftTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_shift_template(
     data: ShiftTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:create")),
+    _user=Depends(require_any_permission("zones:create", "persons:create", "persons:edit")),
 ):
     """Create a new reusable shift template."""
     tmpl = ShiftTemplate(
@@ -1264,20 +1280,30 @@ async def create_shift_template(
     await db.commit()
     await db.refresh(tmpl)
     await stream_processor.refresh_zones()
-    return tmpl
+
+    resp = ShiftTemplateResponse.model_validate(tmpl)
+    resp.assigned_persons_count = 0
+    return resp
 
 
 @router.get("/api/shift-templates/{template_id}", response_model=ShiftTemplateResponse)
 async def get_shift_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:view")),
+    _user=Depends(require_any_permission("zones:view", "persons:view")),
 ):
-    """Get a specific shift template by ID."""
+    """Get a specific shift template by ID with assigned person count."""
     tmpl = await db.get(ShiftTemplate, template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Shift template not found")
-    return tmpl
+
+    count_stmt = select(func.count(Person.id)).where(Person.shift_template_id == template_id)
+    count_res = await db.execute(count_stmt)
+    assigned_count = count_res.scalar() or 0
+
+    resp = ShiftTemplateResponse.model_validate(tmpl)
+    resp.assigned_persons_count = assigned_count
+    return resp
 
 
 @router.put("/api/shift-templates/{template_id}", response_model=ShiftTemplateResponse)
@@ -1285,7 +1311,7 @@ async def update_shift_template(
     template_id: int,
     data: ShiftTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:edit")),
+    _user=Depends(require_any_permission("zones:edit", "persons:edit")),
 ):
     """Update an existing shift template."""
     tmpl = await db.get(ShiftTemplate, template_id)
@@ -1316,19 +1342,32 @@ async def update_shift_template(
     await db.commit()
     await db.refresh(tmpl)
     await stream_processor.refresh_zones()
-    return tmpl
+
+    count_stmt = select(func.count(Person.id)).where(Person.shift_template_id == template_id)
+    count_res = await db.execute(count_stmt)
+    assigned_count = count_res.scalar() or 0
+
+    resp = ShiftTemplateResponse.model_validate(tmpl)
+    resp.assigned_persons_count = assigned_count
+    return resp
 
 
 @router.delete("/api/shift-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_shift_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("zones:delete")),
+    _user=Depends(require_any_permission("zones:delete", "persons:delete")),
 ):
-    """Delete a shift template."""
+    """Delete a shift template and disassociate assigned persons."""
     tmpl = await db.get(ShiftTemplate, template_id)
     if not tmpl:
         raise HTTPException(status_code=404, detail="Shift template not found")
+
+    # Clear template association from assigned persons
+    from sqlalchemy import update
+    await db.execute(
+        update(Person).where(Person.shift_template_id == template_id).values(shift_template_id=None)
+    )
 
     await db.delete(tmpl)
     await db.commit()

@@ -330,6 +330,7 @@ class ShiftTemplateResponse(BaseModel):
     free_times: list[dict[str, Any]] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    assigned_persons_count: Optional[int] = 0
 
     model_config = {"from_attributes": True}
 

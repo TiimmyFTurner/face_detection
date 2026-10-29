@@ -325,11 +325,12 @@ const PersonsPage = {
         }
 
         grid.innerHTML = filtered.map(person => {
+            const isRtl = I18n.isRTL();
             const initials = PersonsPage.getInitials(person.name);
             const hasPhoto = person.reference_photos && person.reference_photos.length > 0;
             const s = person.summary || {};
-            const countDisplay = I18n.isRTL() ? I18n.toPersianDigits(person.embedding_count || 0) : (person.embedding_count || 0);
-            const totalDetections = I18n.isRTL() ? I18n.toPersianDigits(s.total_detections || 0) : (s.total_detections || 0);
+            const countDisplay = isRtl ? I18n.toPersianDigits(person.embedding_count || 0) : (person.embedding_count || 0);
+            const totalDetections = isRtl ? I18n.toPersianDigits(s.total_detections || 0) : (s.total_detections || 0);
             const todayDetections = s.today_detections || 0;
             const todayStr = I18n.isRTL() ? I18n.toPersianDigits(todayDetections) : todayDetections;
 
@@ -409,8 +410,8 @@ const PersonsPage = {
                             <button class="btn btn-secondary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('manage_shift') || 'مدیریت شیفت')}">
                                 ⏰ <span>${I18n.t('manage_shift') || 'مدیریت شیفت'}</span>
                             </button>
-                            <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('add_photo_btn'))}">
-                                📸 <span>${I18n.t('add_photo_btn')}</span>
+                            <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('add_photo_btn') || (isRtl ? 'افزودن عکس' : 'Add Photo'))}">
+                                📸 <span>${I18n.t('add_photo_btn') || (isRtl ? 'افزودن عکس' : 'Add Photo')}</span>
                             </button>
                             <button class="btn btn-secondary btn-sm" onclick="PersonForm.showEditModal(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('edit'))}">
                                 ✏️ <span>${I18n.t('edit')}</span>
@@ -478,8 +479,8 @@ const PersonsPage = {
                         <button class="btn btn-secondary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('manage_shift') || 'مدیریت شیفت')}">
                             ⏰ <span>${I18n.t('manage_shift') || 'شیفت'}</span>
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('add_photo_btn'))}">
-                            📸 <span>${I18n.t('add_photo_btn')}</span>
+                        <button class="btn btn-secondary btn-sm" onclick="PersonsPage.showAddPhotosModal(${person.id}, '${PersonsPage.escapeAttr(person.name)}')" title="${PersonsPage.escapeAttr(I18n.t('add_photo_btn') || (isRtl ? 'افزودن عکس' : 'Add Photo'))}">
+                            📸 <span>${I18n.t('add_photo_btn') || (isRtl ? 'افزودن عکس' : 'Add Photo')}</span>
                         </button>
                         <button class="btn btn-secondary btn-sm" onclick="PersonForm.showEditModal(${person.id})" title="${PersonsPage.escapeAttr(I18n.t('edit'))}">
                             ✏️ <span>${I18n.t('edit')}</span>

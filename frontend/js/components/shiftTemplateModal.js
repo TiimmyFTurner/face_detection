@@ -169,7 +169,7 @@ const ShiftTemplateModal = {
             <button
                 type="button"
                 class="shift-color-swatch ${this._color === c ? 'active' : ''}"
-                style="background: ${c}; width: 26px; height: 26px; border-radius: 50%; border: 2px solid ${this._color === c ? '#ffffff' : 'transparent'}; cursor: pointer; transition: transform 0.15s; outline: none; box-shadow: ${this._color === c ? '0 0 0 2px ' + c : 'none'};"
+                style="background: ${c}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid ${this._color === c ? '#ffffff' : 'transparent'}; cursor: pointer; transition: all 0.15s; outline: none; box-shadow: ${this._color === c ? '0 0 0 2px var(--bg-surface), 0 0 0 4px ' + c : 'none'};"
                 onclick="ShiftTemplateModal.setColor('${c}')"
                 title="${c}"
             ></button>
@@ -183,7 +183,7 @@ const ShiftTemplateModal = {
                 <button
                     type="button"
                     class="day-chip ${active ? 'active' : ''}"
-                    style="padding: 0.35rem 0.75rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid ${active ? 'var(--accent-blue)' : 'var(--border-subtle)'}; background: ${active ? 'var(--accent-blue)' : 'var(--bg-surface)'}; color: ${active ? '#ffffff' : 'var(--text-secondary)'};"
+                    style="padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid ${active ? 'var(--accent-blue)' : 'var(--border-subtle)'}; background: ${active ? 'var(--accent-blue)' : 'var(--bg-surface)'}; color: ${active ? '#ffffff' : 'var(--text-secondary)'};"
                     onclick="ShiftTemplateModal.toggleDay('${d.id}')"
                 >
                     ${label}
@@ -191,60 +191,71 @@ const ShiftTemplateModal = {
             `;
         }).join('');
 
-        // Note: cycle chips, breaks list, and presets toolbar are rendered dynamically
-
         // Note: breaks list and presets toolbar are rendered dynamically via renderBreaksListHtml & renderPresetsBarHtml
 
         const content = `
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 0.6rem;">
-                    <span style="font-size: 1.3rem;">⏰</span>
-                    <h2 class="modal-title" style="margin: 0; font-size: 1.15rem;">${modalTitle}</h2>
+            <div class="modal-header" style="padding: 1.15rem 1.5rem; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+                <div class="modal-title-group" style="display: flex; align-items: center; gap: 0.85rem;">
+                    <div class="modal-icon" style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; border-radius: 12px; background: linear-gradient(135deg, rgba(56, 189, 248, 0.18) 0%, rgba(99, 102, 241, 0.18) 100%); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8;">
+                        ⏰
+                    </div>
+                    <div>
+                        <h2 class="modal-title" style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">${modalTitle}</h2>
+                        <p class="modal-subtitle" style="margin: 0.2rem 0 0 0; font-size: 0.78rem; color: var(--text-tertiary);">
+                            ${isRtl ? 'پیکربندی زمان‌بندی کاری، چرخه نوبت‌کاری، زنگ‌های استراحت و آستانه‌های تخلف' : 'Configure shift hours, rotation cycles, scheduled breaks, and violation tolerances'}
+                        </p>
+                    </div>
                 </div>
-                <button class="modal-close" onclick="App.closeModal()">✕</button>
+                <button class="modal-close" onclick="App.closeModal()" title="${I18n.t('close') || 'بستن'}">✕</button>
             </div>
 
-            <form id="shift-template-form" onsubmit="ShiftTemplateModal.handleSave(event)" style="padding: 1.25rem; display: flex; flex-direction: column; gap: 1.15rem; max-height: 80vh; overflow-y: auto;">
+            <form id="shift-template-form" onsubmit="ShiftTemplateModal.handleSave(event)" style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1.2rem; max-height: 80vh; overflow-y: auto; overflow-x: hidden;">
                 
                 <!-- 1. Name & Color Card -->
-                <div style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; gap: 0.85rem;">
-                    <div class="form-group" style="margin: 0;">
-                        <label for="shift-tmpl-name" style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.4rem; display: block;">
-                            ${I18n.t('shift_name_label') || 'نام شیفت'} <span style="color: #f87171;">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="shift-tmpl-name"
-                            class="form-control"
-                            required
-                            placeholder="${I18n.t('shift_name_placeholder') || 'مثال: شیفت صبحگاهی، شیفت عصر، نوبت‌کاری چرخشی...'}"
-                            value="${this._escape(this._name)}"
-                            oninput="ShiftTemplateModal._name = this.value"
-                            style="font-size: 0.9rem;"
-                        />
-                    </div>
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.15rem 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
+                    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.25rem; align-items: flex-end;">
+                        <div class="form-group" style="margin: 0; min-width: 0;">
+                            <label for="shift-tmpl-name" style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.45rem; display: flex; align-items: center; gap: 6px;">
+                                <span>🏷️</span>
+                                <span>${I18n.t('shift_name_label') || 'نام شیفت'}</span>
+                                <span style="color: #f87171;">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="shift-tmpl-name"
+                                class="form-control"
+                                required
+                                placeholder="${I18n.t('shift_name_placeholder') || 'مثال: شیفت صبحگاهی، شیفت عصر، نوبت‌کاری چرخشی...'}"
+                                value="${this._escape(this._name)}"
+                                oninput="ShiftTemplateModal._name = this.value"
+                                style="font-size: 0.92rem; height: 40px; border-radius: 8px;"
+                            />
+                        </div>
 
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">
-                            ${I18n.t('shift_color_badge') || 'رنگ شناسه شیفت:'}
-                        </span>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            ${colorPillsHtml}
+                        <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+                            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
+                                <span>🎨</span>
+                                <span>${I18n.t('shift_color_badge') || 'رنگ شناسه شیفت:'}</span>
+                            </span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; min-height: 40px;">
+                                ${colorPillsHtml}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 2. Shift Type Selector (Fixed vs Rotational) -->
-                <div style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                    <label style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin: 0;">
-                        ${I18n.t('shift_type_label') || 'نوع و ساختار شیفت'}
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.15rem 1.25rem; display: flex; flex-direction: column; gap: 0.9rem;">
+                    <label style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
+                        <span>⚙️</span>
+                        <span>${I18n.t('shift_type_label') || 'نوع و ساختار شیفت'}</span>
                     </label>
 
-                    <div class="page-segmented-control" style="width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                    <div class="page-segmented-control" style="width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg-secondary); padding: 4px; border-radius: 10px; border: 1px solid var(--border-subtle);">
                         <button
                             type="button"
                             class="segmented-tab ${isFixed ? 'active' : ''}"
-                            style="justify-content: center; padding: 0.5rem;"
+                            style="justify-content: center; padding: 0.55rem; font-weight: 600; border-radius: 8px;"
                             onclick="ShiftTemplateModal.setShiftType('fixed')"
                         >
                             <span>☀️ ${I18n.t('shift_mode_fixed') || 'شیفت ثابت هفتگی'}</span>
@@ -252,7 +263,7 @@ const ShiftTemplateModal = {
                         <button
                             type="button"
                             class="segmented-tab ${!isFixed ? 'active' : ''}"
-                            style="justify-content: center; padding: 0.5rem;"
+                            style="justify-content: center; padding: 0.55rem; font-weight: 600; border-radius: 8px;"
                             onclick="ShiftTemplateModal.setShiftType('rotational')"
                         >
                             <span>🔄 ${I18n.t('rotational_shift') || 'نوبت‌کاری چرخشی'}</span>
@@ -261,10 +272,10 @@ const ShiftTemplateModal = {
 
                     ${isFixed ? `
                         <!-- Fixed Shift Hours & Days -->
-                        <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-top: 0.4rem;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="display: flex; flex-direction: column; gap: 0.95rem; margin-top: 0.2rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">
+                                    <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">
                                         ⏰ ${I18n.t('start_time') || 'ساعت شروع شیفت'}
                                     </label>
                                     <input
@@ -273,11 +284,11 @@ const ShiftTemplateModal = {
                                         class="form-control"
                                         value="${this._startTime}"
                                         onchange="ShiftTemplateModal.setStartTime(this.value)"
-                                        style="font-family: monospace; direction: ltr; font-size: 0.95rem; text-align: center;"
+                                        style="font-family: monospace; direction: ltr; font-size: 0.95rem; text-align: center; height: 38px; border-radius: 6px;"
                                     />
                                 </div>
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">
+                                    <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">
                                         🏁 ${I18n.t('end_time') || 'ساعت پایان شیفت'}
                                     </label>
                                     <input
@@ -286,206 +297,207 @@ const ShiftTemplateModal = {
                                         class="form-control"
                                         value="${this._endTime}"
                                         onchange="ShiftTemplateModal.setEndTime(this.value)"
-                                        style="font-family: monospace; direction: ltr; font-size: 0.95rem; text-align: center;"
+                                        style="font-family: monospace; direction: ltr; font-size: 0.95rem; text-align: center; height: 38px; border-radius: 6px;"
                                     />
                                 </div>
                             </div>
 
                             ${isOvernight ? `
-                                <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.76rem; color: #c4b5fd; display: flex; align-items: center; gap: 0.4rem;">
+                                <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 0.6rem 0.85rem; font-size: 0.78rem; color: #c4b5fd; display: flex; align-items: center; gap: 0.5rem;">
                                     <span>🌙</span>
                                     <span>${isRtl ? 'شیفت شبانه (پایان در روز بعد محاسبه می‌شود).' : 'Overnight shift (ends on the next calendar day).'}</span>
                                 </div>
                             ` : ''}
 
                             <!-- Active Days Selector -->
-                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.2rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem;">
-                                    <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">
+                            <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.2rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">
                                         📅 ${I18n.t('active_days') || 'روزهای فعال کاری:'}
                                     </span>
-                                    <div style="display: flex; gap: 0.4rem; font-size: 0.72rem;">
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.setDaysPreset('all')" style="padding: 2px 7px; font-size: 0.7rem;">
+                                    <div style="display: flex; gap: 0.45rem; font-size: 0.72rem;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.setDaysPreset('all')" style="padding: 3px 9px; font-size: 0.72rem; border-radius: 6px;">
                                             ${I18n.t('days_all_7') || 'تمام ۷ روز'}
                                         </button>
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.setDaysPreset('sat_wed')" style="padding: 2px 7px; font-size: 0.7rem;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.setDaysPreset('sat_wed')" style="padding: 3px 9px; font-size: 0.72rem; border-radius: 6px;">
                                             ${I18n.t('days_sat_wed') || 'شنبه تا چهارشنبه'}
                                         </button>
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.setDaysPreset('sat_thu')" style="padding: 2px 7px; font-size: 0.7rem;">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.setDaysPreset('sat_thu')" style="padding: 3px 9px; font-size: 0.72rem; border-radius: 6px;">
                                             ${I18n.t('days_sat_thu') || 'شنبه تا پنج‌شنبه'}
                                         </button>
                                     </div>
                                 </div>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.45rem;">
                                     ${daysChipsHtml}
                                 </div>
                             </div>
                         </div>
                     ` : `
                         <!-- Rotational Shift Controls -->
-                        <div style="display: flex; flex-direction: column; gap: 0.9rem; margin-top: 0.4rem;">
+                        <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 0.2rem;">
                             <!-- Rotational Presets -->
-                            <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
+                                    <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
                                         <span>🔄</span>
                                         <span>${isRtl ? 'الگوهای استاندارد نوبت‌کاری:' : 'Standard Rotation Cycles:'}</span>
                                     </span>
-                                    <span id="rot-custom-indicator" class="badge" style="font-size: 0.7rem; padding: 2px 7px; ${this._rotationPattern.pattern_type === 'custom' ? 'background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);' : 'display: none;'}">
+                                    <span id="rot-custom-indicator" class="badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; ${this._rotationPattern.pattern_type === 'custom' ? 'background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);' : 'display: none;'}">
                                         ✨ ${isRtl ? 'الگوی سفارشی' : 'Custom Sequence'}
                                     </span>
                                 </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
                                     <button
                                         type="button"
                                         id="rot-preset-btn-2d_2n_1off"
                                         class="btn btn-sm ${this._rotationPattern.pattern_type === '2d_2n_1off' ? 'btn-primary' : 'btn-secondary'}"
                                         onclick="ShiftTemplateModal.applyRotationalPreset('2d_2n_1off')"
-                                        style="font-size: 0.75rem; padding: 0.45rem 0.6rem; text-align: start; display: flex; align-items: center; justify-content: space-between;"
+                                        style="font-size: 0.78rem; padding: 0.55rem 0.85rem; border-radius: 8px; text-align: start; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; transition: all 0.15s; font-weight: 600;"
                                     >
-                                        <span>${I18n.t('preset_2d_2n_1off') || '۲ روز، ۲ شب، ۱ آف'}</span>
-                                        <span style="font-size: 0.68rem; opacity: 0.8; font-family: monospace;">(5d)</span>
+                                        <span style="white-space: normal; line-height: 1.35;">${I18n.t('preset_2d_2n_1off') || '۲ روز، ۲ شب، ۱ آف'}</span>
+                                        <span style="font-size: 0.7rem; opacity: 0.85; font-family: monospace; flex-shrink: 0; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">(5d)</span>
                                     </button>
                                     <button
                                         type="button"
                                         id="rot-preset-btn-2d_2n_2off"
                                         class="btn btn-sm ${this._rotationPattern.pattern_type === '2d_2n_2off' ? 'btn-primary' : 'btn-secondary'}"
                                         onclick="ShiftTemplateModal.applyRotationalPreset('2d_2n_2off')"
-                                        style="font-size: 0.75rem; padding: 0.45rem 0.6rem; text-align: start; display: flex; align-items: center; justify-content: space-between;"
+                                        style="font-size: 0.78rem; padding: 0.55rem 0.85rem; border-radius: 8px; text-align: start; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; transition: all 0.15s; font-weight: 600;"
                                     >
-                                        <span>${I18n.t('preset_2d_2n_2off') || '۲ روز، ۲ شب، ۲ آف'}</span>
-                                        <span style="font-size: 0.68rem; opacity: 0.8; font-family: monospace;">(6d)</span>
+                                        <span style="white-space: normal; line-height: 1.35;">${I18n.t('preset_2d_2n_2off') || '۲ روز، ۲ شب، ۲ آف'}</span>
+                                        <span style="font-size: 0.7rem; opacity: 0.85; font-family: monospace; flex-shrink: 0; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">(6d)</span>
                                     </button>
                                     <button
                                         type="button"
                                         id="rot-preset-btn-24_48"
                                         class="btn btn-sm ${this._rotationPattern.pattern_type === '24_48' ? 'btn-primary' : 'btn-secondary'}"
                                         onclick="ShiftTemplateModal.applyRotationalPreset('24_48')"
-                                        style="font-size: 0.75rem; padding: 0.45rem 0.6rem; text-align: start; display: flex; align-items: center; justify-content: space-between;"
+                                        style="font-size: 0.78rem; padding: 0.55rem 0.85rem; border-radius: 8px; text-align: start; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; transition: all 0.15s; font-weight: 600;"
                                     >
-                                        <span>${I18n.t('preset_24_48') || '۲۴ ساعت کار، ۴۸ استراحت'}</span>
-                                        <span style="font-size: 0.68rem; opacity: 0.8; font-family: monospace;">(4d)</span>
+                                        <span style="white-space: normal; line-height: 1.35;">${I18n.t('preset_24_48') || '۲۴ ساعت کار، ۴۸ استراحت'}</span>
+                                        <span style="font-size: 0.7rem; opacity: 0.85; font-family: monospace; flex-shrink: 0; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">(4d)</span>
                                     </button>
                                     <button
                                         type="button"
                                         id="rot-preset-btn-1d_1n_2off"
                                         class="btn btn-sm ${this._rotationPattern.pattern_type === '1d_1n_2off' ? 'btn-primary' : 'btn-secondary'}"
                                         onclick="ShiftTemplateModal.applyRotationalPreset('1d_1n_2off')"
-                                        style="font-size: 0.75rem; padding: 0.45rem 0.6rem; text-align: start; display: flex; align-items: center; justify-content: space-between;"
+                                        style="font-size: 0.78rem; padding: 0.55rem 0.85rem; border-radius: 8px; text-align: start; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; transition: all 0.15s; font-weight: 600;"
                                     >
-                                        <span>${I18n.t('preset_1d_1n_2off') || (isRtl ? '۱ روز، ۱ شب، ۲ آف' : '1 Day, 1 Night, 2 Off')}</span>
-                                        <span style="font-size: 0.68rem; opacity: 0.8; font-family: monospace;">(4d)</span>
+                                        <span style="white-space: normal; line-height: 1.35;">${I18n.t('preset_1d_1n_2off') || (isRtl ? '۱ روز، ۱ شب، ۲ آف' : '1 Day, 1 Night, 2 Off')}</span>
+                                        <span style="font-size: 0.7rem; opacity: 0.85; font-family: monospace; flex-shrink: 0; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">(4d)</span>
                                     </button>
                                 </div>
                             </div>
 
                             <!-- Day and Night bounds -->
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">
+                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">
                                         ☀️ ${I18n.t('rotation_day_shift') || 'ساعات شیفت روز'}
                                     </label>
-                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem;">
                                         <input
                                             type="time"
                                             id="rot-day-start"
                                             class="form-control"
                                             value="${this._rotationPattern.day_start || '07:00'}"
                                             onchange="ShiftTemplateModal._rotationPattern.day_start = this.value"
-                                            style="font-family: monospace; direction: ltr; font-size: 0.8rem; text-align: center; padding: 0.35rem;"
+                                            style="flex: 1; height: 38px; min-width: 100px; font-family: monospace; direction: ltr; font-size: 0.88rem; text-align: center; border-radius: 6px;"
                                         />
-                                        <span>-</span>
+                                        <span style="font-size: 0.8rem; color: var(--text-tertiary); font-weight: 600;">${isRtl ? 'تا' : 'to'}</span>
                                         <input
                                             type="time"
                                             id="rot-day-end"
                                             class="form-control"
                                             value="${this._rotationPattern.day_end || '19:00'}"
                                             onchange="ShiftTemplateModal._rotationPattern.day_end = this.value"
-                                            style="font-family: monospace; direction: ltr; font-size: 0.8rem; text-align: center; padding: 0.35rem;"
+                                            style="flex: 1; height: 38px; min-width: 100px; font-family: monospace; direction: ltr; font-size: 0.88rem; text-align: center; border-radius: 6px;"
                                         />
                                     </div>
                                 </div>
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.3rem; display: block;">
+                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">
                                         🌙 ${I18n.t('rotation_night_shift') || 'ساعات شیفت شب'}
                                     </label>
-                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem;">
                                         <input
                                             type="time"
                                             id="rot-night-start"
                                             class="form-control"
                                             value="${this._rotationPattern.night_start || '19:00'}"
                                             onchange="ShiftTemplateModal._rotationPattern.night_start = this.value"
-                                            style="font-family: monospace; direction: ltr; font-size: 0.8rem; text-align: center; padding: 0.35rem;"
+                                            style="flex: 1; height: 38px; min-width: 100px; font-family: monospace; direction: ltr; font-size: 0.88rem; text-align: center; border-radius: 6px;"
                                         />
-                                        <span>-</span>
+                                        <span style="font-size: 0.8rem; color: var(--text-tertiary); font-weight: 600;">${isRtl ? 'تا' : 'to'}</span>
                                         <input
                                             type="time"
                                             id="rot-night-end"
                                             class="form-control"
                                             value="${this._rotationPattern.night_end || '07:00'}"
                                             onchange="ShiftTemplateModal._rotationPattern.night_end = this.value"
-                                            style="font-family: monospace; direction: ltr; font-size: 0.8rem; text-align: center; padding: 0.35rem;"
+                                            style="flex: 1; height: 38px; min-width: 100px; font-family: monospace; direction: ltr; font-size: 0.88rem; text-align: center; border-radius: 6px;"
                                         />
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Anchor Date -->
-                            <div class="form-group" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 0.6rem 0.8rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; flex-wrap: wrap; gap: 0.3rem;">
-                                    <label for="rot-anchor-date" style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin: 0; display: flex; align-items: center; gap: 4px;">
+                            <div class="form-group" style="margin: 0; background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.75rem 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+                                    <label for="rot-anchor-date" style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
                                         <span>📅</span>
                                         <span>${I18n.t('rotation_anchor_date') || 'تاریخ مبنای شروع چرخه:'}</span>
                                     </label>
-                                    <span id="rot-anchor-shamsi" style="font-size: 0.72rem; color: var(--text-tertiary); direction: rtl;">
+                                    <span id="rot-anchor-shamsi" style="font-size: 0.76rem; color: var(--accent-blue); font-weight: 600; direction: rtl; font-family: monospace;">
                                         ${this._formatAnchorDatePreview(this._rotationPattern.anchor_date || '2026-01-01')}
                                     </span>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                                     <input
                                         type="date"
                                         id="rot-anchor-date"
                                         class="form-control"
                                         value="${(this._rotationPattern.anchor_date || '2026-01-01').slice(0, 10)}"
                                         onchange="ShiftTemplateModal.onAnchorDateChange(this.value)"
-                                        style="font-family: monospace; font-size: 0.82rem; padding: 0.35rem 0.6rem; max-width: 170px;"
+                                        style="font-family: monospace; font-size: 0.85rem; padding: 0.4rem 0.7rem; max-width: 190px; height: 38px; border-radius: 6px;"
                                     />
-                                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">
-                                        ${isRtl ? 'روز اول چرخه از این تاریخ آغاز و تکرار می‌شود' : 'Cycle starts repeating from this date'}
+                                    <span style="font-size: 0.74rem; color: var(--text-tertiary);">
+                                        ${isRtl ? 'روز اول چرخه نوبت‌کاری از این تاریخ شروع و به ترتیب تکرار می‌شود.' : 'Cycle step 1 begins repeating continuously from this calendar date.'}
                                     </span>
                                 </div>
                             </div>
 
                             <!-- Interactive Cycle Sequence Builder -->
-                            <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.6rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-primary);">
-                                            ${I18n.t('rotation_cycle_sequence') || (isRtl ? 'ترتیب و چرخه نوبت‌کاری:' : 'Rotation Cycle Sequence:')}
+                            <div style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 5px;">
+                                            <span>🔁</span>
+                                            <span>${I18n.t('rotation_cycle_sequence') || (isRtl ? 'ترتیب و چرخه نوبت‌کاری:' : 'Rotation Cycle Sequence:')}</span>
                                         </span>
-                                        <span id="rot-cycle-length-badge" class="badge badge-subtle" style="font-size: 0.72rem; color: var(--accent-blue); font-weight: 700; padding: 2px 7px;">
+                                        <span id="rot-cycle-length-badge" class="badge badge-subtle" style="font-size: 0.74rem; color: var(--accent-blue); font-weight: 700; padding: 3px 8px; border-radius: 6px;">
                                             ${this._formatCycleLengthBadge()}
                                         </span>
                                     </div>
-                                    <span style="font-size: 0.68rem; color: var(--text-tertiary);">
-                                        ${I18n.t('rotation_click_hint') || (isRtl ? '💡 برای تغییر نوع روز روی آن کلیک کنید' : '💡 Click any chip to cycle status')}
+                                    <span style="font-size: 0.72rem; color: var(--text-tertiary);">
+                                        ${I18n.t('rotation_click_hint') || (isRtl ? '💡 با کلیک روی هر روز وضعیت آن را تغییر دهید (روزکار ← شب‌کار ← آف)' : '💡 Click any chip to cycle status (Day → Night → Off)')}
                                     </span>
                                 </div>
 
                                 <!-- Chips timeline container -->
-                                <div id="rot-cycle-chips-container" style="display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; min-height: 38px; padding: 0.25rem 0;">
+                                <div id="rot-cycle-chips-container" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; min-height: 42px; padding: 0.35rem 0;">
                                     ${this.renderCycleChipsHtml()}
                                 </div>
 
                                 <!-- Step Addition & Reset Actions Toolbar -->
-                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed var(--border-subtle);">
-                                    <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.65rem; border-top: 1px dashed var(--border-subtle);">
+                                    <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-ghost"
                                             onclick="ShiftTemplateModal.addCycleStep('day')"
-                                            style="padding: 3px 8px; font-size: 0.73rem; border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.1); color: #fbbf24; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-weight: 600;"
+                                            style="padding: 4px 10px; font-size: 0.76rem; border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.1); color: #fbbf24; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-weight: 600;"
                                             title="${isRtl ? 'افزودن یک روز روزکار به انتهای چرخه' : 'Append a Day shift step'}"
                                         >
                                             ☀️ ${I18n.t('btn_add_cycle_day') || (isRtl ? '＋ روزکار' : '＋ Day')}
@@ -494,7 +506,7 @@ const ShiftTemplateModal = {
                                             type="button"
                                             class="btn btn-sm btn-ghost"
                                             onclick="ShiftTemplateModal.addCycleStep('night')"
-                                            style="padding: 3px 8px; font-size: 0.73rem; border: 1px solid rgba(139, 92, 246, 0.35); background: rgba(139, 92, 246, 0.1); color: #c4b5fd; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-weight: 600;"
+                                            style="padding: 4px 10px; font-size: 0.76rem; border: 1px solid rgba(139, 92, 246, 0.35); background: rgba(139, 92, 246, 0.1); color: #c4b5fd; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-weight: 600;"
                                             title="${isRtl ? 'افزودن یک روز شب‌کار به انتهای چرخه' : 'Append a Night shift step'}"
                                         >
                                             🌙 ${I18n.t('btn_add_cycle_night') || (isRtl ? '＋ شب‌کار' : '＋ Night')}
@@ -503,7 +515,7 @@ const ShiftTemplateModal = {
                                             type="button"
                                             class="btn btn-sm btn-ghost"
                                             onclick="ShiftTemplateModal.addCycleStep('off')"
-                                            style="padding: 3px 8px; font-size: 0.73rem; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(100, 116, 139, 0.15); color: #94a3b8; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-weight: 600;"
+                                            style="padding: 4px 10px; font-size: 0.76rem; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(100, 116, 139, 0.15); color: #94a3b8; border-radius: 6px; cursor: pointer; transition: all 0.15s; font-weight: 600;"
                                             title="${isRtl ? 'افزودن یک روز آف/استراحت به انتهای چرخه' : 'Append an Off-duty step'}"
                                         >
                                             ☕ ${I18n.t('btn_add_cycle_off') || (isRtl ? '＋ آف (استراحت)' : '＋ Off')}
@@ -514,7 +526,7 @@ const ShiftTemplateModal = {
                                         type="button"
                                         class="btn btn-ghost btn-sm"
                                         onclick="ShiftTemplateModal.resetCycleToDefault()"
-                                        style="padding: 3px 8px; font-size: 0.7rem; color: var(--text-tertiary); cursor: pointer;"
+                                        style="padding: 4px 10px; font-size: 0.74rem; color: var(--text-tertiary); cursor: pointer; border: 1px solid var(--border-subtle); border-radius: 6px;"
                                         title="${isRtl ? 'بازنشانی چرخه به ۵ روزه استاندارد (۲ روز، ۲ شب، ۱ آف)' : 'Reset cycle to 5-day standard (2D+2N+1Off)'}"
                                     >
                                         ↺ ${I18n.t('btn_reset_cycle') || (isRtl ? 'بازنشانی' : 'Reset')}
@@ -526,14 +538,15 @@ const ShiftTemplateModal = {
                 </div>
 
                 <!-- 3. Tolerances & Rules -->
-                <div style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; gap: 0.85rem;">
-                    <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">
-                        🛡️ ${I18n.t('shift_tolerances_title') || 'قوانین تاخیر و آستانه هشدار غیبت'}
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.15rem 1.25rem; display: flex; flex-direction: column; gap: 0.9rem;">
+                    <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span>🛡️</span>
+                        <span>${I18n.t('shift_tolerances_title') || 'قوانین تاخیر و آستانه هشدار غیبت'}</span>
                     </span>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
                         <div class="form-group" style="margin: 0;">
-                            <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">
                                 ⏱️ ${I18n.t('grace_period_minutes') || 'مهلت تاخیر مجاز (دقیقه)'}
                             </label>
                             <input
@@ -544,15 +557,15 @@ const ShiftTemplateModal = {
                                 max="120"
                                 value="${this._gracePeriodMinutes}"
                                 oninput="ShiftTemplateModal._gracePeriodMinutes = parseInt(this.value, 10) || 0"
-                                style="text-align: center; font-size: 0.88rem; padding: 0.35rem;"
+                                style="text-align: center; font-size: 0.9rem; padding: 0.4rem; height: 38px; border-radius: 6px;"
                             />
-                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 2px;">
+                            <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 4px;">
                                 ${I18n.t('grace_period_hint') || 'مهلت تاخیر در شروع شیفت پیش از ثبت تخلف'}
                             </div>
                         </div>
 
                         <div class="form-group" style="margin: 0;">
-                            <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">
                                 🚨 ${I18n.t('absence_timeout_minutes') || 'آستانه هشدار غیبت (دقیقه)'}
                             </label>
                             <input
@@ -563,9 +576,9 @@ const ShiftTemplateModal = {
                                 max="1440"
                                 value="${this._absenceTimeoutMinutes}"
                                 oninput="ShiftTemplateModal._absenceTimeoutMinutes = parseInt(this.value, 10) || 1"
-                                style="text-align: center; font-size: 0.88rem; padding: 0.35rem;"
+                                style="text-align: center; font-size: 0.9rem; padding: 0.4rem; height: 38px; border-radius: 6px;"
                             />
-                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 2px;">
+                            <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 4px;">
                                 ${I18n.t('absence_timeout_hint') || 'حداکثر زمان ترک ایستگاه پیش از آلارم'}
                             </div>
                         </div>
@@ -573,26 +586,26 @@ const ShiftTemplateModal = {
                 </div>
 
                 <!-- 4. Scheduled Breaks & Lunch (Free Times) -->
-                <div style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.15rem 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
                         <div>
-                            <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+                            <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.45rem;">
                                 🍽️ ${I18n.t('scheduled_breaks_title') || 'زنگ‌های استراحت و ناهار (Breaks)'}
-                                <span class="badge badge-subtle" id="shift-breaks-count-badge" style="font-size: 0.7rem; padding: 2px 6px; margin-inline-start: 4px;">
+                                <span class="badge badge-subtle" id="shift-breaks-count-badge" style="font-size: 0.72rem; padding: 2px 7px; border-radius: 6px; margin-inline-start: 4px;">
                                     ${isRtl ? I18n.toPersianDigits((this._freeTimes || []).length) : (this._freeTimes || []).length}
                                 </span>
                             </span>
-                            <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px;">
+                            <div style="font-size: 0.73rem; color: var(--text-tertiary); margin-top: 2px;">
                                 ${I18n.t('scheduled_breaks_desc') || 'در این بازه‌ها سیستم هشدار عدم حضور را متوقف می‌کند.'}
                             </div>
                         </div>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.addBreakRow()" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; display: flex; align-items: center; gap: 4px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="ShiftTemplateModal.addBreakRow()" style="font-size: 0.76rem; padding: 0.4rem 0.85rem; border-radius: 6px; display: flex; align-items: center; gap: 5px;">
                             <span>＋</span> <span>${I18n.t('btn_add_break') || (isRtl ? 'افزودن استراحت' : 'Add Break')}</span>
                         </button>
                     </div>
 
                     <!-- Editable Break Rows List Container -->
-                    <div id="shift-breaks-list-container" style="display: flex; flex-direction: column; gap: 0.45rem;">
+                    <div id="shift-breaks-list-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
                         ${this.renderBreaksListHtml()}
                     </div>
 
@@ -601,18 +614,18 @@ const ShiftTemplateModal = {
                 </div>
 
                 <!-- Footer Actions -->
-                <div class="modal-footer" style="padding: 0; margin-top: 0.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-                    <button type="button" class="btn btn-secondary" onclick="App.closeModal()">
+                <div class="modal-footer" style="padding: 0.5rem 0 0 0; margin-top: 0.25rem; display: flex; justify-content: flex-end; gap: 0.85rem;">
+                    <button type="button" class="btn btn-secondary" onclick="App.closeModal()" style="padding: 0.55rem 1.25rem; border-radius: 8px;">
                         ${I18n.t('cancel') || 'انصراف'}
                     </button>
-                    <button type="submit" class="btn btn-primary" id="btn-save-shift-template">
+                    <button type="submit" class="btn btn-primary" id="btn-save-shift-template" style="padding: 0.55rem 1.5rem; border-radius: 8px; font-weight: 600;">
                         💾 ${I18n.t('save_changes') || 'ذخیره تغییرات'}
                     </button>
                 </div>
             </form>
         `;
 
-        App.openModal(content, 'modal-md');
+        App.openModal(content, 'modal-shift-template modal-lg');
     },
 
     setColor(c) {
@@ -1000,44 +1013,44 @@ const ShiftTemplateModal = {
             const durText = this._calcDurationText(br.start_time, br.end_time);
 
             return `
-                <div class="shift-break-row" data-index="${idx}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.7rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; flex-wrap: wrap;">
-                    <span class="shift-break-icon" style="font-size: 1.15rem; flex-shrink: 0; user-select: none;">${icon}</span>
+                <div class="shift-break-row" data-index="${idx}" style="display: flex; align-items: center; gap: 0.65rem; padding: 0.55rem 0.85rem; background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: 8px; flex-wrap: wrap;">
+                    <span class="shift-break-icon" style="font-size: 1.25rem; flex-shrink: 0; user-select: none;">${icon}</span>
                     
                     <!-- Break Name Input -->
-                    <div style="flex: 2; min-width: 140px;">
+                    <div style="flex: 1; min-width: 170px;">
                         <input
                             type="text"
                             class="form-control shift-break-name-input"
                             value="${this._escape(br.name || '')}"
                             placeholder="${I18n.t('break_name_placeholder') || (isRtl ? 'عنوان استراحت (مثال: ناهار، چای)' : 'Break Title (e.g. Lunch, Tea)')}"
                             oninput="ShiftTemplateModal.updateBreak(${idx}, 'name', this.value)"
-                            style="font-size: 0.82rem; padding: 0.35rem 0.6rem; height: 34px; width: 100%;"
+                            style="font-size: 0.85rem; padding: 0.4rem 0.65rem; height: 36px; width: 100%; border-radius: 6px;"
                         />
                     </div>
 
                     <!-- Time Range Inputs -->
-                    <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-shrink: 0;">
+                    <div style="display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0;">
                         <input
                             type="time"
                             class="form-control shift-break-start-input"
                             value="${br.start_time || '12:00'}"
                             onchange="ShiftTemplateModal.updateBreak(${idx}, 'start_time', this.value)"
-                            style="width: 105px; font-family: monospace; font-size: 0.82rem; text-align: center; padding: 0.35rem 0.3rem; height: 34px; direction: ltr;"
+                            style="width: 110px; font-family: monospace; font-size: 0.85rem; text-align: center; padding: 0.4rem 0.35rem; height: 36px; direction: ltr; border-radius: 6px;"
                             title="${isRtl ? 'زمان شروع استراحت' : 'Break Start Time'}"
                         />
-                        <span style="font-size: 0.75rem; color: var(--text-tertiary);">${isRtl ? 'تا' : 'to'}</span>
+                        <span style="font-size: 0.78rem; color: var(--text-tertiary); font-weight: 600;">${isRtl ? 'تا' : 'to'}</span>
                         <input
                             type="time"
                             class="form-control shift-break-end-input"
                             value="${br.end_time || '13:00'}"
                             onchange="ShiftTemplateModal.updateBreak(${idx}, 'end_time', this.value)"
-                            style="width: 105px; font-family: monospace; font-size: 0.82rem; text-align: center; padding: 0.35rem 0.3rem; height: 34px; direction: ltr;"
+                            style="width: 110px; font-family: monospace; font-size: 0.85rem; text-align: center; padding: 0.4rem 0.35rem; height: 36px; direction: ltr; border-radius: 6px;"
                             title="${isRtl ? 'زمان پایان استراحت' : 'Break End Time'}"
                         />
                     </div>
 
                     <!-- Duration Badge -->
-                    <span class="shift-break-duration badge badge-subtle" style="font-size: 0.72rem; padding: 3px 6px; white-space: nowrap; flex-shrink: 0; direction: ltr; min-width: 48px; text-align: center;">
+                    <span class="shift-break-duration badge badge-subtle" style="font-size: 0.74rem; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; direction: ltr; min-width: 58px; text-align: center; font-weight: 600;">
                         ${durText}
                     </span>
 
@@ -1046,8 +1059,10 @@ const ShiftTemplateModal = {
                         type="button"
                         class="btn btn-sm btn-icon"
                         onclick="ShiftTemplateModal.removeBreak(${idx})"
-                        style="padding: 4px 8px; color: #f87171; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.25); border-radius: 6px; cursor: pointer; flex-shrink: 0; line-height: 1; transition: all 0.15s; margin-inline-start: auto;"
+                        style="padding: 5px 9px; color: #f87171; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.25); border-radius: 6px; cursor: pointer; flex-shrink: 0; line-height: 1; transition: all 0.15s; margin-inline-start: 4px;"
                         title="${isRtl ? 'حذف این استراحت' : 'Remove break'}"
+                        onmouseenter="this.style.background='rgba(248, 113, 113, 0.25)'"
+                        onmouseleave="this.style.background='rgba(248, 113, 113, 0.12)'"
                     >
                         ✕
                     </button>
@@ -1068,12 +1083,14 @@ const ShiftTemplateModal = {
                     type="button"
                     class="btn btn-ghost btn-sm shift-preset-chip"
                     onclick="ShiftTemplateModal.applyPreset('${safeName}', '${p.start_time}', '${p.end_time}', '${p.category || 'lunch'}')"
-                    style="padding: 3px 8px; font-size: 0.72rem; border-radius: 12px; border: 1px solid var(--border-subtle); display: inline-flex; align-items: center; gap: 4px; background: var(--bg-surface); cursor: pointer; transition: all 0.15s;"
+                    style="padding: 4px 10px; font-size: 0.75rem; border-radius: 14px; border: 1px solid var(--border-subtle); display: inline-flex; align-items: center; gap: 5px; background: var(--bg-surface); cursor: pointer; transition: all 0.15s;"
                     title="${safeName} (${p.start_time} - ${p.end_time})"
+                    onmouseenter="this.style.borderColor='var(--accent-blue)'; this.style.transform='translateY(-1px)'"
+                    onmouseleave="this.style.borderColor='var(--border-subtle)'; this.style.transform='none'"
                 >
                     <span>${icon}</span>
-                    <strong style="color: var(--text-primary); font-size: 0.74rem;">${safeName}</strong>
-                    <span style="direction: ltr; font-family: monospace; opacity: 0.75; font-size: 0.7rem;">(${p.start_time}-${p.end_time})</span>
+                    <strong style="color: var(--text-primary); font-size: 0.76rem;">${safeName}</strong>
+                    <span style="direction: ltr; font-family: monospace; opacity: 0.8; font-size: 0.72rem;">(${p.start_time}-${p.end_time})</span>
                 </button>
             `;
         }).join('');

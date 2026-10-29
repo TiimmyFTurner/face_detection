@@ -365,6 +365,10 @@ const App = {
                 modalEl.style.maxWidth = '1200px';
                 modalEl.style.width = '95vw';
                 modalEl.style.maxHeight = '92vh';
+            } else if (modalClass.includes('modal-shift-template')) {
+                modalEl.style.maxWidth = '860px';
+                modalEl.style.width = '92vw';
+                modalEl.style.maxHeight = '90vh';
             } else if (modalClass.includes('modal-event') || modalClass.includes('modal-lg')) {
                 modalEl.style.maxWidth = '980px';
                 modalEl.style.width = '92vw';

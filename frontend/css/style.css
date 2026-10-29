@@ -1233,6 +1233,13 @@ body[dir="ltr"] {
     max-height: 90vh !important;
 }
 
+.modal.modal-shift-template {
+    max-width: 860px !important;
+    width: 92vw !important;
+    max-height: 90vh !important;
+    overflow-x: hidden !important;
+}
+
 .modal.modal-md,
 .modal.modal-medium {
     max-width: 600px !important;

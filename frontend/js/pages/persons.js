@@ -659,13 +659,13 @@ const PersonsPage = {
                         </div>
 
                         <div style="display: flex; align-items: center; gap: 0.35rem;">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="PersonsPage.duplicateShiftTemplate(${tmpl.id})" title="${I18n.t('duplicate_shift_template_btn') || 'تکثیر'}" style="padding: 3px 8px; font-size: 0.75rem;">
-                                📋 <span>${I18n.t('duplicate_shift_template_btn') || 'تکثیر'}</span>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="PersonsPage.duplicateShiftTemplate(${tmpl.id})" title="${I18n.t('duplicate_shift_template_btn') || (isRtl ? 'تکثیر' : 'Duplicate')}" style="padding: 3px 8px; font-size: 0.75rem;">
+                                📋 <span>${I18n.t('duplicate_shift_template_btn') || (isRtl ? 'تکثیر' : 'Duplicate')}</span>
                             </button>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="PersonsPage.editShiftTemplate(${tmpl.id})" title="${I18n.t('edit') || 'ویرایش'}" style="padding: 3px 8px; font-size: 0.75rem;">
-                                ✏️ <span>${I18n.t('edit') || 'ویرایش'}</span>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="PersonsPage.editShiftTemplate(${tmpl.id})" title="${I18n.t('edit') || (isRtl ? 'ویرایش' : 'Edit')}" style="padding: 3px 8px; font-size: 0.75rem;">
+                                ✏️ <span>${I18n.t('edit') || (isRtl ? 'ویرایش' : 'Edit')}</span>
                             </button>
-                            <button type="button" class="btn btn-danger btn-sm" onclick="PersonsPage.deleteShiftTemplate(${tmpl.id}, '${PersonsPage.escapeAttr(tmpl.name)}', ${assignedCount})" title="${I18n.t('delete') || 'حذف'}" style="padding: 3px 8px; font-size: 0.75rem;">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="PersonsPage.deleteShiftTemplate(${tmpl.id}, '${PersonsPage.escapeAttr(tmpl.name)}', ${assignedCount})" title="${I18n.t('delete') || (isRtl ? 'حذف' : 'Delete')}" style="padding: 3px 8px; font-size: 0.75rem;">
                                 🗑️
                             </button>
                         </div>

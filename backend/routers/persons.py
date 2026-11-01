@@ -23,6 +23,7 @@ from sqlalchemy import select, func, and_, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.reporting import generate_person_analytics_xlsx, generate_person_analytics_csv
 
+from backend.archive_manager import get_person_events_multi_db, get_person_latest_event_multi_db
 from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.config import settings
 from backend.database import get_db
@@ -170,14 +171,8 @@ async def list_persons(
         )
         today_events = today_ev_res.scalar() or 0
 
-        # Latest event
-        latest_ev_res = await db.execute(
-            select(Event)
-            .where(Event.person_id == person.id)
-            .order_by(Event.timestamp.desc())
-            .limit(1)
-        )
-        latest_event = latest_ev_res.scalar()
+        # Latest event (transparent active DB + monthly archives)
+        latest_event = await get_person_latest_event_multi_db(db, person.id)
 
         # Determine presence status and shift absence
         current_status = "never_seen"
@@ -893,19 +888,29 @@ async def get_person_analytics(
 
     has_assigned_shift = len(shifts_info) > 0
 
-    # Fetch all actual face detection events for this person (exclude alerts)
-    events_res = await db.execute(
-        select(Event)
-        .where(
-            Event.person_id == person_id,
-            or_(
-                Event.alert_type.is_(None),
-                Event.alert_type.notin_(["absence_timeout", "camera_disconnected"]),
-            )
-        )
-        .order_by(Event.timestamp.desc())
+    query_start_dt = None
+    query_end_dt = None
+    if start_date:
+        try:
+            s_d = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query_start_dt = datetime.combine(s_d - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        except Exception:
+            pass
+    if end_date:
+        try:
+            e_d = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query_end_dt = datetime.combine(e_d + timedelta(days=1), datetime.max.time(), tzinfo=timezone.utc)
+        except Exception:
+            pass
+
+    # Fetch all actual face detection events for this person across active DB and archives
+    events = await get_person_events_multi_db(
+        db=db,
+        person_id=person_id,
+        start_dt=query_start_dt,
+        end_dt=query_end_dt,
+        exclude_system_alerts=True,
     )
-    events = events_res.scalars().all()
     last_seen_ev = events[0] if events else None
 
     def is_in_shift(dt: datetime) -> bool:

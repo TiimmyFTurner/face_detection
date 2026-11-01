@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
@@ -810,4 +810,317 @@ async def query_events_multi_db(
         curr_offset = 0
 
     return results, total_matches
+
+
+# ═══════════════════════════════════════════════════════════
+# Person Analytics & Roster Transparent Multi-DB Fetchers
+# ═══════════════════════════════════════════════════════════
+
+class ArchivedEvent:
+    """Lightweight Event-compatible object representing an event row from an archive SQLite DB."""
+    __slots__ = (
+        "id",
+        "timestamp",
+        "camera_id",
+        "person_id",
+        "person_name",
+        "confidence_score",
+        "snapshot_path",
+        "is_known",
+        "zone_id",
+        "zone_name",
+        "alert_type",
+        "duration_seconds",
+    )
+
+    def __init__(
+        self,
+        id: int,
+        timestamp: datetime,
+        camera_id: Optional[int] = None,
+        person_id: Optional[int] = None,
+        person_name: str = "Unknown",
+        confidence_score: float = 0.0,
+        snapshot_path: str = "",
+        is_known: bool = True,
+        zone_id: Optional[int] = None,
+        zone_name: str = "",
+        alert_type: str = "normal",
+        duration_seconds: Optional[int] = None,
+    ):
+        self.id = id
+        self.timestamp = timestamp
+        self.camera_id = camera_id
+        self.person_id = person_id
+        self.person_name = person_name or "Unknown"
+        self.confidence_score = float(confidence_score or 0.0)
+        self.snapshot_path = snapshot_path or ""
+        self.is_known = bool(is_known)
+        self.zone_id = zone_id
+        self.zone_name = zone_name or ""
+        self.alert_type = alert_type or "normal"
+        self.duration_seconds = duration_seconds
+
+    def __repr__(self) -> str:
+        return (
+            f"<ArchivedEvent id={self.id} person='{self.person_name}' "
+            f"confidence={self.confidence_score:.2f} alert={self.alert_type}>"
+        )
+
+
+def _normalize_utc_naive(dt: Any) -> datetime:
+    """Normalize string or datetime to naive UTC datetime for uniform comparison and arithmetic."""
+    if dt is None:
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+    if isinstance(dt, str):
+        s = dt.strip().replace(" ", "T")
+        if s.endswith("Z") or s.endswith("z"):
+            s = s[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(s)
+            if parsed.tzinfo is not None:
+                return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
+        except Exception:
+            return datetime.now(timezone.utc).replace(tzinfo=None)
+    if isinstance(dt, datetime):
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def get_person_events_multi_db(
+    db: AsyncSession,
+    person_id: int,
+    start_dt: Optional[datetime] = None,
+    end_dt: Optional[datetime] = None,
+    exclude_system_alerts: bool = True,
+) -> List[Any]:
+    """
+    Transparently fetch face detection events for a person across the active database
+    and all relevant monthly archive databases.
+    Returns all matching events sorted in descending order of timestamp.
+    """
+    # 1. Fetch from active DB
+    active_conditions = [Event.person_id == person_id]
+    if exclude_system_alerts:
+        active_conditions.append(
+            or_(
+                Event.alert_type.is_(None),
+                Event.alert_type.notin_(["absence_timeout", "camera_disconnected"]),
+            )
+        )
+    if start_dt is not None:
+        active_conditions.append(Event.timestamp >= _normalize_utc_naive(start_dt))
+    if end_dt is not None:
+        active_conditions.append(Event.timestamp <= _normalize_utc_naive(end_dt))
+
+    active_stmt = (
+        select(Event)
+        .where(and_(*active_conditions))
+        .order_by(Event.timestamp.desc())
+    )
+    active_res = await db.execute(active_stmt)
+    active_events = list(active_res.scalars().all())
+
+    # Ensure active event timestamps are naive UTC for consistent arithmetic
+    for ev in active_events:
+        if ev.timestamp is not None and ev.timestamp.tzinfo is not None:
+            ev.timestamp = ev.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+
+    # 2. Discover relevant archive databases
+    relevant_archives = get_relevant_archive_dbs(start_dt, end_dt)
+    if not relevant_archives:
+        return active_events
+
+    # 3. Query relevant archive databases in background thread
+    def _query_archive(path: Path) -> List[ArchivedEvent]:
+        clauses = ["person_id = ?"]
+        params: list[Any] = [person_id]
+        if exclude_system_alerts:
+            clauses.append("(alert_type IS NULL OR alert_type NOT IN ('absence_timeout', 'camera_disconnected'))")
+        if start_dt is not None:
+            clauses.append("timestamp >= ?")
+            params.append(_normalize_utc_naive(start_dt).isoformat())
+        if end_dt is not None:
+            clauses.append("timestamp <= ?")
+            params.append(_normalize_utc_naive(end_dt).isoformat())
+
+        where_sql = " AND ".join(clauses)
+        sql = f"""
+            SELECT id, timestamp, camera_id, person_id, person_name,
+                   confidence_score, snapshot_path, is_known, zone_id,
+                   zone_name, alert_type, duration_seconds
+            FROM events
+            WHERE {where_sql}
+            ORDER BY timestamp DESC
+        """
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            return [
+                ArchivedEvent(
+                    id=r["id"],
+                    timestamp=_normalize_utc_naive(r["timestamp"]),
+                    camera_id=r["camera_id"],
+                    person_id=r["person_id"],
+                    person_name=r["person_name"],
+                    confidence_score=r["confidence_score"],
+                    snapshot_path=r["snapshot_path"],
+                    is_known=r["is_known"],
+                    zone_id=r["zone_id"],
+                    zone_name=r["zone_name"],
+                    alert_type=r["alert_type"],
+                    duration_seconds=r["duration_seconds"],
+                )
+                for r in rows
+            ]
+
+    archive_events: list[ArchivedEvent] = []
+    for slug, db_path in relevant_archives:
+        arch_rows = await asyncio.to_thread(_query_archive, db_path)
+        archive_events.extend(arch_rows)
+
+    all_events = active_events + archive_events
+    all_events.sort(key=lambda ev: ev.timestamp, reverse=True)
+    return all_events
+
+
+async def get_person_latest_event_multi_db(
+    db: AsyncSession,
+    person_id: int,
+) -> Optional[Any]:
+    """
+    Retrieve the most recent event for a person across the active DB and monthly archives.
+    """
+    # 1. Active database check
+    stmt = (
+        select(Event)
+        .where(Event.person_id == person_id)
+        .order_by(Event.timestamp.desc())
+        .limit(1)
+    )
+    res = await db.execute(stmt)
+    ev = res.scalar()
+    if ev:
+        return ev
+
+    # 2. Check archives (newest to oldest)
+    relevant_archives = get_relevant_archive_dbs(None, None)
+    if not relevant_archives:
+        return None
+
+    def _find_latest_in_archive(path: Path) -> Optional[ArchivedEvent]:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, timestamp, camera_id, person_id, person_name,
+                       confidence_score, snapshot_path, is_known, zone_id,
+                       zone_name, alert_type, duration_seconds
+                FROM events
+                WHERE person_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                (person_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return ArchivedEvent(
+                    id=row["id"],
+                    timestamp=_normalize_utc_naive(row["timestamp"]),
+                    camera_id=row["camera_id"],
+                    person_id=row["person_id"],
+                    person_name=row["person_name"],
+                    confidence_score=row["confidence_score"],
+                    snapshot_path=row["snapshot_path"],
+                    is_known=row["is_known"],
+                    zone_id=row["zone_id"],
+                    zone_name=row["zone_name"],
+                    alert_type=row["alert_type"],
+                    duration_seconds=row["duration_seconds"],
+                )
+            return None
+
+    for slug, db_path in relevant_archives:
+        arch_ev = await asyncio.to_thread(_find_latest_in_archive, db_path)
+        if arch_ev:
+            return arch_ev
+
+    return None
+
+
+async def get_events_since_multi_db(
+    db: AsyncSession,
+    since_dt: datetime,
+) -> List[Any]:
+    """
+    Fetch events occurring on or after since_dt across active DB and relevant monthly archives.
+    Sorted ascending by timestamp.
+    """
+    since_naive = _normalize_utc_naive(since_dt)
+
+    # 1. Active DB
+    stmt = (
+        select(Event)
+        .where(Event.timestamp >= since_naive)
+        .order_by(Event.timestamp.asc())
+    )
+    res = await db.execute(stmt)
+    active_events = list(res.scalars().all())
+    for ev in active_events:
+        if ev.timestamp is not None and ev.timestamp.tzinfo is not None:
+            ev.timestamp = ev.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+
+    # 2. Archives overlapping since_dt
+    relevant_archives = get_relevant_archive_dbs(since_dt, None)
+    if not relevant_archives:
+        return active_events
+
+    def _query_archive(path: Path) -> List[ArchivedEvent]:
+        sql = """
+            SELECT id, timestamp, camera_id, person_id, person_name,
+                   confidence_score, snapshot_path, is_known, zone_id,
+                   zone_name, alert_type, duration_seconds
+            FROM events
+            WHERE timestamp >= ?
+            ORDER BY timestamp ASC
+        """
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(sql, (since_naive.isoformat(),))
+            rows = cur.fetchall()
+            return [
+                ArchivedEvent(
+                    id=r["id"],
+                    timestamp=_normalize_utc_naive(r["timestamp"]),
+                    camera_id=r["camera_id"],
+                    person_id=r["person_id"],
+                    person_name=r["person_name"],
+                    confidence_score=r["confidence_score"],
+                    snapshot_path=r["snapshot_path"],
+                    is_known=r["is_known"],
+                    zone_id=r["zone_id"],
+                    zone_name=r["zone_name"],
+                    alert_type=r["alert_type"],
+                    duration_seconds=r["duration_seconds"],
+                )
+                for r in rows
+            ]
+
+    arch_events: list[ArchivedEvent] = []
+    for slug, db_path in relevant_archives:
+        rows = await asyncio.to_thread(_query_archive, db_path)
+        arch_events.extend(rows)
+
+    all_events = active_events + arch_events
+    all_events.sort(key=lambda ev: ev.timestamp)
+    return all_events
+
 

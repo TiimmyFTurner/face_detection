@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User
+from backend.archive_manager import get_events_since_multi_db
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
 from backend.shift_utils import get_rotation_day_state, get_interval_free_minutes
 from backend.schemas import (
@@ -473,13 +474,8 @@ async def compute_duty_roster_data(
         if e.person_id not in avatar_map and e.reference_photo_path:
             avatar_map[e.person_id] = f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
 
-    # 5. Events from past 36 hours (ensures cross-midnight overnight shift events are included)
-    events_result = await db.execute(
-        select(Event)
-        .where(Event.timestamp >= events_start_utc)
-        .order_by(Event.timestamp.asc())
-    )
-    recent_events = events_result.scalars().all()
+    # 5. Events from past 36 hours (ensures cross-midnight overnight shift events are included across active DB + archives)
+    recent_events = await get_events_since_multi_db(db, events_start_utc)
 
     roster: list[PersonDutyStatus] = []
 

@@ -126,11 +126,11 @@ const PersonAnalyticsModal = {
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-${isFa ? 'right' : 'left'}: auto;">
-                    <button class="btn btn-primary btn-sm" onclick="PersonShiftModal.show(${d.id})" title="${PersonAnalyticsModal.escapeAttr(I18n.t('manage_shift') || 'مدیریت شیفت')}">
+                    <button class="btn btn-primary btn-sm" onclick="PersonShiftModal.show(${d.person_id || d.id})" title="${PersonAnalyticsModal.escapeAttr(I18n.t('manage_shift') || 'مدیریت شیفت')}">
                         ⏰ <span>${I18n.t('manage_shift') || 'مدیریت شیفت'}</span>
                     </button>
-                    <button class="btn btn-secondary btn-sm" onclick="PersonAnalyticsModal.printSummary()" title="${PersonAnalyticsModal.escapeAttr(I18n.t('print_summary'))}">
-                        ${I18n.t('print_summary')}
+                    <button class="btn btn-secondary btn-sm" id="btn-person-analytics-export" onclick="PersonAnalyticsModal.exportExcel()" title="${PersonAnalyticsModal.escapeAttr(I18n.t('print_summary'))}">
+                        <span id="btn-export-text">${I18n.t('print_summary')}</span>
                     </button>
                     <button class="modal-close" onclick="App.closeModal()">✕</button>
                 </div>
@@ -887,10 +887,73 @@ const PersonAnalyticsModal = {
     },
 
     /**
-     * Print or save summary report.
+     * Export the 30-day attendance table to an Excel (.xlsx) file.
+     */
+    async exportExcel() {
+        const d = PersonAnalyticsModal._data;
+        if (!d) return;
+        const pid = d.person_id || d.id;
+        if (!pid) return;
+
+        const isFa = I18n.isRTL();
+        const exportBtn = document.getElementById('btn-person-analytics-export');
+        const exportText = document.getElementById('btn-export-text');
+        const origText = exportText ? exportText.textContent : '';
+
+        if (exportBtn) {
+            exportBtn.disabled = true;
+            exportBtn.style.opacity = '0.7';
+            if (exportText) exportText.textContent = isFa ? 'در حال دریافت...' : 'Exporting...';
+        }
+
+        App.showToast(isFa ? 'در حال تولید و دریافت فایل اکسل جدول...' : 'Generating and downloading Excel report...', 'info');
+
+        try {
+            const token = (typeof Auth !== 'undefined' && Auth.getToken()) || localStorage.getItem('token') || '';
+            const url = `/api/persons/${pid}/analytics/export?format=xlsx&days=30&token=${encodeURIComponent(token)}`;
+
+            const response = await fetch(url, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            if (!response.ok) {
+                const errJson = await response.json().catch(() => ({}));
+                throw new Error(errJson.detail || (isFa ? 'خطا در دریافت فایل اکسل' : 'Export failed'));
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = downloadUrl;
+
+            const safeName = (d.name || `person_${pid}`).replace(/[\s\/\\:*?"<>|]+/g, '_');
+            const todayStr = new Date().toISOString().split('T')[0];
+            a.download = `attendance_30d_${safeName}_${todayStr}.xlsx`;
+
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            a.remove();
+
+            App.showToast(isFa ? 'فایل اکسل جدول با موفقیت دانلود شد' : 'Excel table downloaded successfully', 'success');
+        } catch (err) {
+            console.error('Failed to export analytics excel:', err);
+            App.showToast(err.message || (isFa ? 'خطا در تولید فایل اکسل' : 'Failed to export Excel file'), 'error');
+        } finally {
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.style.opacity = '1';
+                if (exportText) exportText.textContent = origText;
+            }
+        }
+    },
+
+    /**
+     * Print or save summary report (routes to Excel export).
      */
     printSummary() {
-        window.print();
+        return PersonAnalyticsModal.exportExcel();
     },
 
     /**

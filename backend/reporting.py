@@ -711,7 +711,7 @@ def generate_person_analytics_xlsx(
     gregorian_now_str = report_date.strftime("%Y-%m-%d %H:%M:%S")
 
     # 1. Header Banner
-    ws.merge_cells("A1:P1")
+    ws.merge_cells("A1:Q1")
     title_cell = ws["A1"]
     title_cell.value = "🎯 سامانه پایش هوشمند FaceTrack — گزارش تحلیلی عملکرد و انضباط پرسنل"
     title_cell.font = FONT_TITLE
@@ -719,7 +719,7 @@ def generate_person_analytics_xlsx(
     title_cell.alignment = ALIGN_CENTER
     ws.row_dimensions[1].height = 36
 
-    ws.merge_cells("A2:P2")
+    ws.merge_cells("A2:Q2")
     meta_cell = ws["A2"]
     meta_cell.value = (
         f"پرسنل: {person_name}  |  سمت: {role or 'پرسنل'}  |  بخش: {section or 'عمومی'}  |  "
@@ -826,7 +826,7 @@ def generate_person_analytics_xlsx(
         curr_row += 1
 
     # 4. Daily Attendance & Compliance Detail Table
-    ws.merge_cells(f"A{curr_row}:P{curr_row}")
+    ws.merge_cells(f"A{curr_row}:Q{curr_row}")
     tbl_title = ws[f"A{curr_row}"]
     tbl_title.value = "📋 ریز سوابق حضور، تردد و وضعیت انطباق شیفت روزانه"
     tbl_title.font = Font(name="Tahoma", size=10, bold=True, color="1E293B")
@@ -847,6 +847,7 @@ def generate_person_analytics_xlsx(
         "تأخیر (دقیقه)",
         "تعجیل (دقیقه)",
         "نوبت‌های ترک",
+        "جزئیات بازه‌های غیبت",
         "ایستگاه اصلی",
         "تعداد ثبت",
         "هشدارها",
@@ -895,6 +896,22 @@ def generate_person_analytics_xlsx(
         det_cnt = day.get("detections_count", 0)
         alt_cnt = day.get("alerts_count", 0)
 
+        intervals = day.get("absence_intervals") or []
+        interval_strs = []
+        for inv in intervals:
+            if isinstance(inv, dict):
+                s_t = inv.get("start_time", "")
+                e_t = inv.get("end_time", "")
+                dur = inv.get("duration_str") or f"{inv.get('duration_minutes', 0)}m"
+            else:
+                s_t = getattr(inv, "start_time", "")
+                e_t = getattr(inv, "end_time", "")
+                dur = getattr(inv, "duration_str", "") or f"{getattr(inv, 'duration_minutes', 0)}m"
+            s_short = s_t[:5] if len(s_t) >= 5 else s_t
+            e_short = e_t[:5] if len(e_t) >= 5 else e_t
+            interval_strs.append(f"{s_short} - {e_short} ({dur})")
+        abs_details = " | ".join(interval_strs) if interval_strs else "—"
+
         row_vals = [
             idx,
             shamsi_date,
@@ -909,6 +926,7 @@ def generate_person_analytics_xlsx(
             del_m if del_m > 0 else "—",
             early_m if early_m > 0 else "—",
             abs_cnt if abs_cnt > 0 else "—",
+            abs_details,
             top_cam,
             det_cnt,
             alt_cnt if alt_cnt > 0 else "—",
@@ -920,7 +938,7 @@ def generate_person_analytics_xlsx(
             cell.fill = fill_zebra
             cell.font = FONT_DATA
 
-            if ci in (1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15, 16):
+            if ci in (1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 16, 17):
                 cell.alignment = ALIGN_CENTER
             elif ci == 6:  # Status column highlighting
                 cell.alignment = ALIGN_CENTER
@@ -1023,6 +1041,7 @@ def generate_person_analytics_csv(
         "میزان تأخیر (دقیقه)",
         "میزان تعجیل خروج (دقیقه)",
         "نوبت‌های ترک ایستگاه",
+        "جزئیات بازه‌های غیبت",
         "ایستگاه / دوربین اصلی",
         "تعداد دفعات ثبت تردد",
         "تعداد هشدارها",
@@ -1051,6 +1070,22 @@ def generate_person_analytics_csv(
         arr_stat = day.get("arrival_status", "")
         stat_label = status_labels_fa.get(arr_stat, arr_stat or ("حاضر" if day.get("detections_count", 0) > 0 else "—"))
 
+        intervals = day.get("absence_intervals") or []
+        interval_strs = []
+        for inv in intervals:
+            if isinstance(inv, dict):
+                s_t = inv.get("start_time", "")
+                e_t = inv.get("end_time", "")
+                dur = inv.get("duration_str") or f"{inv.get('duration_minutes', 0)}m"
+            else:
+                s_t = getattr(inv, "start_time", "")
+                e_t = getattr(inv, "end_time", "")
+                dur = getattr(inv, "duration_str", "") or f"{getattr(inv, 'duration_minutes', 0)}m"
+            s_short = s_t[:5] if len(s_t) >= 5 else s_t
+            e_short = e_t[:5] if len(e_t) >= 5 else e_t
+            interval_strs.append(f"{s_short} - {e_short} ({dur})")
+        abs_details = " | ".join(interval_strs) if interval_strs else "—"
+
         writer.writerow([
             idx,
             sh_date,
@@ -1065,6 +1100,7 @@ def generate_person_analytics_csv(
             day.get("delay_minutes", 0),
             day.get("early_leave_minutes", 0),
             day.get("absence_count", 0),
+            abs_details,
             day.get("primary_camera") or "—",
             day.get("detections_count", 0),
             day.get("alerts_count", 0),

@@ -25,7 +25,7 @@ const PersonAnalyticsModal = {
         `, 'modal-analytics');
 
         try {
-            const data = await App.api(`/api/persons/${personId}/analytics`);
+            const data = await App.api(`/api/persons/${personId}/analytics?days=30`);
             PersonAnalyticsModal._data = data;
             PersonAnalyticsModal._activeTab = 'overview';
             PersonAnalyticsModal._shiftFilter = 'all';
@@ -647,7 +647,7 @@ const PersonAnalyticsModal = {
     },
 
     /**
-     * Tab 4: 14-Day Attendance Log & Punctuality Table.
+     * Tab 4: 30-Day Attendance Log & Punctuality Table.
      */
     renderAttendanceTab() {
         const d = PersonAnalyticsModal._data;
@@ -733,25 +733,27 @@ const PersonAnalyticsModal = {
                                 const presenceSpan = day.estimated_duration_str || '—';
                                 const detectionsCount = I18n.isRTL() ? I18n.toPersianDigits(day.detections_count) : day.detections_count;
 
-                                // Absence from shift calculation badge
+                                // Absence from shift calculation badge & intervals button
                                 let absencePill = '';
                                 if (day.is_scheduled_shift_day) {
                                     if (day.absence_from_shift_minutes > 0) {
                                         const absStr = day.absence_from_shift_str || `${day.absence_from_shift_minutes}m`;
-                                        const countStr = isFa ? I18n.toPersianDigits(day.absence_count || 0) : (day.absence_count || 0);
-                                        const winTooltip = (day.absence_intervals && day.absence_intervals.length > 0)
+                                        const countVal = day.absence_count || (day.absence_intervals ? day.absence_intervals.length : 0);
+                                        const countStr = isFa ? I18n.toPersianDigits(countVal) : countVal;
+                                        const hasIntervals = Array.isArray(day.absence_intervals) && day.absence_intervals.length > 0;
+                                        const winTooltip = hasIntervals
                                             ? day.absence_intervals.map(w => `${w.start_time}-${w.end_time} (${w.duration_str})`).join(' | ')
                                             : '';
                                         absencePill = `
-                                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                                                 <span class="badge-status-pill" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.35); font-weight: 700;" title="${winTooltip}">
                                                     ⏱️ ${isFa ? I18n.toPersianDigits(absStr) : absStr}
                                                 </span>
-                                                ${day.absence_count > 0 ? `
-                                                    <span style="font-size: 0.68rem; color: #fbbf24; font-weight: 600;" title="${winTooltip}">
-                                                        📍 ${I18n.t('absence_count_short', { count: countStr })}
-                                                    </span>
-                                                ` : ''}
+                                                <button type="button" class="btn-day-absence-windows" onclick="event.stopPropagation(); PersonAnalyticsModal.openDayAbsenceModal('${day.date}')" title="${I18n.t('absence_windows_btn') || 'بازه‌های زمانی غیبت'}">
+                                                    <span>📋</span>
+                                                    <span>${I18n.t('absence_count_short', { count: countStr })}</span>
+                                                    <span style="font-size: 0.65rem; ${isFa ? 'transform: rotate(180deg);' : ''}">➜</span>
+                                                </button>
                                             </div>
                                         `;
                                     } else {
@@ -914,5 +916,131 @@ const PersonAnalyticsModal = {
             .replace(/&/g, '&amp;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    },
+
+    /**
+     * Open daily absence intervals modal dialog.
+     * @param {string} dateStr - YYYY-MM-DD
+     */
+    openDayAbsenceModal(dateStr) {
+        const d = PersonAnalyticsModal._data;
+        if (!d) return;
+        const daily = d.daily_activity_last_14_days || [];
+        const day = daily.find(x => x.date === dateStr);
+        if (!day) return;
+
+        PersonAnalyticsModal.closeDayAbsenceModal();
+
+        const isFa = I18n.isRTL();
+        const formattedDate = I18n.formatDate(day.date);
+        const dayNameStr = I18n.t(`short_${day.day_name.toLowerCase()}`);
+        const intervals = day.absence_intervals || [];
+        const totalAbsStr = day.absence_from_shift_str || `${day.absence_from_shift_minutes || 0}m`;
+        const countVal = day.absence_count || intervals.length;
+        const countStr = isFa ? I18n.toPersianDigits(countVal) : countVal;
+        const shiftHours = day.is_scheduled_shift_day && day.shift_start_time
+            ? `${isFa ? I18n.toPersianDigits(day.shift_start_time) : day.shift_start_time} - ${isFa ? I18n.toPersianDigits(day.shift_end_time) : day.shift_end_time}`
+            : (I18n.t('status_rest_day') || 'بدون شیفت');
+
+        const overlay = document.createElement('div');
+        overlay.id = 'day-absence-modal-overlay';
+        overlay.className = 'day-absence-modal-overlay';
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                PersonAnalyticsModal.closeDayAbsenceModal();
+            }
+        };
+
+        overlay.innerHTML = `
+            <div class="day-absence-dialog" onclick="event.stopPropagation()">
+                <div class="day-absence-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface-hover);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1rem; color: var(--text-primary);">
+                        <span style="font-size: 1.2rem;">🕒</span>
+                        <span>${I18n.t('absence_windows_btn') || 'بازه‌های زمانی غیبت'}</span>
+                        <span style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 500;">(${formattedDate} — ${dayNameStr})</span>
+                    </div>
+                    <button type="button" class="modal-close" onclick="PersonAnalyticsModal.closeDayAbsenceModal()" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-secondary);">✕</button>
+                </div>
+
+                <!-- Summary Chips -->
+                <div style="padding: 0.75rem 1.25rem; background: rgba(15, 23, 42, 0.4); border-bottom: 1px solid var(--border-subtle); display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.82rem; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                        <span>👤 <strong>${PersonAnalyticsModal.escapeHtml(d.name)}</strong></span>
+                        <span>⏰ <strong>${I18n.t('shift_hours') || 'ساعات شیفت:'}</strong> <span dir="ltr">${shiftHours}</span></span>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                        <span>⏱️ <strong>${I18n.t('kpi_absence_time') || 'مجموع غیبت:'}</strong> <span style="color: var(--accent-rose); font-weight: 700;">${isFa ? I18n.toPersianDigits(totalAbsStr) : totalAbsStr}</span></span>
+                        <span>📍 <strong>${I18n.t('absence_count_short', { count: countStr })}</strong></span>
+                    </div>
+                </div>
+
+                <!-- Absence Intervals List -->
+                <div class="day-absence-body" style="padding: 1.25rem; overflow-y: auto; max-height: calc(85vh - 160px); display: flex; flex-direction: column; gap: 0.6rem;">
+                    ${intervals.length > 0 ? intervals.map((w, idx) => {
+                        const startT = isFa ? I18n.toPersianDigits(w.start_time) : w.start_time;
+                        const endT = w.interval_type === 'current'
+                            ? (I18n.t('window_now') || 'هم‌اکنون')
+                            : (isFa ? I18n.toPersianDigits(w.end_time) : w.end_time);
+                        const durStr = isFa ? I18n.toPersianDigits(w.duration_str) : w.duration_str;
+                        const typeKey = `interval_type_${w.interval_type}`;
+                        const typeLabel = I18n.t(typeKey) || (w.interval_type === 'unseen' ? (isFa ? 'عدم حضور از ابتدای شیفت' : 'Never Seen Yet') : w.interval_type);
+                        const isCurrent = w.interval_type === 'current';
+                        return `
+                            <div class="duty-window-item ${isCurrent ? 'is-current' : ''}" style="padding: 0.65rem 0.9rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: var(--bg-surface-hover);">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem; color: var(--text-tertiary); font-weight: 700; min-width: 1.5rem;">#${isFa ? I18n.toPersianDigits(idx + 1) : (idx + 1)}</span>
+                                    <div class="duty-window-type-tag ${w.interval_type}" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">
+                                        ${isCurrent ? '🔴' : (w.interval_type === 'unseen' ? '⌛' : '⏳')} ${typeLabel}
+                                    </div>
+                                </div>
+                                <div class="duty-window-time" dir="ltr" style="font-family: monospace; font-size: 0.95rem; font-weight: 700;">
+                                    <span class="win-time">${startT}</span>
+                                    <span class="win-arrow" style="color: var(--text-tertiary); margin: 0 4px;">➜</span>
+                                    <span class="win-time ${isCurrent ? 'win-current' : ''}" style="${isCurrent ? 'color: var(--accent-rose);' : ''}">${endT}</span>
+                                </div>
+                                <div class="duty-window-dur-pill" style="font-size: 0.8rem; font-weight: 700; background: rgba(244, 63, 94, 0.15); color: #fb7185; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(244, 63, 94, 0.3);">
+                                    ${durStr}
+                                </div>
+                            </div>
+                        `;
+                    }).join('') : `
+                        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary);">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">✓</div>
+                            <div style="font-weight: 600;">${I18n.t('no_absence_intervals') || 'بدون ثبت غیبت در این شیفت'}</div>
+                        </div>
+                    `}
+                </div>
+
+                <!-- Footer -->
+                <div class="day-absence-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; background: var(--bg-surface-hover);">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="PersonAnalyticsModal.closeDayAbsenceModal()">
+                        ${I18n.t('close') || 'بستن'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        PersonAnalyticsModal._escapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                PersonAnalyticsModal.closeDayAbsenceModal();
+            }
+        };
+        window.addEventListener('keydown', PersonAnalyticsModal._escapeHandler);
+    },
+
+    /**
+     * Close the day absence dialog overlay.
+     */
+    closeDayAbsenceModal() {
+        const el = document.getElementById('day-absence-modal-overlay');
+        if (el) {
+            el.remove();
+        }
+        if (PersonAnalyticsModal._escapeHandler) {
+            window.removeEventListener('keydown', PersonAnalyticsModal._escapeHandler);
+            PersonAnalyticsModal._escapeHandler = null;
+        }
     },
 };

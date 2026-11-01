@@ -109,7 +109,7 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 - **Clean Camera Deletion Cascades:** Removing a camera automatically cleans up associated zones and alerts, unlinks camera IDs on historical detection logs, and clears in-memory state to prevent phantom alerts.
 - **Spatial Zone Monitoring:** Draw designated areas directly on camera snapshots and attach staff members.
 - **Shift Timetable Schedules:** Define active monitoring hours and active weekdays with automated absence timeout detection.
-- **Identity & Comprehensive Person Analytics:** Deep audit modal with 6 specialized tabs (Overview, Shifts, 24-Hour Timeline, 14-Day Attendance Log, Cameras, and Recent Sightings).
+- **Identity & Comprehensive Person Analytics:** Deep audit modal with 6 specialized tabs (Overview, Shifts, 24-Hour Timeline, 30-Day Attendance Log, Cameras, and Recent Sightings).
 - **User Management & RBAC:** Secure JWT authentication, password hashing, and role-based permissions (`admin`, `operator`, `viewer`).
 - **Direct Unknown Face Enrollment & Multi-Photo Picker:** Tap "Enroll Person" directly from any unidentified detection event to register the individual immediately. The enrollment dialog pre-loads the event snapshot as primary photo and provides an interactive **Unknown Logs Photo Picker** to select multiple detection angles/sightings from recent sequences or all cameras, automatically updating past detection logs to known status.
 - **Full Dual-Language Localization:** Persian (`fa`) as default with full RTL layout, Vazirmatn typography, Solar Hijri (Jalali) timestamps, and instant English (`en`) switching.
@@ -179,7 +179,7 @@ Click on any person card to launch the **Person Analytics Modal** (`PersonAnalyt
 - **1. پیشخوان و خلاصه (Overview):** Identity card, assigned shift badge, active status, today/week/month absence breakdown, punctuality statistics (on-time arrivals, late arrivals, early departures), and most frequented camera.
 - **2. انضباط و شیفت‌ها (Shifts & Compliance):** Shift timetable cards, today's detailed absence time windows panel, in-shift vs. out-of-shift detection counts, and overall compliance score.
 - **3. الگوهای ۲۴ ساعته (24-Hour Timeline):** 24-hour hourly detection histogram with automatic peak traffic hour highlight.
-- **4. سوابق حضور ۱۴ روزه (14-Day Attendance Log):** Historical tabular log with first arrival, last departure, presence span, punctuality status badges, and absence incident counts with window tooltips.
+- **4. سوابق حضور ۳۰ روزه (30-Day Attendance Log):** Historical tabular log with first arrival, last departure, presence span, punctuality status badges, and absence incident counts with window tooltips.
 - **5. توزیع دوربین‌ها (Cameras):** Percentage distribution across all facility camera feeds.
 - **6. آخرین ترددها (Recent Sightings):** Gallery of cropped high-res face snapshots with confidence scores and timestamps.
 - **7. خروجی چاپی (Print Summary):** Clean, print-optimized report for administrative and HR records.
@@ -469,7 +469,7 @@ Access the web dashboard by opening `http://localhost:8000` in your web browser.
 ### 5. Identity Management & Analytics (`/#persons` / مدیریت هویت‌ها و پرسنل)
 - **Enroll Identities:** Upload single or multiple reference photos per individual.
 - **Photo Gallery:** Manage enrolled staff, update roles, and review biometric embeddings.
-- **Comprehensive Analytics Modal:** Click any staff member to view full 6-tab analytics audit (Overview, Shifts & Absence Windows, 24-Hour Timeline, 14-Day Attendance Log, Cameras, and Recent Sightings).
+- **Comprehensive Analytics Modal:** Click any staff member to view full 6-tab analytics audit (Overview, Shifts & Absence Windows, 24-Hour Timeline, 30-Day Attendance Log, Cameras, and Recent Sightings).
 
 ### 6. Users & Access Control (`/#users` / کاربران و دسترسی‌ها)
 - **Role-Based Accounts:** Administer user accounts with granular permissions (`admin`, `operator`, `viewer`).

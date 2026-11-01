@@ -4,14 +4,55 @@
  */
 const PersonAnalyticsModal = {
     _data: null,
+    _personId: null,
     _activeTab: 'overview',
     _shiftFilter: 'all', // 'all', 'in_shift', 'out_shift'
+    _activePeriod: '30d', // '7d' | '14d' | '30d' | '60d' | '90d' | 'custom'
+    _days: 30,
+    _customStartDate: '',
+    _customEndDate: '',
+    _startJy: null,
+    _startJm: null,
+    _startJd: null,
+    _endJy: null,
+    _endJm: null,
+    _endJd: null,
+    _activeCalendarTarget: null,
+    _calendarViewJy: null,
+    _calendarViewJm: null,
+    _hasClickOutsideListener: false,
 
     /**
      * Fetch analytics and open the analytics modal for a person.
      * @param {number} personId
      */
     async show(personId) {
+        this._personId = personId;
+        this._activeTab = 'overview';
+        this._shiftFilter = 'all';
+        this._activePeriod = '30d';
+        this._days = 30;
+
+        // Default custom dates: today and 30 days ago
+        const today = new Date();
+        const past30 = new Date();
+        past30.setDate(today.getDate() - 29);
+        this._customEndDate = today.toISOString().slice(0, 10);
+        this._customStartDate = past30.toISOString().slice(0, 10);
+
+        const sJ = I18n.toJalali(past30);
+        const eJ = I18n.toJalali(today);
+        if (sJ) {
+            this._startJy = sJ.jy;
+            this._startJm = sJ.jm;
+            this._startJd = sJ.jd;
+        }
+        if (eJ) {
+            this._endJy = eJ.jy;
+            this._endJm = eJ.jm;
+            this._endJd = eJ.jd;
+        }
+
         // Show loading state modal
         App.openModal(`
             <div class="modal-header">
@@ -24,25 +65,127 @@ const PersonAnalyticsModal = {
             </div>
         `, 'modal-analytics');
 
+        await this.loadData();
+    },
+
+    /**
+     * Load analytics data for active period.
+     */
+    async loadData() {
+        if (!this._personId) return;
+
+        const bodyEl = document.getElementById('analytics-modal-body');
+        if (bodyEl) {
+            bodyEl.style.opacity = '0.5';
+            bodyEl.style.pointerEvents = 'none';
+        }
+
         try {
-            const data = await App.api(`/api/persons/${personId}/analytics?days=30`);
-            PersonAnalyticsModal._data = data;
-            PersonAnalyticsModal._activeTab = 'overview';
-            PersonAnalyticsModal._shiftFilter = 'all';
-            PersonAnalyticsModal.render();
+            let query = '';
+            if (this._activePeriod === 'custom' && this._customStartDate && this._customEndDate) {
+                query = `?start_date=${encodeURIComponent(this._customStartDate)}&end_date=${encodeURIComponent(this._customEndDate)}`;
+            } else {
+                query = `?days=${this._days || 30}`;
+            }
+
+            const data = await App.api(`/api/persons/${this._personId}/analytics${query}`);
+            this._data = data;
+            this.render();
         } catch (err) {
             console.error('Failed to load person analytics:', err);
-            App.openModal(`
-                <div class="modal-header">
-                    <h2 class="modal-title">${I18n.t('test_failed')}</h2>
-                    <button class="modal-close" onclick="App.closeModal()">✕</button>
-                </div>
-                <div class="modal-body" style="padding: 2rem; text-align: center;">
-                    <div style="font-size: 2.5rem; margin-bottom: 1rem;">⚠️</div>
-                    <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 0.5rem;">${err.message}</div>
-                </div>
-            `);
+            if (!this._data) {
+                App.openModal(`
+                    <div class="modal-header">
+                        <h2 class="modal-title">${I18n.t('test_failed')}</h2>
+                        <button class="modal-close" onclick="App.closeModal()">✕</button>
+                    </div>
+                    <div class="modal-body" style="padding: 2rem; text-align: center;">
+                        <div style="font-size: 2.5rem; margin-bottom: 1rem;">⚠️</div>
+                        <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 0.5rem;">${err.message}</div>
+                    </div>
+                `);
+            } else {
+                App.showToast(err.message || (I18n.isRTL() ? 'خطا در دریافت اطلاعات بازه' : 'Failed to load time window'), 'error');
+            }
+        } finally {
+            if (bodyEl) {
+                bodyEl.style.opacity = '1';
+                bodyEl.style.pointerEvents = 'auto';
+            }
         }
+    },
+
+    /**
+     * Set active time window preset.
+     * @param {'7d'|'14d'|'30d'|'60d'|'90d'|'custom'} period
+     */
+    async setTimeWindow(period) {
+        if (period === 'custom') {
+            const form = document.getElementById('person-ana-custom-form');
+            if (form) {
+                const isHidden = (form.style.display === 'none' || !form.style.display);
+                form.style.display = isHidden ? 'flex' : 'none';
+                if (form.style.display !== 'none') {
+                    this._updateDateLabels();
+                }
+            }
+            return;
+        }
+
+        if (this._activePeriod === period) return;
+
+        this._activePeriod = period;
+        if (period === '7d') {
+            this._days = 7;
+        } else if (period === '14d') {
+            this._days = 14;
+        } else if (period === '30d') {
+            this._days = 30;
+        } else if (period === '60d') {
+            this._days = 60;
+        } else if (period === '90d') {
+            this._days = 90;
+        }
+
+        this.closeAllCalendarPopovers();
+        await this.loadData();
+    },
+
+    /**
+     * Apply custom date range picker.
+     */
+    async applyCustomRange() {
+        const sIso = this.getGregorianDate('start') || this._customStartDate;
+        const eIso = this.getGregorianDate('end') || this._customEndDate;
+
+        if (!sIso || !eIso) {
+            App.showToast(I18n.isRTL() ? 'لطفاً هر دو تاریخ شروع و پایان شمسی را انتخاب کنید.' : 'Please select both start and end dates.', 'warning');
+            return;
+        }
+
+        if (sIso > eIso) {
+            App.showToast(I18n.isRTL() ? 'تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.' : 'Start date cannot be after end date.', 'warning');
+            return;
+        }
+
+        this._customStartDate = sIso;
+        this._customEndDate = eIso;
+        this._activePeriod = 'custom';
+        this.closeAllCalendarPopovers();
+        await this.loadData();
+    },
+
+    /**
+     * Dynamic label for attendance log tab.
+     */
+    getAttendanceTabLabel() {
+        const isFa = I18n.isRTL();
+        if (this._activePeriod === 'custom') {
+            return isFa ? '📅 سوابق حضور (بازه دلخواه)' : '📅 Attendance Log (Custom)';
+        }
+        const d = this._days || 30;
+        const dStr = isFa ? I18n.toPersianDigits(d) : d;
+        return isFa ? `📅 سوابق حضور (${dStr} روز)` : `📅 ${d}-Day Attendance Log`;
     },
 
     /**
@@ -148,7 +291,7 @@ const PersonAnalyticsModal = {
                     ${I18n.t('tab_timeline')}
                 </button>
                 <button class="analytics-tab-btn ${PersonAnalyticsModal._activeTab === 'attendance' ? 'active' : ''}" onclick="PersonAnalyticsModal.switchTab('attendance')">
-                    ${I18n.t('tab_attendance')}
+                    ${PersonAnalyticsModal.getAttendanceTabLabel()}
                 </button>
                 <button class="analytics-tab-btn ${PersonAnalyticsModal._activeTab === 'cameras' ? 'active' : ''}" onclick="PersonAnalyticsModal.switchTab('cameras')">
                     ${I18n.t('tab_cameras')}
@@ -669,7 +812,84 @@ const PersonAnalyticsModal = {
             <div class="analytics-card">
                 <div class="analytics-card-title">
                     <span>📅</span>
-                    <span>${I18n.t('tab_attendance')}</span>
+                    <span>${PersonAnalyticsModal.getAttendanceTabLabel()}</span>
+                </div>
+
+                <!-- Time Window Selector & Actions Toolbar -->
+                <div class="attendance-timeframe-toolbar" style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; margin-top: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-inline-end: 0.35rem; display: inline-flex; align-items: center; gap: 4px;">
+                            <span>🕒</span>
+                            <span>${I18n.t('time_window_table') || (isFa ? 'بازه زمانی جدول:' : 'Table Time Window:')}</span>
+                        </span>
+                        <button type="button" class="btn btn-sm ${PersonAnalyticsModal._activePeriod === '7d' ? 'btn-primary' : 'btn-ghost'}" onclick="PersonAnalyticsModal.setTimeWindow('7d')" style="padding: 3px 10px; font-size: 0.78rem; border-radius: var(--radius-full); font-weight: ${PersonAnalyticsModal._activePeriod === '7d' ? '700' : '500'};">
+                            ${I18n.t('preset_days_7') || (isFa ? '۷ روز اخیر' : '7 Days')}
+                        </button>
+                        <button type="button" class="btn btn-sm ${PersonAnalyticsModal._activePeriod === '14d' ? 'btn-primary' : 'btn-ghost'}" onclick="PersonAnalyticsModal.setTimeWindow('14d')" style="padding: 3px 10px; font-size: 0.78rem; border-radius: var(--radius-full); font-weight: ${PersonAnalyticsModal._activePeriod === '14d' ? '700' : '500'};">
+                            ${I18n.t('preset_days_14') || (isFa ? '۱۴ روز اخیر' : '14 Days')}
+                        </button>
+                        <button type="button" class="btn btn-sm ${PersonAnalyticsModal._activePeriod === '30d' ? 'btn-primary' : 'btn-ghost'}" onclick="PersonAnalyticsModal.setTimeWindow('30d')" style="padding: 3px 10px; font-size: 0.78rem; border-radius: var(--radius-full); font-weight: ${PersonAnalyticsModal._activePeriod === '30d' ? '700' : '500'};">
+                            ${I18n.t('preset_days_30') || (isFa ? '۳۰ روز اخیر' : '30 Days')}
+                        </button>
+                        <button type="button" class="btn btn-sm ${PersonAnalyticsModal._activePeriod === '60d' ? 'btn-primary' : 'btn-ghost'}" onclick="PersonAnalyticsModal.setTimeWindow('60d')" style="padding: 3px 10px; font-size: 0.78rem; border-radius: var(--radius-full); font-weight: ${PersonAnalyticsModal._activePeriod === '60d' ? '700' : '500'};">
+                            ${I18n.t('preset_days_60') || (isFa ? '۶۰ روز اخیر' : '60 Days')}
+                        </button>
+                        <button type="button" class="btn btn-sm ${PersonAnalyticsModal._activePeriod === '90d' ? 'btn-primary' : 'btn-ghost'}" onclick="PersonAnalyticsModal.setTimeWindow('90d')" style="padding: 3px 10px; font-size: 0.78rem; border-radius: var(--radius-full); font-weight: ${PersonAnalyticsModal._activePeriod === '90d' ? '700' : '500'};">
+                            ${I18n.t('preset_days_90') || (isFa ? '۹۰ روز اخیر' : '90 Days')}
+                        </button>
+                        <button type="button" class="btn btn-sm ${PersonAnalyticsModal._activePeriod === 'custom' ? 'btn-primary' : 'btn-ghost'}" onclick="PersonAnalyticsModal.setTimeWindow('custom')" style="padding: 3px 10px; font-size: 0.78rem; border-radius: var(--radius-full); font-weight: ${PersonAnalyticsModal._activePeriod === 'custom' ? '700' : '500'};">
+                            📅 ${I18n.t('preset_days_custom') || (isFa ? 'بازه دلخواه' : 'Custom')}
+                        </button>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-inline-start: auto;">
+                        <button type="button" class="btn btn-sm" onclick="PersonAnalyticsModal.exportExcel()" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #fff; font-weight: 700; padding: 4px 12px; font-size: 0.78rem; border: none; border-radius: var(--radius-sm); box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25); display: inline-flex; align-items: center; gap: 5px;" title="${isFa ? 'دریافت اکسل سوابق همین بازه' : 'Export current window to Excel'}">
+                            <span>📊</span>
+                            <span>${I18n.t('export_window_excel') || (isFa ? 'خروجی اکسل این بازه' : 'Export Window to Excel')}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Shamsi Date Range Expandable Panel -->
+                <div id="person-ana-custom-form" style="display: ${PersonAnalyticsModal._activePeriod === 'custom' ? 'flex' : 'none'}; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-top: 0.5rem; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; flex: 1;">
+                        <!-- Shamsi Start Date Picker -->
+                        <div style="position: relative; min-width: 200px; flex: 1;">
+                            <label style="display: block; font-size: 0.74rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 3px;">
+                                📅 ${isFa ? 'از تاریخ (شمسی):' : 'From Date (Shamsi):'}
+                            </label>
+                            <button type="button" class="btn btn-secondary w-100 shamsi-date-btn" onclick="PersonAnalyticsModal.toggleCalendar('start', event)" style="height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.65rem; border: 1px solid var(--border-medium); background: var(--bg-surface-input); border-radius: var(--radius-sm); font-size: 0.8rem;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>📅</span>
+                                    <span id="p-ana-start-shamsi-label" style="font-weight: 700; color: var(--text-primary);">${PersonAnalyticsModal.getShamsiDisplay('start')}</span>
+                                </div>
+                                <span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>
+                            </button>
+                            <div id="p-ana-calendar-popover-start" class="shamsi-calendar-popover" style="display: none; position: absolute; top: calc(100% + 4px); inset-inline-start: 0; z-index: 1200; width: 285px;"></div>
+                        </div>
+
+                        <!-- Shamsi End Date Picker -->
+                        <div style="position: relative; min-width: 200px; flex: 1;">
+                            <label style="display: block; font-size: 0.74rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 3px;">
+                                📅 ${isFa ? 'تا تاریخ (شمسی):' : 'To Date (Shamsi):'}
+                            </label>
+                            <button type="button" class="btn btn-secondary w-100 shamsi-date-btn" onclick="PersonAnalyticsModal.toggleCalendar('end', event)" style="height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.65rem; border: 1px solid var(--border-medium); background: var(--bg-surface-input); border-radius: var(--radius-sm); font-size: 0.8rem;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span>📅</span>
+                                    <span id="p-ana-end-shamsi-label" style="font-weight: 700; color: var(--text-primary);">${PersonAnalyticsModal.getShamsiDisplay('end')}</span>
+                                </div>
+                                <span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>
+                            </button>
+                            <div id="p-ana-calendar-popover-end" class="shamsi-calendar-popover" style="display: none; position: absolute; top: calc(100% + 4px); inset-inline-start: 0; z-index: 1200; width: 285px;"></div>
+                        </div>
+
+                        <!-- Apply Button -->
+                        <div style="display: flex; align-items: flex-end; padding-top: 16px;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="PersonAnalyticsModal.applyCustomRange()" style="padding: 6px 14px; font-size: 0.8rem; font-weight: 700;">
+                                ✓ ${isFa ? 'اعمال بازه' : 'Apply Range'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Day / Week / Month Absence Summary Ribbon -->
@@ -910,7 +1130,18 @@ const PersonAnalyticsModal = {
 
         try {
             const token = (typeof Auth !== 'undefined' && Auth.getToken()) || localStorage.getItem('token') || '';
-            const url = `/api/persons/${pid}/analytics/export?format=xlsx&days=30&token=${encodeURIComponent(token)}`;
+            let queryParams = 'format=xlsx';
+            let periodTag = '30d';
+            if (PersonAnalyticsModal._activePeriod === 'custom' && PersonAnalyticsModal._customStartDate && PersonAnalyticsModal._customEndDate) {
+                queryParams += `&start_date=${encodeURIComponent(PersonAnalyticsModal._customStartDate)}&end_date=${encodeURIComponent(PersonAnalyticsModal._customEndDate)}`;
+                periodTag = `${PersonAnalyticsModal._customStartDate}_to_${PersonAnalyticsModal._customEndDate}`;
+            } else {
+                const days = PersonAnalyticsModal._days || 30;
+                queryParams += `&days=${days}`;
+                periodTag = `${days}d`;
+            }
+
+            const url = `/api/persons/${pid}/analytics/export?${queryParams}&token=${encodeURIComponent(token)}`;
 
             const response = await fetch(url, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -929,7 +1160,7 @@ const PersonAnalyticsModal = {
 
             const safeName = (d.name || `person_${pid}`).replace(/[\s\/\\:*?"<>|]+/g, '_');
             const todayStr = new Date().toISOString().split('T')[0];
-            a.download = `attendance_30d_${safeName}_${todayStr}.xlsx`;
+            a.download = `attendance_${periodTag}_${safeName}_${todayStr}.xlsx`;
 
             document.body.appendChild(a);
             a.click();
@@ -1105,5 +1336,250 @@ const PersonAnalyticsModal = {
             window.removeEventListener('keydown', PersonAnalyticsModal._escapeHandler);
             PersonAnalyticsModal._escapeHandler = null;
         }
+    },
+    /**
+     * Get Gregorian ISO date (YYYY-MM-DD) for start or end.
+     * @param {'start'|'end'} target
+     * @returns {string}
+     */
+    getGregorianDate(target) {
+        const jy = target === 'start' ? this._startJy : this._endJy;
+        const jm = target === 'start' ? this._startJm : this._endJm;
+        const jd = target === 'start' ? this._startJd : this._endJd;
+        if (!jy || !jm || !jd) return '';
+        const g = I18n.jalaliToGregorian(jy, jm, jd);
+        const pad = n => String(n).padStart(2, '0');
+        return `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`;
+    },
+
+    /**
+     * Format selected Shamsi date for button display.
+     * @param {'start'|'end'} target
+     * @returns {string}
+     */
+    getShamsiDisplay(target) {
+        const jy = target === 'start' ? this._startJy : this._endJy;
+        const jm = target === 'start' ? this._startJm : this._endJm;
+        const jd = target === 'start' ? this._startJd : this._endJd;
+        if (!jy || !jm || !jd) return '—';
+
+        const isRtl = I18n.isRTL();
+        const monthName = isRtl
+            ? (I18n._shamsiMonthsFa[jm - 1] || '')
+            : (I18n._shamsiMonthsEn[jm - 1] || '');
+
+        if (isRtl) {
+            return `${I18n.toPersianDigits(jd)} ${monthName} ${I18n.toPersianDigits(jy)}`;
+        } else {
+            return `${jd} ${monthName} ${jy}`;
+        }
+    },
+
+    /**
+     * Toggle Shamsi calendar popover for start or end.
+     * @param {'start'|'end'} target
+     * @param {Event} event
+     */
+    toggleCalendar(target, event) {
+        if (event) event.stopPropagation();
+        this._setupClickOutsideListener();
+
+        if (this._activeCalendarTarget === target) {
+            this.closeAllCalendarPopovers();
+            return;
+        }
+
+        this.closeAllCalendarPopovers();
+        this._activeCalendarTarget = target;
+
+        const jy = (target === 'start') ? this._startJy : this._endJy;
+        const jm = (target === 'start') ? this._startJm : this._endJm;
+        this._calendarViewJy = jy;
+        this._calendarViewJm = jm;
+
+        this.renderCalendarPopover(target);
+    },
+
+    /**
+     * Close all open Shamsi calendar popovers in this modal.
+     */
+    closeAllCalendarPopovers() {
+        const popStart = document.getElementById('p-ana-calendar-popover-start');
+        const popEnd = document.getElementById('p-ana-calendar-popover-end');
+        if (popStart) popStart.style.display = 'none';
+        if (popEnd) popEnd.style.display = 'none';
+        this._activeCalendarTarget = null;
+    },
+
+    /**
+     * Change viewed month in Shamsi calendar popover.
+     * @param {number} delta - 1 or -1
+     */
+    changeCalendarMonth(delta) {
+        if (!this._activeCalendarTarget) return;
+        this._calendarViewJm += delta;
+        if (this._calendarViewJm > 12) {
+            this._calendarViewJm = 1;
+            this._calendarViewJy += 1;
+        } else if (this._calendarViewJm < 1) {
+            this._calendarViewJm = 12;
+            this._calendarViewJy -= 1;
+        }
+        this.renderCalendarPopover(this._activeCalendarTarget);
+    },
+
+    /**
+     * Jump calendar popover to current Shamsi month & day.
+     */
+    goToCalendarToday() {
+        if (!this._activeCalendarTarget) return;
+        const nowJ = I18n.toJalali(new Date());
+        if (nowJ) {
+            this._calendarViewJy = nowJ.jy;
+            this._calendarViewJm = nowJ.jm;
+            this.renderCalendarPopover(this._activeCalendarTarget);
+        }
+    },
+
+    /**
+     * Select a specific Shamsi day from the calendar grid.
+     * @param {'start'|'end'} target
+     * @param {number} jy
+     * @param {number} jm
+     * @param {number} jd
+     */
+    selectCalendarDay(target, jy, jm, jd) {
+        if (target === 'start') {
+            this._startJy = jy;
+            this._startJm = jm;
+            this._startJd = jd;
+
+            const sIso = this.getGregorianDate('start');
+            const eIso = this.getGregorianDate('end');
+            if (eIso && sIso && eIso < sIso) {
+                this._endJy = jy;
+                this._endJm = jm;
+                this._endJd = jd;
+            }
+        } else {
+            this._endJy = jy;
+            this._endJm = jm;
+            this._endJd = jd;
+
+            const sIso = this.getGregorianDate('start');
+            const eIso = this.getGregorianDate('end');
+            if (sIso && eIso && sIso > eIso) {
+                this._startJy = jy;
+                this._startJm = jm;
+                this._startJd = jd;
+            }
+        }
+
+        this.closeAllCalendarPopovers();
+        this._updateDateLabels();
+    },
+
+    /**
+     * Update Shamsi date labels on the DOM.
+     */
+    _updateDateLabels() {
+        const startLbl = document.getElementById('p-ana-start-shamsi-label');
+        const endLbl = document.getElementById('p-ana-end-shamsi-label');
+        if (startLbl) startLbl.textContent = this.getShamsiDisplay('start');
+        if (endLbl) endLbl.textContent = this.getShamsiDisplay('end');
+    },
+
+    /**
+     * Render the Shamsi calendar popover grid HTML.
+     * @param {'start'|'end'} target
+     */
+    renderCalendarPopover(target) {
+        const popoverEl = document.getElementById(`p-ana-calendar-popover-${target}`);
+        if (!popoverEl) return;
+
+        const isRtl = I18n.isRTL();
+        const viewJy = this._calendarViewJy;
+        const viewJm = this._calendarViewJm;
+
+        const monthName = isRtl
+            ? (I18n._shamsiMonthsFa[viewJm - 1] || '')
+            : (I18n._shamsiMonthsEn[viewJm - 1] || '');
+        const yearDisp = isRtl ? I18n.toPersianDigits(viewJy) : viewJy;
+
+        const selJy = (target === 'start') ? this._startJy : this._endJy;
+        const selJm = (target === 'start') ? this._startJm : this._endJm;
+        const selJd = (target === 'start') ? this._startJd : this._endJd;
+
+        const nowJ = I18n.toJalali(new Date());
+
+        const gFirst = I18n.jalaliToGregorian(viewJy, viewJm, 1);
+        const dFirst = new Date(gFirst.gy, gFirst.gm - 1, gFirst.gd);
+        const startCol = (dFirst.getDay() + 1) % 7;
+        const totalDays = I18n.getJalaliDaysInMonth(viewJy, viewJm);
+
+        const weekdays = isRtl
+            ? ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
+            : ['Sa', 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr'];
+
+        let cellsHtml = '';
+        for (let i = 0; i < startCol; i++) {
+            cellsHtml += '<div class="cal-day-cell empty"></div>';
+        }
+
+        for (let d = 1; d <= totalDays; d++) {
+            const isSelected = (selJy === viewJy && selJm === viewJm && selJd === d);
+            const isToday = nowJ && (nowJ.jy === viewJy && nowJ.jm === viewJm && nowJ.jd === d);
+            const isFriday = ((startCol + d - 1) % 7 === 6);
+            const dayNum = isRtl ? I18n.toPersianDigits(d) : d;
+
+            cellsHtml += `
+                <button 
+                    type="button" 
+                    class="cal-day-cell ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isFriday ? 'friday' : ''}" 
+                    onclick="event.stopPropagation(); PersonAnalyticsModal.selectCalendarDay('${target}', ${viewJy}, ${viewJm}, ${d});"
+                >
+                    ${dayNum}
+                </button>
+            `;
+        }
+
+        popoverEl.innerHTML = `
+            <div class="cal-header">
+                <button type="button" class="cal-nav-btn" onclick="event.stopPropagation(); PersonAnalyticsModal.changeCalendarMonth(${isRtl ? '1' : '-1'});" title="${isRtl ? 'ماه قبل' : 'Previous Month'}">
+                    ${isRtl ? '▶' : '◀'}
+                </button>
+                <div class="cal-title">${monthName} ${yearDisp}</div>
+                <button type="button" class="cal-today-btn" onclick="event.stopPropagation(); PersonAnalyticsModal.goToCalendarToday();">
+                    ${I18n.t('preset_today') || 'امروز'}
+                </button>
+                <button type="button" class="cal-nav-btn" onclick="event.stopPropagation(); PersonAnalyticsModal.changeCalendarMonth(${isRtl ? '-1' : '1'});" title="${isRtl ? 'ماه بعد' : 'Next Month'}">
+                    ${isRtl ? '◀' : '▶'}
+                </button>
+            </div>
+            <div class="cal-weekdays">
+                ${weekdays.map((w, idx) => `<div class="cal-weekday ${idx === 6 ? 'friday' : ''}">${w}</div>`).join('')}
+            </div>
+            <div class="cal-days-grid">
+                ${cellsHtml}
+            </div>
+        `;
+
+        popoverEl.style.display = 'block';
+    },
+
+    _setupClickOutsideListener() {
+        if (this._hasClickOutsideListener) return;
+        this._hasClickOutsideListener = true;
+        document.addEventListener('click', (e) => {
+            if (!this._activeCalendarTarget) return;
+            const popStart = document.getElementById('p-ana-calendar-popover-start');
+            const popEnd = document.getElementById('p-ana-calendar-popover-end');
+            const isInsidePopStart = popStart && popStart.contains(e.target);
+            const isInsidePopEnd = popEnd && popEnd.contains(e.target);
+            const isInsideBtn = e.target.closest && e.target.closest('.shamsi-date-btn');
+            if (!isInsidePopStart && !isInsidePopEnd && !isInsideBtn) {
+                this.closeAllCalendarPopovers();
+            }
+        });
     },
 };

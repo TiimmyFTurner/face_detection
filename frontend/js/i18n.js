@@ -1127,6 +1127,11 @@ const I18n = {
             status_expired: 'منقضی‌شده',
             leave_substitute_label: 'تعیین همکار جانشین برای این مرخصی (اختیاری):',
             substitute_short: 'تعیین جانشین',
+            alert_absence_short: '⏱️ عدم حضور',
+            alert_camera_offline_short: '⚠️ قطع ارتباط دوربین',
+            alert_unauthorized_short: '🚨 ورود غیرمجاز',
+            alert_out_of_zone_short: '⚠️ خروج از منطقه',
+            event_presence: '🟢 حضور',
             conflict_badge_label: 'تداخل شیفت',
             conflict_msg_leave: 'فرد جانشین ({name}) در بازه {start} تا {end} در وضعیت «{type}» ثبت شده است.',
             conflict_msg_already_substituting: 'فرد جانشین ({name}) قبلاً در بازه {start} تا {end} برای «{orig}» به عنوان جانشین ثبت شده است.',
@@ -2237,6 +2242,11 @@ const I18n = {
             status_expired: 'Expired',
             leave_substitute_label: 'Assign substitute colleague for this leave (optional):',
             substitute_short: 'Substitute',
+            alert_absence_short: '⏱️ Absence Timeout',
+            alert_camera_offline_short: '⚠️ Camera Offline',
+            alert_unauthorized_short: '🚨 Unauthorized',
+            alert_out_of_zone_short: '⚠️ Out of Area',
+            event_presence: '🟢 Present',
             conflict_badge_label: 'Shift Conflict',
             conflict_msg_leave: 'The substitute colleague ({name}) is scheduled for "{type}" between {start} and {end}.',
             conflict_msg_already_substituting: 'The substitute colleague ({name}) is already assigned as substitute for "{orig}" between {start} and {end}.',
@@ -2808,6 +2818,34 @@ const I18n = {
             return `${I18n.toPersianDigits(jyStr)}/${I18n.toPersianDigits(jmStr)}/${I18n.toPersianDigits(jdStr)}`;
         } else {
             return `${jyStr}/${jmStr}/${jdStr}`;
+        }
+    },
+
+    /**
+     * Format numeric date and time without relative suffix.
+     * Example: "۱۴۰۵/۰۸/۱۱ - ۰۷:۳۰:۰۳" / "1405/08/11 - 07:30:03"
+     */
+    formatDateTimeNumeric(isoString) {
+        if (!isoString) return '—';
+        const j = I18n.toJalali(isoString);
+        if (!j) return String(isoString);
+
+        const pad = n => String(n).padStart(2, '0');
+        const jyStr = String(j.jy);
+        const jmStr = pad(j.jm);
+        const jdStr = pad(j.jd);
+        const hStr = pad(j.hours);
+        const minStr = pad(j.minutes);
+        const secStr = pad(j.seconds);
+
+        if (I18n.isRTL()) {
+            const datePart = `${I18n.toPersianDigits(jyStr)}/${I18n.toPersianDigits(jmStr)}/${I18n.toPersianDigits(jdStr)}`;
+            const timePart = `${I18n.toPersianDigits(hStr)}:${I18n.toPersianDigits(minStr)}:${I18n.toPersianDigits(secStr)}`;
+            return `${datePart} - ${timePart}`;
+        } else {
+            const datePart = `${jyStr}/${jmStr}/${jdStr}`;
+            const timePart = `${hStr}:${minStr}:${secStr}`;
+            return `${datePart} - ${timePart}`;
         }
     },
 

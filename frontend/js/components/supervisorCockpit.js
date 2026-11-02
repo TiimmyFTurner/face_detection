@@ -1445,6 +1445,28 @@ const SupervisorCockpit = {
         }
     },
 
+    formatAlertBadge(ev) {
+        const isAlert = ev.alert_type && ev.alert_type !== 'normal';
+        if (!isAlert) {
+            return `<span class="badge" style="background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.72rem; padding: 2px 7px;">${I18n.t('event_presence') || '🟢 حضور'}</span>`;
+        }
+
+        const type = ev.alert_type;
+        if (type === 'absence_timeout') {
+            return `<span class="badge" style="background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; padding: 2px 7px;">${I18n.t('alert_absence_short') || '⏱️ عدم حضور'}</span>`;
+        }
+        if (type === 'camera_disconnected') {
+            return `<span class="badge" style="background: rgba(234, 179, 8, 0.18); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); font-size: 0.72rem; padding: 2px 7px;">${I18n.t('alert_camera_offline_short') || '⚠️ قطع ارتباط دوربین'}</span>`;
+        }
+        if (type === 'unauthorized_entry') {
+            return `<span class="badge" style="background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.72rem; padding: 2px 7px;">${I18n.t('alert_unauthorized_short') || '🚨 ورود غیرمجاز'}</span>`;
+        }
+        if (type === 'out_of_zone') {
+            return `<span class="badge" style="background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.72rem; padding: 2px 7px;">${I18n.t('alert_out_of_zone_short') || '⚠️ خروج از منطقه'}</span>`;
+        }
+        return `<span class="badge" style="background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.72rem; padding: 2px 7px;">⚠️ ${this.escapeHtml(type)}</span>`;
+    },
+
     renderTimeline() {
         const container = document.getElementById('sup-timeline-container');
         if (!container) return;
@@ -1470,19 +1492,9 @@ const SupervisorCockpit = {
 
         const itemsHtml = events.map(ev => {
             const isAlert = ev.alert_type && ev.alert_type !== 'normal';
-            let rowClass = 'sup-timeline-row';
-            let alertBadge = '<span class="badge" style="background: rgba(34, 197, 94, 0.12); color: #4ade80; font-size: 0.72rem; padding: 2px 7px;">🟢 ورود / حضور</span>';
-
-            if (isAlert) {
-                rowClass += ' alert';
-                if (ev.alert_type === 'absence_timeout') {
-                    alertBadge = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.72rem; padding: 2px 7px;">⚠️ هشدار عدم حضور</span>';
-                } else {
-                    alertBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.72rem; padding: 2px 7px;">⚠️ ${this.escapeHtml(ev.alert_type)}</span>`;
-                }
-            }
-
-            const timeStr = I18n.formatTimestamp ? I18n.formatTimestamp(ev.timestamp) : new Date(ev.timestamp).toLocaleTimeString();
+            const rowClass = isAlert ? 'sup-timeline-row alert' : 'sup-timeline-row';
+            const alertBadge = this.formatAlertBadge(ev);
+            const timeStr = I18n.formatDateTimeNumeric ? I18n.formatDateTimeNumeric(ev.timestamp) : (I18n.formatTimestamp ? I18n.formatTimestamp(ev.timestamp) : new Date(ev.timestamp).toLocaleTimeString());
             const relTime = this.formatRelativeTime(ev.timestamp);
             const personName = ev.person_name || 'پرسنل';
             const initial = personName.charAt(0).toUpperCase();
@@ -1542,11 +1554,9 @@ const SupervisorCockpit = {
                 <div class="sup-timeline-feed" style="max-height: 420px; overflow-y: auto;">
                     ${personEvents.map(ev => {
                         const isAlert = ev.alert_type && ev.alert_type !== 'normal';
-                        const timeStr = I18n.formatTimestamp ? I18n.formatTimestamp(ev.timestamp) : new Date(ev.timestamp).toLocaleTimeString();
+                        const timeStr = I18n.formatDateTimeNumeric ? I18n.formatDateTimeNumeric(ev.timestamp) : (I18n.formatTimestamp ? I18n.formatTimestamp(ev.timestamp) : new Date(ev.timestamp).toLocaleTimeString());
                         const relTime = this.formatRelativeTime(ev.timestamp);
-                        const alertBadge = isAlert 
-                            ? `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 0.72rem;">⚠️ ${this.escapeHtml(ev.alert_type)}</span>`
-                            : `<span class="badge" style="background: rgba(34, 197, 94, 0.12); color: #4ade80; font-size: 0.72rem;">🟢 حضور</span>`;
+                        const alertBadge = this.formatAlertBadge(ev);
 
                         return `
                             <div class="sup-timeline-row ${isAlert ? 'alert' : ''}" style="margin-bottom: 0.4rem;">
@@ -1559,7 +1569,7 @@ const SupervisorCockpit = {
                                 <div style="display: flex; align-items: center; gap: 0.6rem;">
                                     ${alertBadge}
                                     <div style="text-align: end; font-size: 0.74rem;">
-                                        <div style="font-family: monospace; font-weight: 700; color: var(--text-primary);">${this.escapeHtml(timeStr)}</div>
+                                        <div style="font-family: monospace; font-weight: 700; color: var(--text-primary); direction: ltr;">${this.escapeHtml(timeStr)}</div>
                                         <small style="color: var(--text-tertiary);">${this.escapeHtml(relTime)}</small>
                                     </div>
                                 </div>

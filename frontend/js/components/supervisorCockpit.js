@@ -180,6 +180,18 @@ const SupervisorCockpit = {
             window.removeEventListener('keydown', this._keyListener);
             this._keyListener = null;
         }
+        if (SupervisorCockpit._handleHeaderOutsideClick) {
+            document.removeEventListener('click', SupervisorCockpit._handleHeaderOutsideClick);
+            SupervisorCockpit._handleHeaderOutsideClick = null;
+        }
+    },
+
+    toggleHeaderUserMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('sup-header-user-menu');
+        if (menu) {
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
     },
 
     startTimers() {
@@ -270,10 +282,11 @@ const SupervisorCockpit = {
             titleEl.textContent = I18n.t('supervisor_dashboard_title') || 'پیشخوان اختصاصی سرپرست';
         }
 
+        const userInitial = (user.full_name || user.username || 'س').trim().charAt(0).toUpperCase();
         const headerActions = document.getElementById('header-actions');
         if (headerActions) {
             headerActions.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <div style="display: flex; align-items: center; gap: 0.45rem;">
                     <span class="badge-status-pill" id="sup-timer-badge" style="font-size: 0.8rem; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 12px; display: inline-flex; align-items: center; gap: 5px; border-radius: 9999px;">
                         ⏳ <span id="sup-countdown-val" style="font-family: monospace; font-weight: 700;">10</span>s
                     </span>
@@ -284,9 +297,54 @@ const SupervisorCockpit = {
                         <span class="sup-radar-dot"></span>
                         <span>${I18n.t('live') || 'زنده'}</span>
                     </div>
+
+                    <!-- Header User Profile & Language Pill -->
+                    <div class="sup-header-user-wrap" style="position: relative;">
+                        <button type="button" class="sup-header-user-btn" id="sup-header-user-btn" onclick="SupervisorCockpit.toggleHeaderUserMenu(event)" title="${this.escapeAttr(userName)}">
+                            <span class="sup-header-user-avatar">${userInitial}</span>
+                            <span class="sup-header-username-text">${this.escapeHtml(userName)}</span>
+                            <span style="font-size: 0.62rem; color: var(--text-tertiary);">▾</span>
+                        </button>
+                        <div class="user-dropdown-menu sup-header-user-menu" id="sup-header-user-menu" style="display: none;">
+                            <div class="user-dropdown-header">
+                                <div class="user-dropdown-name">${this.escapeHtml(userName)}</div>
+                                <div class="user-dropdown-username" style="direction: ltr; text-align: start;">@${this.escapeHtml(user.username || '')}</div>
+                                <span class="badge sup-role-badge" style="font-size: 0.68rem; margin-top: 4px; display: inline-block; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 7px; border-radius: 9999px;">👑 ${I18n.t('role_supervisor_badge') || 'سرپرست واحد'}</span>
+                            </div>
+                            <div class="user-dropdown-divider"></div>
+                            <div style="padding: 0.45rem 0.65rem;">
+                                <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 5px;">🌐 ${I18n.t('system_language') || 'زبان سیستم'}</div>
+                                <div class="lang-btn-group" style="display: flex; gap: 4px; width: 100%;">
+                                    <button type="button" class="lang-btn ${isRtl ? 'active' : ''}" style="flex: 1; padding: 4px 6px; font-size: 0.74rem;" onclick="I18n.setLanguage('fa')">فارسی</button>
+                                    <button type="button" class="lang-btn ${!isRtl ? 'active' : ''}" style="flex: 1; padding: 4px 6px; font-size: 0.74rem;" onclick="I18n.setLanguage('en')">English</button>
+                                </div>
+                            </div>
+                            <div class="user-dropdown-divider"></div>
+                            <a class="user-dropdown-item" onclick="Auth.showChangePasswordModal()">
+                                <span>🔑</span>
+                                <span>${I18n.t('change_password') || 'تغییر کلمه عبور'}</span>
+                            </a>
+                            <div class="user-dropdown-divider"></div>
+                            <a class="user-dropdown-item text-danger" onclick="Auth.logout()">
+                                <span>🚪</span>
+                                <span>${I18n.t('logout') || 'خروج از حساب'}</span>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             `;
         }
+
+        // Attach outside click listener for header user dropdown
+        document.removeEventListener('click', SupervisorCockpit._handleHeaderOutsideClick);
+        SupervisorCockpit._handleHeaderOutsideClick = (e) => {
+            const btn = document.getElementById('sup-header-user-btn');
+            const menu = document.getElementById('sup-header-user-menu');
+            if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        };
+        document.addEventListener('click', SupervisorCockpit._handleHeaderOutsideClick);
 
         const body = document.getElementById('content-body');
         if (!body) return;
@@ -295,51 +353,81 @@ const SupervisorCockpit = {
             <div class="supervisor-cockpit-container" style="display: flex; flex-direction: column; gap: 1.25rem;">
                 <!-- Executive Command Strip -->
                 <div class="sup-command-strip">
-                    <div style="display: flex; align-items: center; gap: 1rem; z-index: 1;">
+                    <div class="sup-strip-profile">
                         <div class="sup-supervisor-avatar" title="Supervisor Role">
                             🛡️
                         </div>
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 3px;">
-                                <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">
+                        <div style="min-width: 0; flex: 1;">
+                            <div class="sup-strip-name-row" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 3px;">
+                                <h3 class="sup-strip-name" style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">
                                     ${this.escapeHtml(greeting)}، ${this.escapeHtml(userName)}
                                 </h3>
-                                <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
-                                    👑 سرپرست واحد
+                                <span class="badge sup-role-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
+                                    👑 ${I18n.t('role_supervisor_badge') || 'سرپرست واحد'}
                                 </span>
+                                ${user.username ? `
+                                    <span style="direction: ltr; display: inline-block; font-size: 0.75rem; color: var(--text-tertiary); font-family: monospace;">@${this.escapeHtml(user.username)}</span>
+                                ` : ''}
                             </div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.82rem; color: var(--text-secondary);">
+                            <div class="sup-strip-sub-row" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.82rem; color: var(--text-secondary);">
                                 <span>🏢 ${isRtl ? 'بخش‌های مجاز:' : 'Supervised Sections:'}</span>
-                                <div style="display: inline-flex; gap: 4px; flex-wrap: wrap;">
+                                <div class="sup-strip-sections-list" style="display: inline-flex; gap: 4px; flex-wrap: wrap;">
                                     ${assignedSecs.length > 0 
                                         ? assignedSecs.map(s => `<span class="badge badge-subtle text-xs" style="padding: 2px 7px; background: rgba(255,255,255,0.06);">${this.escapeHtml(s)}</span>`).join('')
                                         : `<span class="badge badge-subtle text-xs">${I18n.t('all_assigned_sections') || 'کل بخش‌ها'}</span>`
                                     }
                                 </div>
-                                <span style="color: var(--border-color);">|</span>
-                                <span style="color: #60a5fa; display: inline-flex; align-items: center; gap: 4px;">
+                                <span class="sup-strip-divider" style="color: var(--border-color);">|</span>
+                                <span class="sup-strip-privacy" style="color: #60a5fa; display: inline-flex; align-items: center; gap: 4px;">
                                     🔒 ${I18n.t('privacy_shield_label') || 'حفاظت حریم خصوصی ۱۰۰٪ (بدون تصویر و دوربین)'}
                                 </span>
+                            </div>
+
+                            <!-- User Quick Utility Bar (Language Toggle & Logout) -->
+                            <div class="sup-user-quick-bar">
+                                <div class="sup-quick-user-info">
+                                    <span>👤 <strong>${this.escapeHtml(userName)}</strong></span>
+                                    ${user.username ? `<span style="direction: ltr; display: inline-block; font-size: 0.72rem; color: var(--text-tertiary); font-family: monospace;">(@${this.escapeHtml(user.username)})</span>` : ''}
+                                </div>
+                                <div class="sup-quick-actions-row">
+                                    <!-- Quick Language Switch -->
+                                    <button type="button" class="btn btn-outline-secondary btn-xs sup-strip-lang-btn" onclick="I18n.setLanguage('${isRtl ? 'en' : 'fa'}')" title="${isRtl ? 'Switch to English' : 'تغییر زبان به فارسی'}">
+                                        <span>🌐</span>
+                                        <span>${isRtl ? 'English' : 'فارسی'}</span>
+                                    </button>
+                                    <!-- Change Password -->
+                                    <button type="button" class="btn btn-outline-secondary btn-xs sup-strip-pwd-btn" onclick="Auth.showChangePasswordModal()" title="${I18n.t('change_password') || 'تغییر کلمه عبور'}">
+                                        <span>🔑</span>
+                                        <span>${isRtl ? 'تغییر رمز' : 'Password'}</span>
+                                    </button>
+                                    <!-- Logout -->
+                                    <button type="button" class="btn btn-outline-danger btn-xs sup-strip-logout-btn" onclick="Auth.logout()" title="${I18n.t('logout') || 'خروج از حساب'}">
+                                        <span>🚪</span>
+                                        <span>${I18n.t('logout') || 'خروج'}</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Telemetry & Fast Leave Action -->
-                    <div style="display: flex; align-items: center; gap: 0.85rem; z-index: 1; flex-wrap: wrap;">
+                    <div class="sup-strip-actions">
                         <div class="sup-live-telemetry">
                             <span class="sup-radar-dot"></span>
                             <span id="sup-live-date" style="font-size: 0.82rem; color: var(--text-secondary);">—</span>
                             <span style="color: var(--border-color);">|</span>
                             <span id="sup-live-time" class="sup-live-clock">--:--:--</span>
                         </div>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorCockpit.showQuickLeavePicker()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-                            <span>🏖️</span>
-                            <span>${I18n.t('quick_leave_action') || 'ثبت مرخصی پرسنل'}</span>
-                        </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorSubstitutionModal.show()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-                            <span>🔄</span>
-                            <span>${I18n.t('assign_substitute_action') || 'تعیین جانشین شیفت'}</span>
-                        </button>
+                        <div class="sup-strip-btn-group">
+                            <button type="button" class="btn btn-outline-primary btn-sm sup-strip-btn" onclick="SupervisorCockpit.showQuickLeavePicker()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                                <span>🏖️</span>
+                                <span>${I18n.t('quick_leave_action') || 'ثبت مرخصی پرسنل'}</span>
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm sup-strip-btn" onclick="SupervisorSubstitutionModal.show()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                                <span>🔄</span>
+                                <span>${I18n.t('assign_substitute_action') || 'تعیین جانشین شیفت'}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -389,8 +477,8 @@ const SupervisorCockpit = {
                             </div>
 
                             <!-- Lower toolbar row: Section selector, Sort, Search input & Layout View Toggle -->
-                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
-                                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                            <div class="sup-toolbar-lower" style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+                                <div class="sup-toolbar-filters" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
                                     <!-- Section Dropdown -->
                                     <div class="sup-section-select-wrapper" style="display: flex; align-items: center; gap: 4px;">
                                         <span style="font-size: 0.8rem; color: var(--text-secondary);">🏢</span>
@@ -411,7 +499,7 @@ const SupervisorCockpit = {
                                     </div>
                                 </div>
 
-                                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                                <div class="sup-toolbar-search-group" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
                                     <!-- Search Box with Shortcut badge [/] -->
                                     <div class="dashboard-search-box" style="min-width: 210px; max-width: 300px; position: relative;">
                                         <span class="dashboard-search-icon">🔍</span>
@@ -566,7 +654,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: 100%; background: #3b82f6;"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px;">
                     ${isRtl ? 'کل پرونده‌های ثبت‌شده' : 'Total registered staff'}
                 </div>
             </div>
@@ -583,7 +671,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: ${presentPct}%; background: #22c55e;"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: #4ade80; margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: #4ade80; margin-top: 2px;">
                     ${isRtl ? `${I18n.toPersianDigits(presentPct)}٪ از کل پرسنل` : `${presentPct}% of total`}
                 </div>
             </div>
@@ -600,7 +688,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: ${gracePct}%; background: #38bdf8;"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px;">
                     ${isRtl ? 'فرصت ورود مجاز شیفت' : 'Arrival grace window'}
                 </div>
             </div>
@@ -617,7 +705,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: ${breakPct}%; background: #fbbf24;"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: #fbbf24; margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: #fbbf24; margin-top: 2px;">
                     ${isRtl ? 'بازه آزاد و هماهنگ‌شده' : 'Scheduled rest time'}
                 </div>
             </div>
@@ -634,7 +722,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: ${leavePct}%; background: #c084fc;"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: #c084fc; margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: #c084fc; margin-top: 2px;">
                     ${isRtl ? 'آف یا مرخصی مصوب' : 'Approved days off'}
                 </div>
             </div>
@@ -651,7 +739,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: ${absentPct}%; background: #f87171;"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: ${absentCount > 0 ? '#f87171' : 'var(--text-tertiary)'}; margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: ${absentCount > 0 ? '#f87171' : 'var(--text-tertiary)'}; margin-top: 2px;">
                     ${absentCount > 0 ? (isRtl ? '⚠️ نیازمند پیگیری سرپرست' : 'Attention required') : (isRtl ? 'بدون غیبت غیرمجاز' : 'Zero violations')}
                 </div>
             </div>
@@ -668,7 +756,7 @@ const SupervisorCockpit = {
                 <div class="sup-kpi-progress-track">
                     <div class="sup-kpi-progress-bar" style="width: ${compliancePct}%; background: linear-gradient(90deg, #8b5cf6, #3b82f6);"></div>
                 </div>
-                <div style="font-size: 0.72rem; color: #a78bfa; margin-top: 2px;">
+                <div class="sup-kpi-subtext" style="font-size: 0.72rem; color: #a78bfa; margin-top: 2px;">
                     ${isRtl ? 'شاخص پایبندی کلی' : 'Overall adherence index'}
                 </div>
             </div>
@@ -812,7 +900,7 @@ const SupervisorCockpit = {
             `;
         } else {
             container.innerHTML = `
-                <div class="sup-roster-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 1.15rem;">
+                <div class="sup-roster-grid">
                     ${list.map(item => this.renderGridCard(item)).join('')}
                 </div>
             `;
@@ -1038,7 +1126,7 @@ const SupervisorCockpit = {
         const compliancePct = isRtl ? I18n.toPersianDigits(complianceNum.toFixed(1)) : complianceNum.toFixed(1);
 
         return `
-            <div class="duty-card ${cardClass}" id="sup-card-${person.id}">
+            <div class="duty-card sup-roster-card ${cardClass}" id="sup-card-${person.id}">
                 <!-- Top Info Row: Avatar + Name + Live Badge + Station -->
                 <div style="display: flex; gap: 0.9rem; align-items: flex-start;">
                     ${avatarHtml}
@@ -1057,7 +1145,7 @@ const SupervisorCockpit = {
                                 🏢 ${this.escapeHtml(cleanSection)}
                             </span>
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); padding: 3px 8px; border-radius: 6px; display: inline-block;">
+                        <div style="font-size: 0.75rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); padding: 3px 8px; border-radius: 6px; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             📍 <strong>${this.escapeHtml(cameraName)}</strong> — ${this.escapeHtml(zoneName)}
                         </div>
                         ${duty && duty.is_substituted ? `
@@ -1089,63 +1177,63 @@ const SupervisorCockpit = {
                         </span>
                     </div>
                     ${timeoutMins ? `
-                    <div style="font-size: 0.72rem; color: var(--text-tertiary); display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 0.25rem;">
-                        <span style="color: #60a5fa;">⏱️ ${I18n.t('threshold_and_grace', { threshold: isRtl ? I18n.toPersianDigits(timeoutMins) : timeoutMins, grace: isRtl ? I18n.toPersianDigits(graceMins) : graceMins }) || `آستانه غیبت: ${timeoutMins}دقیقه | مهلت ورود: ${graceMins}دقیقه`}</span>
+                    <div class="sup-card-threshold-row" style="font-size: 0.72rem; color: var(--text-tertiary); display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 0.25rem; flex-wrap: wrap; gap: 0.3rem;">
+                        <span style="color: #60a5fa; min-width: 0;">⏱️ ${I18n.t('threshold_and_grace', { threshold: isRtl ? I18n.toPersianDigits(timeoutMins) : timeoutMins, grace: isRtl ? I18n.toPersianDigits(graceMins) : graceMins }) || `آستانه غیبت: ${timeoutMins}دقیقه | مهلت ورود: ${graceMins}دقیقه`}</span>
                         ${absenceTypeTagHtml}
                     </div>
                     ` : ''}
                 </div>
 
                 <!-- 2 Main Absence / Status Metrics (Exact Match with Executive Deck) -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                <div class="sup-card-metrics-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem;">
                     <!-- Status / Current Absence -->
                     ${isOnBreak ? `
-                        <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
-                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                        <div class="sup-card-metric-box" style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                            <div class="metric-title" style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                                 ${I18n.t('status') || 'وضعیت'}
                             </div>
-                            <div style="font-size: 1.05rem; font-weight: 800; color: #38bdf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeAttr(duty?.current_break_name || '')}">
+                            <div class="metric-val" style="font-size: 1.05rem; font-weight: 800; color: #38bdf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${this.escapeAttr(duty?.current_break_name || '')}">
                                 ${this.escapeHtml(duty?.current_break_name || (isRtl ? 'زمان استراحت' : 'Break Time'))}
                             </div>
-                            <div style="font-size: 0.68rem; color: #7dd3fc; margin-top: 0.15rem;">
+                            <div class="metric-subtext" style="font-size: 0.68rem; color: #7dd3fc; margin-top: 0.15rem;">
                                 ${isRtl ? 'غیبت معاف است (مجاز)' : 'Absence exempt (Excused)'}
                             </div>
                         </div>
                     ` : (isOffline ? `
-                        <div style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
-                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                        <div class="sup-card-metric-box" style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                            <div class="metric-title" style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                                 ${I18n.t('status') || 'وضعیت'}
                             </div>
-                            <div style="font-size: 1.05rem; font-weight: 800; color: #facc15;">
+                            <div class="metric-val" style="font-size: 1.05rem; font-weight: 800; color: #facc15;">
                                 ${I18n.t('status_camera_offline') || 'دوربین قطع'}
                             </div>
-                            <div style="font-size: 0.68rem; color: #fef08a; margin-top: 0.15rem;">
+                            <div class="metric-subtext" style="font-size: 0.68rem; color: #fef08a; margin-top: 0.15rem;">
                                 ${I18n.t('camera_feed_unavailable') || 'تصویر در دسترس نیست'}
                             </div>
                         </div>
                     ` : `
-                        <div style="background: ${isPresent ? 'rgba(16, 185, 129, 0.09)' : 'rgba(244, 63, 94, 0.09)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
-                            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                        <div class="sup-card-metric-box" style="background: ${isPresent ? 'rgba(16, 185, 129, 0.09)' : 'rgba(244, 63, 94, 0.09)'}; border: 1px solid ${isPresent ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)'}; border-radius: 10px; padding: 0.65rem 0.75rem;">
+                            <div class="metric-title" style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                                 ${I18n.t('current_absence_title') || 'غیبت لحظه‌ای (عدم حضور)'}
                             </div>
-                            <div style="font-size: 1.2rem; font-weight: 800; color: ${isPresent ? '#34d399' : '#fb7185'};">
+                            <div class="metric-val" style="font-size: 1.2rem; font-weight: 800; color: ${isPresent ? '#34d399' : '#fb7185'};">
                                 ${currAbsenceDisplay}
                             </div>
-                            <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                            <div class="metric-subtext" style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
                                 ${currentSubtext}
                             </div>
                         </div>
                     `)}
 
                     <!-- Sum of Current Shift Absence -->
-                    <div style="background: rgba(245, 158, 11, 0.09); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
-                        <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
+                    <div class="sup-card-metric-box" style="background: rgba(245, 158, 11, 0.09); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 0.65rem 0.75rem;">
+                        <div class="metric-title" style="font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.2rem; font-weight: 600;">
                             ${I18n.t('sum_shift_absence_title') || 'مجموع غیبت در شیفت'}
                         </div>
-                        <div style="font-size: 1.2rem; font-weight: 800; color: #fbbf24;">
+                        <div class="metric-val" style="font-size: 1.2rem; font-weight: 800; color: #fbbf24;">
                             ${sumShiftAbsenceDisplay}
                         </div>
-                        <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
+                        <div class="metric-subtext" style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem;">
                             ${isOffline
                                 ? (duty && duty.shift_absence_minutes === 0
                                     ? (isRtl ? 'زمان قطعی جزو غیبت محاسبه نمی‌شود' : 'Offline time not counted as absence')
@@ -1156,7 +1244,7 @@ const SupervisorCockpit = {
                 </div>
 
                 <!-- Absence Count & Time Windows Bar -->
-                <div class="duty-absence-count-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.65rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.07); font-size: 0.76rem;">
+                <div class="duty-absence-count-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.65rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.07); font-size: 0.76rem; flex-wrap: wrap; gap: 0.35rem;">
                     <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
                         <span>📍</span>
                         <strong style="color: ${absenceCount > 0 ? '#fbbf24' : 'var(--text-secondary)'};">
@@ -1201,21 +1289,21 @@ const SupervisorCockpit = {
 
                     <!-- Quick Action Bar for Supervisor tools (2x2 balanced grid) -->
                     <div class="sup-action-bar" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'تنظیمات شیفت'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'تنظیمات شیفت'}" style="font-size: 0.76rem; padding: 6px 6px; justify-content: center; display: inline-flex; align-items: center; gap: 4px; min-width: 0;">
                             <span>⏰</span>
-                            <span>${I18n.t('shift') || 'شیفت کاری'}</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${I18n.t('shift') || 'شیفت کاری'}</span>
                         </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="font-size: 0.76rem; padding: 6px 6px; justify-content: center; display: inline-flex; align-items: center; gap: 4px; min-width: 0;">
                             <span>🏖️</span>
-                            <span>${I18n.t('leave') || 'مرخصی'}</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${I18n.t('leave') || 'مرخصی'}</span>
                         </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorSubstitutionModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('assign_substitute_btn') || 'تعیین جانشین'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorSubstitutionModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('assign_substitute_btn') || 'تعیین جانشین'}" style="font-size: 0.76rem; padding: 6px 6px; justify-content: center; display: inline-flex; align-items: center; gap: 4px; min-width: 0;">
                             <span>🔄</span>
-                            <span>${I18n.t('substitute_short') || I18n.t('assign_substitute_btn') || 'تعیین جانشین'}</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${I18n.t('substitute_short') || I18n.t('assign_substitute_btn') || 'تعیین جانشین'}</span>
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="font-size: 0.76rem; padding: 6px 6px; justify-content: center; display: inline-flex; align-items: center; gap: 4px; min-width: 0;">
                             <span>📜</span>
-                            <span>${I18n.t('view_today_events') || 'سوابق امروز'}</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${I18n.t('view_today_events') || 'سوابق امروز'}</span>
                         </button>
                     </div>
                 </div>
@@ -1502,28 +1590,30 @@ const SupervisorCockpit = {
 
             return `
                 <div class="${rowClass}">
-                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div class="sup-timeline-identity">
                         <!-- Initials badge (ZERO photos) -->
-                        <div class="sup-avatar-badge" style="width: 32px; height: 32px; font-size: 0.85rem; background: ${avatarGrad};">
+                        <div class="sup-avatar-badge" style="width: 32px; height: 32px; font-size: 0.85rem; background: ${avatarGrad}; flex-shrink: 0;">
                             ${initial}
                         </div>
-                        <div>
-                            <strong style="font-size: 0.88rem; color: var(--text-primary);">${this.escapeHtml(personName)}</strong>
-                            <div style="display: flex; gap: 6px; align-items: center; font-size: 0.74rem; color: var(--text-secondary); margin-top: 1px;">
-                                <span>📹 ${this.escapeHtml(ev.camera_name || `Camera #${ev.camera_id}`)}</span>
-                                ${ev.zone_name ? `<span>· 🎯 ${this.escapeHtml(ev.zone_name)}</span>` : ''}
-                            </div>
+                        <div style="min-width: 0;">
+                            <strong style="font-size: 0.88rem; color: var(--text-primary); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(personName)}</strong>
                         </div>
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div class="sup-timeline-status">
                         ${alertBadge}
-                        <div style="display: flex; flex-direction: column; align-items: flex-end; font-size: 0.72rem; color: var(--text-secondary);">
-                            <span style="direction: ltr; font-family: monospace; font-weight: 600; color: var(--text-primary);">
-                                ${this.escapeHtml(timeStr)}
-                            </span>
-                            ${relTime ? `<small style="color: var(--text-tertiary);">${this.escapeHtml(relTime)}</small>` : ''}
-                        </div>
+                    </div>
+
+                    <div class="sup-timeline-location">
+                        <span>📹 ${this.escapeHtml(ev.camera_name || `Camera #${ev.camera_id}`)}</span>
+                        ${ev.zone_name ? `<span>· 🎯 ${this.escapeHtml(ev.zone_name)}</span>` : ''}
+                    </div>
+
+                    <div class="sup-timeline-time">
+                        <span class="sup-timeline-timestr">
+                            ${this.escapeHtml(timeStr)}
+                        </span>
+                        ${relTime ? `<small class="sup-timeline-reltime">${this.escapeHtml(relTime)}</small>` : ''}
                     </div>
                 </div>
             `;
@@ -1560,18 +1650,20 @@ const SupervisorCockpit = {
 
                         return `
                             <div class="sup-timeline-row ${isAlert ? 'alert' : ''}" style="margin-bottom: 0.4rem;">
-                                <div>
-                                    <strong style="font-size: 0.88rem; color: var(--text-primary);">
+                                <div class="sup-timeline-identity">
+                                    <strong style="font-size: 0.88rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                         📹 ${this.escapeHtml(ev.camera_name || `Camera #${ev.camera_id}`)}
                                     </strong>
-                                    ${ev.zone_name ? `<div style="font-size: 0.76rem; color: var(--accent-blue); margin-top: 1px;">🎯 ${this.escapeHtml(ev.zone_name)}</div>` : ''}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <div class="sup-timeline-status">
                                     ${alertBadge}
-                                    <div style="text-align: end; font-size: 0.74rem;">
-                                        <div style="font-family: monospace; font-weight: 700; color: var(--text-primary); direction: ltr;">${this.escapeHtml(timeStr)}</div>
-                                        <small style="color: var(--text-tertiary);">${this.escapeHtml(relTime)}</small>
-                                    </div>
+                                </div>
+                                <div class="sup-timeline-location">
+                                    ${ev.zone_name ? `<span style="font-size: 0.76rem; color: var(--accent-blue);">🎯 ${this.escapeHtml(ev.zone_name)}</span>` : ''}
+                                </div>
+                                <div class="sup-timeline-time">
+                                    <span class="sup-timeline-timestr">${this.escapeHtml(timeStr)}</span>
+                                    ${relTime ? `<small class="sup-timeline-reltime">${this.escapeHtml(relTime)}</small>` : ''}
                                 </div>
                             </div>
                         `;

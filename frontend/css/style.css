@@ -6980,9 +6980,9 @@ html[dir="rtl"] textarea {
 }
 
 .sup-timeline-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
     align-items: center;
-    justify-content: space-between;
     padding: 0.75rem 1rem;
     background: rgba(0, 0, 0, 0.25);
     border-radius: var(--radius-sm, 8px);
@@ -6990,6 +6990,55 @@ html[dir="rtl"] textarea {
     border-inline-start: 3px solid #3b82f6;
     gap: 0.85rem;
     transition: background-color 0.2s ease;
+}
+
+.sup-timeline-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.sup-timeline-location {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    min-width: 0;
+}
+
+.sup-timeline-status {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.sup-timeline-time {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.sup-timeline-timestr {
+    direction: ltr;
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sup-timeline-reltime {
+    color: var(--text-tertiary);
+}
+
+.sup-roster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 1.15rem;
+    width: 100%;
 }
 
 .sup-timeline-row:hover {
@@ -7253,4 +7302,654 @@ html[dir="rtl"] textarea {
     color: #fef08a;
     transform: translateY(-1px);
     box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+}
+
+
+
+/* ── Mobile Sidebar Toggle Button & Backdrop ─────────────── */
+.sidebar-toggle-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1.15rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.sidebar-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 190;
+    transition: opacity 0.25s ease;
+}
+
+/* ── Supervisor Header User Menu & Quick Utility Bar ─────── */
+.sup-header-user-wrap {
+    position: relative;
+}
+.sup-header-user-btn {
+    padding: 4px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+}
+.sup-header-user-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+.sup-header-user-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff;
+    font-size: 0.72rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+.sup-header-username-text {
+    font-size: 0.76rem;
+    font-weight: 600;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sup-header-user-menu {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    bottom: auto !important;
+    min-width: 230px !important;
+    max-width: 90vw !important;
+    z-index: 2000 !important;
+}
+
+html[dir="rtl"] .sup-header-user-menu {
+    left: 0 !important;
+    right: auto !important;
+}
+
+html[dir="ltr"] .sup-header-user-menu {
+    right: 0 !important;
+    left: auto !important;
+}
+
+.sup-user-quick-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.55rem;
+    padding-top: 0.45rem;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+.sup-quick-user-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.sup-quick-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.sup-quick-actions-row .btn {
+    font-size: 0.72rem;
+    padding: 4px 9px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Supervisor Cockpit — Phone & Mobile Screen Optimizations
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    /* 0. Strict Viewport & Zero Horizontal Overflow Containment */
+    html, body {
+        overflow-x: hidden !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+    }
+    .app-layout,
+    .main-content {
+        overflow-x: hidden !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+    }
+    .content-body {
+        padding: 0.5rem !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+
+    /* 0.1 Mobile Navigation & Sidebar */
+    .sidebar-toggle-btn {
+        display: inline-flex !important;
+    }
+    .sidebar-backdrop.active {
+        display: block !important;
+    }
+    .sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        z-index: 250 !important;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.7) !important;
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* 1. Top Header Bar */
+    .content-header {
+        padding: 0.5rem 0.65rem !important;
+        gap: 0.4rem !important;
+        min-height: 48px !important;
+    }
+    .sup-header-username-text {
+        display: none !important;
+    }
+    .sup-header-user-btn {
+        padding: 4px 6px !important;
+    }
+    html[dir="rtl"] .sup-header-user-menu {
+        left: 4px !important;
+        right: auto !important;
+        max-width: calc(100vw - 12px) !important;
+    }
+    html[dir="ltr"] .sup-header-user-menu {
+        right: 4px !important;
+        left: auto !important;
+        max-width: calc(100vw - 12px) !important;
+    }
+
+    .sup-user-quick-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.45rem !important;
+    }
+    .sup-quick-user-info {
+        justify-content: flex-start !important;
+    }
+    .sup-quick-actions-row {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 0.35rem !important;
+        width: 100% !important;
+    }
+    .sup-quick-actions-row .btn {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 6px 2px !important;
+        font-size: 0.72rem !important;
+        min-width: 0 !important;
+        white-space: nowrap !important;
+    }
+    .sup-quick-actions-row .btn span:last-child {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    .content-header h1 {
+        font-size: 0.95rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 48vw !important;
+    }
+    .content-header-actions {
+        gap: 0.25rem !important;
+        flex-shrink: 0 !important;
+    }
+    #sup-timer-badge {
+        padding: 4px 6px !important;
+        font-size: 0.7rem !important;
+    }
+    #sup-refresh-btn {
+        padding: 4px 6px !important;
+        font-size: 0.72rem !important;
+    }
+    #sup-refresh-btn span {
+        display: none !important;
+    }
+    .live-indicator {
+        padding: 4px 6px !important;
+        font-size: 0.7rem !important;
+    }
+    .live-indicator span:last-child {
+        display: none !important;
+    }
+
+    /* 2. Cockpit Container & Glass Cards */
+    .supervisor-cockpit-container {
+        gap: 0.75rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+    .supervisor-cockpit-container .card-glass {
+        padding: 0.65rem 0.55rem !important;
+        border-radius: 12px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+    .sup-main-grid {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 3. Executive Command Strip (Header Banner) */
+    .sup-command-strip {
+        padding: 0.75rem 0.85rem !important;
+        gap: 0.75rem !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        border-radius: 12px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-strip-profile {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.75rem !important;
+        width: 100% !important;
+    }
+    .sup-supervisor-avatar {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 1.15rem !important;
+        flex-shrink: 0 !important;
+    }
+    .sup-strip-name {
+        font-size: 1.02rem !important;
+    }
+    .sup-strip-sub-row {
+        gap: 0.35rem !important;
+        font-size: 0.76rem !important;
+    }
+    .sup-strip-privacy {
+        display: inline-flex !important;
+        font-size: 0.72rem !important;
+        margin-top: 2px !important;
+    }
+    .sup-strip-actions {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.65rem !important;
+        width: 100% !important;
+        align-items: stretch !important;
+    }
+    .sup-live-telemetry {
+        justify-content: center !important;
+        width: 100% !important;
+        padding: 0.4rem 0.75rem !important;
+        font-size: 0.78rem !important;
+    }
+    .sup-strip-btn-group {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+    }
+    .sup-strip-btn {
+        width: 100% !important;
+        justify-content: center !important;
+        font-size: 0.76rem !important;
+        padding: 7px 4px !important;
+        white-space: nowrap !important;
+    }
+
+    /* 4. KPI Deck (Compact 2-Column Grid) */
+    .sup-kpi-deck {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.55rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-kpi-deck .sup-kpi-card:last-child {
+        grid-column: span 2 !important;
+    }
+    .sup-kpi-card {
+        padding: 0.65rem 0.75rem !important;
+        gap: 0.3rem !important;
+        border-radius: 10px !important;
+    }
+    .sup-kpi-title {
+        font-size: 0.72rem !important;
+    }
+    .sup-kpi-icon {
+        font-size: 0.95rem !important;
+    }
+    .sup-kpi-val {
+        font-size: 1.4rem !important;
+        line-height: 1.1 !important;
+    }
+    .sup-kpi-progress-track {
+        height: 3px !important;
+        margin-top: 2px !important;
+    }
+    .sup-kpi-subtext {
+        font-size: 0.66rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* 5. Filter Bar (Horizontal Swipeable Row) */
+    .sup-filter-pills {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding-bottom: 4px !important;
+        margin-inline: -4px;
+        padding-inline: 4px;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-filter-pills::-webkit-scrollbar {
+        display: none !important;
+    }
+    .sup-filter-pills .filter-btn {
+        flex-shrink: 0 !important;
+        padding: 5px 11px !important;
+        font-size: 0.75rem !important;
+        gap: 0.35rem !important;
+    }
+    .sup-filter-pills .filter-btn .badge-pill-counter {
+        min-width: 18px !important;
+        height: 18px !important;
+        font-size: 0.68rem !important;
+        padding: 0 4px !important;
+    }
+
+    /* 6. Lower Toolbar (Search, Dropdowns, View Switcher) */
+    .sup-toolbar-lower {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.6rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-toolbar-search-group {
+        width: 100% !important;
+        display: flex !important;
+        gap: 0.5rem !important;
+    }
+    .dashboard-search-box {
+        flex: 1 !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+    .sup-toolbar-filters {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.5rem !important;
+    }
+    .sup-section-select-wrapper,
+    .sup-sort-select-wrapper {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    .sup-section-select-wrapper select,
+    .sup-sort-select-wrapper select {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* 7. Roster Grid & Staff Cards */
+    .sup-roster-grid {
+        grid-template-columns: 100% !important;
+        gap: 0.75rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .duty-card,
+    .sup-roster-card {
+        padding: 0.75rem 0.65rem !important;
+        border-radius: 12px !important;
+        gap: 0.65rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .sup-card-meta {
+        padding: 0.5rem 0.65rem !important;
+        font-size: 0.75rem !important;
+    }
+    .sup-card-section-badge,
+    .sup-card-role-badge {
+        max-width: 130px !important;
+        font-size: 0.7rem !important;
+        padding: 2px 6px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* Two Metric Boxes Inside Card */
+    .sup-card-metrics-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.45rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-card-metric-box {
+        min-width: 0 !important;
+        padding: 0.5rem 0.55rem !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+    }
+    .sup-card-metric-box .metric-title {
+        font-size: 0.66rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .sup-card-metric-box .metric-val {
+        font-size: 1.12rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .sup-card-metric-box .metric-subtext {
+        font-size: 0.64rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* Action buttons in 2x2 grid */
+    .sup-action-bar {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.35rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-action-bar .btn {
+        min-width: 0 !important;
+        width: 100% !important;
+        font-size: 0.72rem !important;
+        padding: 6px 3px !important;
+        box-sizing: border-box !important;
+        justify-content: center !important;
+    }
+    .sup-action-bar .btn span:last-child {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    /* 8. Table View Horizontal Scroll */
+    .sup-roster-table-wrapper {
+        margin: 0 -0.55rem !important;
+        padding: 0 0.55rem !important;
+        -webkit-overflow-scrolling: touch;
+        overflow-x: auto !important;
+        width: calc(100% + 1.1rem) !important;
+        box-sizing: border-box !important;
+    }
+    .sup-roster-table-wrapper table th,
+    .sup-roster-table-wrapper table td {
+        padding: 8px 10px !important;
+        font-size: 0.75rem !important;
+        white-space: nowrap !important;
+    }
+
+    /* 9. Timeline Card & 2x2 Balanced Rows */
+    .sup-timeline-feed {
+        max-height: 380px !important;
+        gap: 0.4rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-timeline-row {
+        display: grid !important;
+        grid-template-columns: 1fr auto !important;
+        grid-template-rows: auto auto !important;
+        gap: 0.35rem 0.5rem !important;
+        padding: 0.55rem 0.65rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .sup-timeline-identity {
+        grid-column: 1 / 2 !important;
+        grid-row: 1 / 2 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.45rem !important;
+        min-width: 0 !important;
+    }
+    .sup-timeline-identity strong {
+        font-size: 0.82rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .sup-timeline-status {
+        grid-column: 2 / 3 !important;
+        grid-row: 1 / 2 !important;
+        justify-self: end !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    .sup-timeline-status .badge {
+        font-size: 0.68rem !important;
+        padding: 2px 6px !important;
+        white-space: nowrap !important;
+    }
+    .sup-timeline-location {
+        grid-column: 1 / 2 !important;
+        grid-row: 2 / 3 !important;
+        font-size: 0.7rem !important;
+        color: var(--text-secondary) !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    .sup-timeline-time {
+        grid-column: 2 / 3 !important;
+        grid-row: 2 / 3 !important;
+        justify-self: end !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        font-size: 0.68rem !important;
+    }
+    .sup-timeline-timestr {
+        direction: ltr !important;
+        font-family: monospace !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+        font-size: 0.72rem !important;
+        white-space: nowrap !important;
+    }
+    .sup-timeline-reltime {
+        color: var(--text-tertiary) !important;
+        font-size: 0.66rem !important;
+        white-space: nowrap !important;
+    }
+
+    /* 10. Modals on Phone */
+    .modal {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        margin: 6px auto !important;
+        border-radius: 14px !important;
+        max-height: 94vh !important;
+        box-sizing: border-box !important;
+    }
+    .modal-header {
+        padding: 0.85rem 1rem !important;
+    }
+    .modal-header h2 {
+        font-size: 0.98rem !important;
+    }
+    .modal-subtitle {
+        font-size: 0.72rem !important;
+    }
+    .modal-body {
+        padding: 0.85rem 1rem !important;
+        max-height: 76vh !important;
+    }
+    .modal-footer {
+        padding: 0.75rem 1rem !important;
+    }
+
+    /* 11. Shamsi Calendar Popover Centered on Phone */
+    .shamsi-calendar-popover {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 92vw !important;
+        max-width: 320px !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8) !important;
+        z-index: 10050 !important;
+    }
 }

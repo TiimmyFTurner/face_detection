@@ -65,6 +65,11 @@ const App = {
 
     // ─── Client-Side Router ────────────────────────────────
     navigate(page) {
+        // Automatically close mobile sidebar on navigation
+        if (typeof App.closeSidebar === 'function') {
+            App.closeSidebar();
+        }
+
         // Clean up page timers if navigating away
         if (typeof DutyPage !== 'undefined' && DutyPage.cleanup) {
             DutyPage.cleanup();
@@ -135,6 +140,38 @@ const App = {
             default:
                 DashboardPage.load();
         }
+    },
+
+    // ─── Mobile Sidebar Toggle ─────────────────────────────
+    toggleSidebar(forceState = null) {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        if (!sidebar) return;
+        const isOpen = forceState !== null ? forceState : !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', isOpen);
+        if (backdrop) {
+            backdrop.classList.toggle('active', isOpen);
+        }
+    },
+
+    closeSidebar() {
+        this.toggleSidebar(false);
+    },
+
+    // ─── Mobile Sidebar Toggle ─────────────────────────────
+    toggleSidebar(forceState = null) {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        if (!sidebar) return;
+        const isOpen = forceState !== null ? forceState : !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', isOpen);
+        if (backdrop) {
+            backdrop.classList.toggle('active', isOpen);
+        }
+    },
+
+    closeSidebar() {
+        this.toggleSidebar(false);
     },
 
     // ─── WebSocket Connection ──────────────────────────────

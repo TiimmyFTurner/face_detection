@@ -73,10 +73,18 @@
             </div>
         </aside>
 
+        <!-- ── Mobile Sidebar Backdrop ──────────────────── -->
+        <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="App.closeSidebar()"></div>
+
         <!-- ── Main Content Area ────────────────────────── -->
         <main class="main-content">
             <header class="content-header" id="content-header">
-                <h1 id="page-title">پیشخوان</h1>
+                <div class="content-header-title-wrap" style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
+                    <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="App.toggleSidebar()" title="منو" aria-label="Toggle navigation menu">
+                        <span class="hamburger-icon">☰</span>
+                    </button>
+                    <h1 id="page-title">پیشخوان</h1>
+                </div>
                 <div class="content-header-actions" id="header-actions"></div>
             </header>
 

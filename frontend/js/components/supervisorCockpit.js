@@ -336,6 +336,10 @@ const SupervisorCockpit = {
                             <span>🏖️</span>
                             <span>${I18n.t('quick_leave_action') || 'ثبت مرخصی پرسنل'}</span>
                         </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorSubstitutionModal.show()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                            <span>🔄</span>
+                            <span>${I18n.t('assign_substitute_action') || 'تعیین جانشین شیفت'}</span>
+                        </button>
                     </div>
                 </div>
 
@@ -1056,6 +1060,18 @@ const SupervisorCockpit = {
                         <div style="font-size: 0.75rem; color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); padding: 3px 8px; border-radius: 6px; display: inline-block;">
                             📍 <strong>${this.escapeHtml(cameraName)}</strong> — ${this.escapeHtml(zoneName)}
                         </div>
+                        ${duty && duty.is_substituted ? `
+                            <div style="font-size: 0.76rem; color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-weight: 700;">
+                                <span>🔄</span>
+                                <span>${I18n.t('substitute_badge_prefix') || 'جانشین:'} ${this.escapeHtml(duty.substitute_name)}</span>
+                            </div>
+                        ` : ''}
+                        ${duty && duty.is_substituting_for ? `
+                            <div style="font-size: 0.76rem; color: #34d399; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-weight: 700;">
+                                <span>🛡️</span>
+                                <span>${I18n.t('substituting_for_badge_prefix') || 'جانشین برای:'} ${this.escapeHtml(duty.original_person_name)}</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
 
@@ -1183,18 +1199,23 @@ const SupervisorCockpit = {
                         <span>${I18n.t('analytics_and_summary') || 'Analytics & Summary'}</span>
                     </button>
 
-                    <!-- Quick Action Bar for Supervisor tools -->
-                    <div class="sup-action-bar" style="display: grid; grid-template-columns: 1fr 1fr 38px; gap: 0.45rem;">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'تنظیمات شیفت'}" style="font-size: 0.76rem; padding: 5px 8px; justify-content: center;">
+                    <!-- Quick Action Bar for Supervisor tools (2x2 balanced grid) -->
+                    <div class="sup-action-bar" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="PersonShiftModal.show(${person.id})" title="${I18n.t('shift_settings') || 'تنظیمات شیفت'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
                             <span>⏰</span>
-                            <span>${I18n.t('shift') || 'شیفت'}</span>
+                            <span>${I18n.t('shift') || 'شیفت کاری'}</span>
                         </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="font-size: 0.76rem; padding: 5px 8px; justify-content: center;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
                             <span>🏖️</span>
                             <span>${I18n.t('leave') || 'مرخصی'}</span>
                         </button>
-                        <button type="button" class="btn btn-ghost btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="padding: 5px 6px; font-size: 0.8rem; justify-content: center;">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorSubstitutionModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('assign_substitute_btn') || 'تعیین جانشین'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
+                            <span>🔄</span>
+                            <span>${I18n.t('substitute_short') || I18n.t('assign_substitute_btn') || 'تعیین جانشین'}</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="font-size: 0.76rem; padding: 6px 8px; justify-content: center; display: inline-flex; align-items: center; gap: 5px;">
                             <span>📜</span>
+                            <span>${I18n.t('view_today_events') || 'سوابق امروز'}</span>
                         </button>
                     </div>
                 </div>
@@ -1245,6 +1266,8 @@ const SupervisorCockpit = {
                         <div>
                             <strong style="display: block; font-size: 0.92rem; color: var(--text-primary); word-break: break-word;">${this.escapeHtml(person.name)}</strong>
                             ${cleanRole ? `<span class="sup-card-role-badge text-xs" style="margin-top: 3px;">🏷️ ${this.escapeHtml(cleanRole)}</span>` : ''}
+                            ${duty && duty.is_substituted ? `<span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px;">🔄 ${I18n.t('substitute_badge_prefix') || 'جانشین:'} ${this.escapeHtml(duty.substitute_name)}</span>` : ''}
+                            ${duty && duty.is_substituting_for ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px;">🛡️ ${I18n.t('substituting_for_badge_prefix') || 'جانشین برای:'} ${this.escapeHtml(duty.original_person_name)}</span>` : ''}
                         </div>
                     </div>
                 </td>
@@ -1303,6 +1326,9 @@ const SupervisorCockpit = {
                         </button>
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorLeaveModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('leave_or_off') || 'مرخصی / آف'}" style="padding: 4px 8px; font-size: 0.75rem;">
                             🏖️ ${I18n.t('leave') || 'مرخصی'}
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="SupervisorSubstitutionModal.show(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('assign_substitute_btn') || 'تعیین جانشین'}" style="padding: 4px 8px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                            <span>🔄</span> <span>${I18n.t('substitute_short') || I18n.t('assign_substitute_btn') || 'تعیین جانشین'}</span>
                         </button>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="SupervisorCockpit.showPersonEvents(${person.id}, '${this.escapeAttr(person.name)}')" title="${I18n.t('view_today_events') || 'سوابق امروز'}" style="padding: 4px 7px; font-size: 0.75rem;">
                             📜

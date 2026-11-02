@@ -224,6 +224,7 @@ class LeaveCreate(BaseModel):
     end_date: str = Field(..., description="End date (YYYY-MM-DD)")
     leave_type: str = Field("daily_leave", description="daily_leave | off_duty | sick | other")
     note: str = Field("", description="Optional note or reason")
+    substitute_person_id: Optional[int] = Field(None, description="Optional ID of colleague covering shift")
 
 
 class LeaveRecord(BaseModel):
@@ -234,6 +235,8 @@ class LeaveRecord(BaseModel):
     note: str = ""
     created_at: str
     created_by: str = ""
+    substitute_person_id: Optional[int] = None
+    substitute_person_name: Optional[str] = None
 
 
 class PersonResponse(BaseModel):
@@ -577,6 +580,12 @@ class PersonDutyStatus(BaseModel):
     arrival_delay_minutes: int = 0
     is_within_grace_period: bool = False
     absence_type: Optional[str] = None  # "not_arrived", "left_station", "camera_offline", "on_break"
+    is_substituted: bool = False
+    substitute_name: Optional[str] = None
+    substitute_id: Optional[int] = None
+    is_substituting_for: bool = False
+    original_person_name: Optional[str] = None
+    original_person_id: Optional[int] = None
 
 
 class DutyRosterResponse(BaseModel):
@@ -926,4 +935,51 @@ class PasswordChangeRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     new_password: str = Field(..., min_length=4)
+
+# ═══════════════════════════════════════════════════════════
+# Shift Substitution Schemas
+# ═══════════════════════════════════════════════════════════
+
+class ShiftSubstitutionCreate(BaseModel):
+    original_person_id: int = Field(..., description="ID of person being substituted")
+    substitute_person_id: int = Field(..., description="ID of substitute person")
+    start_date: str = Field(..., description="Start date (YYYY-MM-DD)")
+    end_date: str = Field(..., description="End date (YYYY-MM-DD)")
+    zone_id: Optional[int] = Field(None, description="Optional specific zone ID (defaults to original person's zone)")
+    note: str = Field("", description="Optional note or reason")
+
+
+class ShiftSubstitutionConflictInfo(BaseModel):
+    has_conflict: bool = False
+    conflict_type: Optional[str] = None  # "already_substituting" | "own_shift" | "leave" | "self_substitution"
+    detail: Optional[str] = None
+    substitute_name: Optional[str] = None
+    original_name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    station_names: Optional[str] = None
+    leave_type: Optional[str] = None
+
+
+class ShiftSubstitutionResponse(BaseModel):
+    id: int
+    original_person_id: int
+    original_person_name: str
+    original_person_section: Optional[str] = None
+    substitute_person_id: int
+    substitute_person_name: str
+    substitute_person_section: Optional[str] = None
+    start_date: str
+    end_date: str
+    zone_id: Optional[int] = None
+    zone_name: Optional[str] = None
+    leave_id: Optional[str] = None
+    note: str = ""
+    created_by: str = ""
+    created_at: datetime
+    updated_at: datetime
+    has_conflict: bool = False
+    conflict_detail: Optional[str] = None
+
+    model_config = {"from_attributes": True}
 

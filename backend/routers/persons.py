@@ -28,7 +28,7 @@ from backend.auth import require_permission, require_any_permission, get_user_sc
 from backend.config import settings
 from backend.database import get_db
 from backend.face_engine import face_engine
-from backend.models import Person, PersonEmbedding, Event, Camera, CameraZone, ShiftTemplate, User
+from backend.models import Person, PersonEmbedding, Event, Camera, CameraZone, ShiftTemplate, User, ShiftSubstitution
 from backend.schemas import (
     PersonResponse,
     PersonPhotoItem,
@@ -707,18 +707,57 @@ async def create_person_leave(
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
+    sub_person = None
+    if getattr(data, "substitute_person_id", None):
+        if not scope.can_access_person(data.substitute_person_id):
+            raise HTTPException(
+                status_code=403,
+                detail="دسترسی به فرد جانشین برای شما مجاز نیست.",
+            )
+        sub_person = await db.get(Person, data.substitute_person_id)
+        if not sub_person:
+            raise HTTPException(status_code=404, detail="Substitute person not found")
+
     current_leaves = list(getattr(person, "leaves", None) or [])
+    new_leave_id = str(uuid.uuid4())[:8]
+    creator_name = getattr(_user, "full_name", None) or getattr(_user, "username", "supervisor")
     new_leave = {
-        "id": str(uuid.uuid4())[:8],
+        "id": new_leave_id,
         "start_date": data.start_date.strip(),
         "end_date": data.end_date.strip(),
         "leave_type": data.leave_type.strip(),
         "note": (data.note or "").strip(),
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "created_by": getattr(_user, "full_name", None) or getattr(_user, "username", "supervisor"),
+        "created_by": creator_name,
+        "substitute_person_id": data.substitute_person_id if sub_person else None,
+        "substitute_person_name": sub_person.name if sub_person else None,
     }
     current_leaves.append(new_leave)
     person.leaves = current_leaves
+
+    if sub_person:
+        # Auto-resolve original person's assigned zone
+        zone_id = None
+        zones_res = await db.execute(select(CameraZone).where(CameraZone.is_active == True))  # noqa: E712
+        for z in zones_res.scalars().all():
+            assigned = [int(px) for px in (z.assigned_person_ids or []) if str(px).isdigit()]
+            if person_id in assigned:
+                zone_id = z.id
+                break
+        subst = ShiftSubstitution(
+            original_person_id=person_id,
+            substitute_person_id=data.substitute_person_id,
+            start_date=data.start_date.strip(),
+            end_date=data.end_date.strip(),
+            zone_id=zone_id,
+            leave_id=new_leave_id,
+            note=(data.note or "").strip(),
+            created_by=creator_name,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(subst)
+
     await db.commit()
     await db.refresh(person)
     await stream_processor.refresh_zones()
@@ -740,6 +779,13 @@ async def delete_person_leave(
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
+
+    # Cancel linked ShiftSubstitution if present
+    subst_res = await db.execute(
+        select(ShiftSubstitution).where(ShiftSubstitution.leave_id == leave_id)
+    )
+    for s in subst_res.scalars().all():
+        await db.delete(s)
 
     current_leaves = list(getattr(person, "leaves", None) or [])
     updated_leaves = [l for l in current_leaves if l.get("id") != leave_id]

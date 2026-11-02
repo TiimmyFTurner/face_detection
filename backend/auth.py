@@ -533,12 +533,20 @@ def require_permission(permission: str) -> Callable:
     return _dependency
 
 
-def require_any_permission(*permissions: str) -> Callable:
+def require_any_permission(*permissions: Any) -> Callable:
     """Enforce that the authenticated user has at least one of the listed permissions."""
+    flat_perms: list[str] = []
+    for item in permissions:
+        if isinstance(item, (list, tuple, set)):
+            flat_perms.extend(str(x) for x in item)
+        else:
+            flat_perms.append(str(item))
 
     async def _dependency(current_user: User = Depends(get_current_user)) -> User:
         effective_perms = get_user_permissions(current_user)
-        if not any(p in effective_perms for p in permissions):
+        if "*" in effective_perms:
+            return current_user
+        if not any(p in effective_perms for p in flat_perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: you do not have permission to perform this action.",

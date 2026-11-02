@@ -256,3 +256,31 @@ class User(Base):
     def __repr__(self) -> str:
         return f"<User id={self.id} username='{self.username}' active={self.is_active}>"
 
+class ShiftSubstitution(Base):
+    """
+    A temporary assignment where one person (substitute) takes over another person's
+    (original) scheduled shift and workstation during a specified date range.
+    """
+
+    __tablename__ = "shift_substitutions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, index=True)
+    substitute_person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, index=True)
+    start_date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD
+    end_date = Column(String(10), nullable=False, index=True)    # YYYY-MM-DD
+    zone_id = Column(Integer, ForeignKey("camera_zones.id", ondelete="SET NULL"), nullable=True)
+    leave_id = Column(String(100), nullable=True, index=True)   # If linked to a person's leave record
+    note = Column(Text, default="")
+    created_by = Column(String(100), default="system")
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    # Relationships
+    original_person = relationship("Person", foreign_keys=[original_person_id], backref="substituted_shifts")
+    substitute_person = relationship("Person", foreign_keys=[substitute_person_id], backref="covered_shifts")
+    zone = relationship("CameraZone")
+
+    def __repr__(self) -> str:
+        return f"<ShiftSubstitution id={self.id} orig={self.original_person_id} sub={self.substitute_person_id} {self.start_date}..{self.end_date}>"
+

@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.database import async_session
 from backend.face_engine import face_engine, KnownPerson, DetectedFace
-from backend.models import Camera, Person, PersonEmbedding, Event, CameraZone, ShiftTemplate
+from backend.models import Camera, Person, PersonEmbedding, Event, CameraZone, ShiftTemplate, ShiftSubstitution
 from backend.shift_utils import (
     get_shift_window,
     is_time_in_timetable,
@@ -144,6 +144,8 @@ class StreamProcessor:
         self._shift_templates_cache: dict[int, dict] = {}  # template_id -> template config dict
         self._zone_last_seen: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
         self._zone_last_absence_alert: dict[tuple[int, int], float] = {}  # (zone_id, person_id) -> timestamp
+        self._active_substitutions_by_original: dict[int, dict] = {}  # orig_pid -> subst dict
+        self._active_substitutions_by_substitute: dict[int, dict] = {}  # sub_pid -> subst dict
         self._camera_last_disconnect_alert: dict[int, float] = {}  # camera_id -> timestamp of last disconnect alert
         self._last_preview_time: dict[int, float] = {}  # camera_id -> timestamp of last JPEG encode
         self._camera_last_frame_time: dict[int, float] = {}  # camera_id -> timestamp of last successfully read frame
@@ -458,6 +460,61 @@ class StreamProcessor:
                     for p in persons
                 }
 
+                # Cache active shift substitutions for today
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                subst_res = await session.execute(
+                    select(ShiftSubstitution).where(
+                        ShiftSubstitution.start_date <= today_str,
+                        ShiftSubstitution.end_date >= today_str,
+                    )
+                )
+                today_substs = subst_res.scalars().all()
+                by_orig = {}
+                by_sub = {}
+                for s in today_substs:
+                    s_dict = {
+                        "id": s.id,
+                        "original_person_id": s.original_person_id,
+                        "substitute_person_id": s.substitute_person_id,
+                        "start_date": s.start_date,
+                        "end_date": s.end_date,
+                        "zone_id": s.zone_id,
+                        "note": s.note or "",
+                    }
+                    by_orig[s.original_person_id] = s_dict
+                    by_sub[s.substitute_person_id] = s_dict
+
+                    # Populate last seen for substitute person at this station
+                    s_zone_id = s.zone_id
+                    if not s_zone_id:
+                        for z in zones:
+                            if s.original_person_id in (z.assigned_person_ids or []):
+                                s_zone_id = z.id
+                                break
+                    if s_zone_id:
+                        sub_pair_key = (s_zone_id, s.substitute_person_id)
+                        if sub_pair_key not in self._zone_last_seen:
+                            sub_evt_res = await session.execute(
+                                select(Event.timestamp)
+                                .where(
+                                    Event.zone_id == s_zone_id,
+                                    Event.person_id == s.substitute_person_id,
+                                    ~Event.alert_type.in_(["absence_timeout", "camera_disconnected"]),
+                                )
+                                .order_by(Event.timestamp.desc())
+                                .limit(1)
+                            )
+                            sub_last_dt = sub_evt_res.scalars().first()
+                            if sub_last_dt:
+                                if sub_last_dt.tzinfo is None:
+                                    sub_last_dt = sub_last_dt.replace(tzinfo=timezone.utc)
+                                self._zone_last_seen[sub_pair_key] = sub_last_dt.timestamp()
+                            else:
+                                self._zone_last_seen[sub_pair_key] = 0.0
+
+                self._active_substitutions_by_original = by_orig
+                self._active_substitutions_by_substitute = by_sub
+
             self._zones_cache = zones_map
             # Clean up tracking for any zones that no longer exist
             active_zone_ids = {z["id"] for zlist in zones_map.values() for z in zlist}
@@ -691,8 +748,8 @@ class StreamProcessor:
                                             evt = Event(
                                                 timestamp=datetime.now(timezone.utc),
                                                 camera_id=camera_id,
-                                                person_id=person_id,
-                                                person_name=person_name,
+                                                person_id=effective_person_id,
+                                                person_name=f"{effective_person_name}{subst_prefix}", 
                                                 confidence_score=0.0,
                                                 snapshot_path=saved_snapshot,
                                                 is_known=True,
@@ -743,22 +800,32 @@ class StreamProcessor:
                             if camera_id in self._camera_last_disconnect_alert:
                                 self._camera_last_disconnect_alert.pop(camera_id, None)
 
-                            key = (zone["id"], person_id)
+                            # Check if person has an active substitute covering their shift today
+                            subst_rec = self._active_substitutions_by_original.get(person_id)
+                            effective_person_id = person_id
+                            effective_person_name = person_name
+                            subst_prefix = ""
+                            if subst_rec:
+                                effective_person_id = subst_rec["substitute_person_id"]
+                                effective_person_name = known_persons_map.get(effective_person_id, f"Substitute #{effective_person_id}")
+                                subst_prefix = f" (جانشین {person_name})"
+
+                            key = (zone["id"], effective_person_id)
                             last_seen = self._zone_last_seen.get(key, 0)
                             seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
                             if seen_in_shift:
                                 absent_duration_secs = int(now - last_seen)
                                 if absent_duration_secs < timeout_secs:
-                                    continue  # Person is currently present or within timeout threshold
+                                    continue  # Person/Substitute is currently present or within timeout threshold
                                 minutes_absent = max(1, absent_duration_secs // 60)
                                 time_desc = f"{minutes_absent} min" if minutes_absent == 1 else f"{minutes_absent} mins"
                                 alert_msg = (
-                                    f"⚠️ Absence Alert: {person_name} is NOT in assigned area "
+                                    f"⚠️ Absence Alert: {effective_person_name}{subst_prefix} is NOT in assigned area "
                                     f"'{zone['name']}' (missing for {time_desc}, threshold: {timeout_mins}m)"
                                 )
                             else:
-                                # Person was never seen in this shift
+                                # Person/Substitute was never seen in this shift
                                 if cur_elapsed_shift_mins < grace_mins:
                                     # Within arrival grace period — suppress absence alert
                                     continue
@@ -766,7 +833,7 @@ class StreamProcessor:
                                 minutes_absent = max(1, absent_duration_secs // 60)
                                 time_desc = f"{minutes_absent} min" if minutes_absent == 1 else f"{minutes_absent} mins"
                                 alert_msg = (
-                                    f"⚠️ Absence Alert: {person_name} has NOT arrived for shift in "
+                                    f"⚠️ Absence Alert: {effective_person_name}{subst_prefix} has NOT arrived for shift in "
                                     f"'{zone['name']}' (shift started {time_desc} ago, threshold: {timeout_mins}m)"
                                 )
 
@@ -819,8 +886,8 @@ class StreamProcessor:
                                         "timestamp": datetime.now(timezone.utc).isoformat(),
                                         "camera_id": camera_id,
                                         "camera_name": camera_name,
-                                        "person_id": person_id,
-                                        "person_name": person_name,
+                                        "person_id": effective_person_id,
+                                        "person_name": f"{effective_person_name}{subst_prefix}",
                                         "confidence_score": 0.0,
                                         "snapshot_url": f"/api/snapshots/{saved_snapshot}" if saved_snapshot else "",
                                         "snapshot_path": saved_snapshot,
@@ -835,8 +902,8 @@ class StreamProcessor:
                                     "zone_name": zone["name"],
                                     "camera_id": camera_id,
                                     "camera_name": camera_name,
-                                    "person_id": person_id,
-                                    "person_name": person_name,
+                                    "person_id": effective_person_id,
+                                    "person_name": f"{effective_person_name}{subst_prefix}",
                                     "duration_seconds": absent_duration_secs,
                                     "duration_str": time_desc,
                                     "timestamp": datetime.now(timezone.utc).isoformat(),

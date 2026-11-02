@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.database import get_db
-from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User
+from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User, ShiftSubstitution
 from backend.archive_manager import get_events_since_multi_db
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
 from backend.shift_utils import get_rotation_day_state, get_interval_free_minutes
@@ -474,6 +474,18 @@ async def compute_duty_roster_data(
         if e.person_id not in avatar_map and e.reference_photo_path:
             avatar_map[e.person_id] = f"/api/snapshots/ref_{Path(e.reference_photo_path).name}"
 
+    # 4b. Active substitutions for today
+    today_str = now_local.strftime("%Y-%m-%d")
+    subst_res = await db.execute(
+        select(ShiftSubstitution).where(
+            ShiftSubstitution.start_date <= today_str,
+            ShiftSubstitution.end_date >= today_str,
+        )
+    )
+    active_substs = subst_res.scalars().all()
+    orig_substs_map = {s.original_person_id: s for s in active_substs}
+    sub_substs_map = {s.substitute_person_id: s for s in active_substs}
+
     # 5. Events from past 36 hours (ensures cross-midnight overnight shift events are included across active DB + archives)
     recent_events = await get_events_since_multi_db(db, events_start_utc)
 
@@ -627,9 +639,31 @@ async def compute_duty_roster_data(
                 if only_active and not cur_in_schedule:
                     continue
 
+                # Check active substitutions for today
+                is_substituted = pid in orig_substs_map
+                subst_record = orig_substs_map.get(pid)
+                sub_id = subst_record.substitute_person_id if subst_record else None
+                sub_person_obj = persons.get(sub_id) if sub_id else None
+                sub_name = sub_person_obj.name if sub_person_obj else (f"#{sub_id}" if sub_id else None)
+
+                is_substituting_for = pid in sub_substs_map
+                covered_record = sub_substs_map.get(pid)
+                orig_id = covered_record.original_person_id if covered_record else None
+                orig_person_obj = persons.get(orig_id) if orig_id else None
+                orig_name = orig_person_obj.name if orig_person_obj else (f"#{orig_id}" if orig_id else None)
+
                 # Check live presence via stream processor
-                key = (z.id, pid)
+                # If person is substituted today, check presence of the substitute at this station
+                eval_pids = [sub_id] if (is_substituted and sub_id) else [pid]
+                key = (z.id, eval_pids[0])
                 last_seen = stream_processor._zone_last_seen.get(key, 0)
+                # If both original or substitute have last seen, pick latest
+                if is_substituted and sub_id:
+                    orig_seen = stream_processor._zone_last_seen.get((z.id, pid), 0)
+                    if orig_seen > last_seen:
+                        last_seen = orig_seen
+                        eval_pids.append(pid)
+
                 is_cam_online = stream_processor.is_camera_online(z.camera_id)
                 shift_start_ts = cur_shift_start_dt.timestamp() if cur_shift_start_dt else 0
                 seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
@@ -743,7 +777,7 @@ async def compute_duty_roster_data(
                 # Filter ONLY actual face detection sightings for this shift (from cur_shift_start_dt to min(now_local, cur_shift_end_dt))
                 shift_events = []
                 for ev in recent_events:
-                    if ev.person_id == pid and ev.alert_type not in ("absence_timeout", "camera_disconnected"):
+                    if (ev.person_id in eval_pids) and ev.alert_type not in ("absence_timeout", "camera_disconnected"):
                         ev_loc = _to_local_dt(ev.timestamp)
                         if cur_shift_start_dt and cur_shift_end_dt and (cur_shift_start_dt <= ev_loc <= min(now_local, cur_shift_end_dt)):
                             shift_events.append(ev)
@@ -913,6 +947,12 @@ async def compute_duty_roster_data(
                         arrival_delay_minutes=raw_arrival_delay,
                         is_within_grace_period=is_within_grace,
                         absence_type=absence_type,
+                        is_substituted=is_substituted,
+                        substitute_name=sub_name,
+                        substitute_id=sub_id,
+                        is_substituting_for=is_substituting_for,
+                        original_person_name=orig_name,
+                        original_person_id=orig_id,
                     )
                 )
 

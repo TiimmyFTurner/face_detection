@@ -7,6 +7,7 @@ const SupervisorLeaveModal = {
     _personId: null,
     _personName: '',
     _leaves: [],
+    _candidates: [],
 
     // Shamsi start date components
     _startJy: null,
@@ -215,8 +216,13 @@ const SupervisorLeaveModal = {
         `, 'modal-lg');
 
         try {
-            const leaves = await App.api(`/api/persons/${personId}/leaves`);
+            const [leaves, personsData] = await Promise.all([
+                App.api(`/api/persons/${personId}/leaves`).catch(() => []),
+                App.api('/api/persons').catch(() => [])
+            ]);
             this._leaves = Array.isArray(leaves) ? leaves : [];
+            const allCandidates = (Array.isArray(personsData) ? personsData : []).filter(p => p.id !== personId);
+            this._candidates = allCandidates;
             this.render();
         } catch (err) {
             console.error('Failed to load leaves:', err);
@@ -302,6 +308,12 @@ const SupervisorLeaveModal = {
                                         </td>
                                         <td style="padding: 7px 10px; vertical-align: middle;">
                                             ${this.formatLeaveRange(sDate, eDate)}
+                                            ${l.substitute_person_name ? `
+                                                <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px; font-weight: 600; display: flex; align-items: center; gap: 3px;">
+                                                    <span>🔄</span>
+                                                    <span>${I18n.t('substitute_badge_prefix') || 'جانشین:'} ${this.escapeHtml(l.substitute_person_name)}</span>
+                                                </div>
+                                            ` : ''}
                                         </td>
                                         <td style="padding: 7px 10px; vertical-align: middle;">
                                             ${statusBadge}
@@ -454,6 +466,20 @@ const SupervisorLeaveModal = {
                             <button type="button" class="btn sup-preset-chip" onclick="SupervisorLeaveModal.applyPreset('week')">
                                 ${I18n.t('preset_week') || '۱ هفته'}
                             </button>
+                        </div>
+
+                        <!-- Optional Substitute Colleague Selector -->
+                        <div style="margin-bottom: 0.75rem;">
+                            <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #cbd5e1; margin-bottom: 5px;">
+                                <span>🔄</span>
+                                <span>${I18n.t('leave_substitute_label') || 'تعیین همکار جانشین برای این مرخصی (اختیاری):'}</span>
+                            </label>
+                            <select id="leave-substitute-select" class="form-control form-select sup-leave-select" style="height: 40px; font-size: 0.85rem; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.16); color: #f8fafc; border-radius: 8px;">
+                                <option value="">${I18n.t('no_substitute_option') || '-- بدون جانشین --'}</option>
+                                ${(this._candidates || []).map(c => `
+                                    <option value="${c.id}">${this.escapeHtml(c.name)} ${c.role ? `(${this.escapeHtml(c.role)})` : ''}</option>
+                                `).join('')}
+                            </select>
                         </div>
 
                         <!-- Combined Note / Reason + Submit Button Row -->
@@ -792,13 +818,20 @@ const SupervisorLeaveModal = {
             saveBtn.style.opacity = '0.6';
         }
 
+        const subSelect = document.getElementById('leave-substitute-select');
+        const subPid = subSelect && subSelect.value ? parseInt(subSelect.value, 10) : null;
+        const payload = {
+            start_date: sDate,
+            end_date: eDate,
+            leave_type: type,
+            note: note,
+        };
+        if (subPid) {
+            payload.substitute_person_id = subPid;
+        }
+
         try {
-            const res = await App.api(`/api/persons/${this._personId}/leaves`, 'POST', {
-                start_date: sDate,
-                end_date: eDate,
-                leave_type: type,
-                note: note,
-            });
+            const res = await App.api(`/api/persons/${this._personId}/leaves`, 'POST', payload);
             this._leaves = Array.isArray(res) ? res : [];
             App.showToast(I18n.t('leave_saved') || 'مرخصی با موفقیت ثبت شد', 'success');
             this.render();

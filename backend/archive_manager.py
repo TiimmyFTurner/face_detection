@@ -1124,3 +1124,263 @@ async def get_events_since_multi_db(
     return all_events
 
 
+# ═══════════════════════════════════════════════════════════
+# Historical Archive Retention & Storage Cleanup
+# ═══════════════════════════════════════════════════════════
+
+def cleanup_archived_snapshots(cutoff: datetime) -> Tuple[int, int, int]:
+    """
+    Clean up expired snapshot images from all monthly archives on disk and
+    clear their references in corresponding archive SQLite databases.
+
+    Parameters:
+      cutoff: Cutoff datetime in UTC. Any event/snapshot older than this is purged.
+
+    Returns:
+      Tuple of (deleted_files_count, freed_bytes, records_updated_count)
+    """
+    if cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
+    else:
+        cutoff = cutoff.astimezone(timezone.utc)
+
+    archive_dir = get_archive_dir()
+    if not archive_dir.is_dir():
+        return 0, 0, 0
+
+    cutoff_epoch = cutoff.timestamp()
+    cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+
+    total_deleted_files = 0
+    total_freed_bytes = 0
+    total_records_updated = 0
+
+    for folder in sorted(archive_dir.iterdir()):
+        if not folder.is_dir() or not MONTH_SLUG_REGEX.match(folder.name):
+            continue
+
+        slug = folder.name
+        try:
+            parts = slug.split("_")
+            y, m = int(parts[0]), int(parts[1])
+            m_start, m_end = get_month_date_range(y, m)
+        except Exception:
+            continue
+
+        # If the entire month starts strictly after cutoff, nothing in it is expired.
+        if m_start > cutoff:
+            continue
+
+        db_path = folder / f"events_{slug}.db"
+        snapshots_dir = folder / "snapshots"
+        deleted_in_folder = set()
+
+        if db_path.is_file():
+            try:
+                with sqlite3.connect(str(db_path)) as conn:
+                    conn.execute("PRAGMA busy_timeout = 5000;")
+                    cur = conn.cursor()
+
+                    if m_end <= cutoff:
+                        # Entire month ended before cutoff -> all events in this month are expired
+                        cur.execute(
+                            "SELECT id, snapshot_path FROM events WHERE snapshot_path IS NOT NULL AND snapshot_path != '';"
+                        )
+                    else:
+                        # Month spans cutoff -> only events older than cutoff are expired
+                        cur.execute(
+                            """
+                            SELECT id, snapshot_path FROM events
+                            WHERE snapshot_path IS NOT NULL AND snapshot_path != ''
+                              AND datetime(timestamp) < datetime(?);
+                            """,
+                            (cutoff_str,),
+                        )
+
+                    rows = cur.fetchall()
+                    ids_to_clear = []
+
+                    for row in rows:
+                        ev_id, raw_snap = row[0], row[1]
+                        ids_to_clear.append(ev_id)
+
+                        if not raw_snap or raw_snap.startswith("ref_"):
+                            continue
+                        safe_name = Path(raw_snap).name
+                        if safe_name != raw_snap or ".." in raw_snap:
+                            continue
+
+                        file_path = (snapshots_dir / safe_name).resolve()
+                        if snapshots_dir.resolve() in file_path.parents and file_path.is_file():
+                            try:
+                                sz = file_path.stat().st_size
+                                file_path.unlink(missing_ok=True)
+                                total_deleted_files += 1
+                                total_freed_bytes += sz
+                                deleted_in_folder.add(safe_name)
+                            except OSError as e:
+                                logger.warning("Could not delete archived snapshot %s: %s", file_path, e)
+
+                    if ids_to_clear:
+                        if m_end <= cutoff:
+                            cur.execute(
+                                "UPDATE events SET snapshot_path = '' WHERE snapshot_path IS NOT NULL AND snapshot_path != '';"
+                            )
+                        else:
+                            chunk_size = 500
+                            for i in range(0, len(ids_to_clear), chunk_size):
+                                chunk = ids_to_clear[i : i + chunk_size]
+                                placeholders = ",".join("?" for _ in chunk)
+                                cur.execute(
+                                    f"UPDATE events SET snapshot_path = '' WHERE id IN ({placeholders});",
+                                    chunk,
+                                )
+                        conn.commit()
+                        total_records_updated += len(ids_to_clear)
+
+                        try:
+                            conn.execute("VACUUM;")
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.error("Error cleaning archived snapshots in %s: %s", db_path, e)
+
+        # Also clean orphaned image files on disk in snapshots_dir
+        if snapshots_dir.is_dir():
+            try:
+                for entry in os.scandir(snapshots_dir):
+                    if not entry.is_file():
+                        continue
+                    name = entry.name
+                    if name.startswith("ref_") or name in deleted_in_folder:
+                        continue
+                    lower = name.lower()
+                    if not (lower.endswith(".jpg") or lower.endswith(".jpeg") or lower.endswith(".png")):
+                        continue
+
+                    try:
+                        stat = entry.stat()
+                        # If entire month is older than cutoff, or mtime is older than cutoff
+                        if m_end <= cutoff or stat.st_mtime < cutoff_epoch:
+                            sz = stat.st_size
+                            Path(entry.path).unlink(missing_ok=True)
+                            total_deleted_files += 1
+                            total_freed_bytes += sz
+                    except OSError:
+                        continue
+            except Exception as e:
+                logger.error("Error cleaning orphaned archive snapshots in %s: %s", snapshots_dir, e)
+
+    if total_deleted_files > 0:
+        invalidate_snapshot_cache()
+
+    return total_deleted_files, total_freed_bytes, total_records_updated
+
+
+def cleanup_archived_events(cutoff: datetime) -> Tuple[int, int, int]:
+    """
+    Clean up expired detection event records from all monthly archives on disk,
+    including any associated snapshot image files.
+
+    Parameters:
+      cutoff: Cutoff datetime in UTC. Any event older than this is purged.
+
+    Returns:
+      Tuple of (deleted_files_count, freed_bytes, records_deleted_count)
+    """
+    if cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
+    else:
+        cutoff = cutoff.astimezone(timezone.utc)
+
+    archive_dir = get_archive_dir()
+    if not archive_dir.is_dir():
+        return 0, 0, 0
+
+    cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+
+    total_deleted_files = 0
+    total_freed_bytes = 0
+    total_records_deleted = 0
+
+    for folder in sorted(archive_dir.iterdir()):
+        if not folder.is_dir() or not MONTH_SLUG_REGEX.match(folder.name):
+            continue
+
+        slug = folder.name
+        try:
+            parts = slug.split("_")
+            y, m = int(parts[0]), int(parts[1])
+            m_start, m_end = get_month_date_range(y, m)
+        except Exception:
+            continue
+
+        if m_start > cutoff:
+            continue
+
+        db_path = folder / f"events_{slug}.db"
+        snapshots_dir = folder / "snapshots"
+
+        if db_path.is_file():
+            try:
+                with sqlite3.connect(str(db_path)) as conn:
+                    conn.execute("PRAGMA busy_timeout = 5000;")
+                    cur = conn.cursor()
+
+                    if m_end <= cutoff:
+                        cur.execute("SELECT id, snapshot_path FROM events;")
+                    else:
+                        cur.execute(
+                            "SELECT id, snapshot_path FROM events WHERE datetime(timestamp) < datetime(?);",
+                            (cutoff_str,),
+                        )
+
+                    rows = cur.fetchall()
+                    ids_to_delete = []
+
+                    for row in rows:
+                        ev_id, raw_snap = row[0], row[1]
+                        ids_to_delete.append(ev_id)
+
+                        if raw_snap and not raw_snap.startswith("ref_"):
+                            safe_name = Path(raw_snap).name
+                            if safe_name == raw_snap and ".." not in safe_name:
+                                file_path = (snapshots_dir / safe_name).resolve()
+                                if snapshots_dir.resolve() in file_path.parents and file_path.is_file():
+                                    try:
+                                        sz = file_path.stat().st_size
+                                        file_path.unlink(missing_ok=True)
+                                        total_deleted_files += 1
+                                        total_freed_bytes += sz
+                                    except OSError:
+                                        pass
+
+                    if ids_to_delete:
+                        if m_end <= cutoff:
+                            cur.execute("DELETE FROM events;")
+                        else:
+                            chunk_size = 500
+                            for i in range(0, len(ids_to_delete), chunk_size):
+                                chunk = ids_to_delete[i : i + chunk_size]
+                                placeholders = ",".join("?" for _ in chunk)
+                                cur.execute(
+                                    f"DELETE FROM events WHERE id IN ({placeholders});",
+                                    chunk,
+                                )
+                        conn.commit()
+                        total_records_deleted += len(ids_to_delete)
+
+                        try:
+                            conn.execute("VACUUM;")
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.error("Error cleaning archived events in %s: %s", db_path, e)
+
+    if total_deleted_files > 0:
+        invalidate_snapshot_cache()
+
+    return total_deleted_files, total_freed_bytes, total_records_deleted
+
+
+

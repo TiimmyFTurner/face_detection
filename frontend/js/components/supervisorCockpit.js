@@ -383,30 +383,6 @@ const SupervisorCockpit = {
                                 </span>
                             </div>
 
-                            <!-- User Quick Utility Bar (Language Toggle & Logout) -->
-                            <div class="sup-user-quick-bar">
-                                <div class="sup-quick-user-info">
-                                    <span>👤 <strong>${this.escapeHtml(userName)}</strong></span>
-                                    ${user.username ? `<span style="direction: ltr; display: inline-block; font-size: 0.72rem; color: var(--text-tertiary); font-family: monospace;">(@${this.escapeHtml(user.username)})</span>` : ''}
-                                </div>
-                                <div class="sup-quick-actions-row">
-                                    <!-- Quick Language Switch -->
-                                    <button type="button" class="btn btn-outline-secondary btn-xs sup-strip-lang-btn" onclick="I18n.setLanguage('${isRtl ? 'en' : 'fa'}')" title="${isRtl ? 'Switch to English' : 'تغییر زبان به فارسی'}">
-                                        <span>🌐</span>
-                                        <span>${isRtl ? 'English' : 'فارسی'}</span>
-                                    </button>
-                                    <!-- Change Password -->
-                                    <button type="button" class="btn btn-outline-secondary btn-xs sup-strip-pwd-btn" onclick="Auth.showChangePasswordModal()" title="${I18n.t('change_password') || 'تغییر کلمه عبور'}">
-                                        <span>🔑</span>
-                                        <span>${isRtl ? 'تغییر رمز' : 'Password'}</span>
-                                    </button>
-                                    <!-- Logout -->
-                                    <button type="button" class="btn btn-outline-danger btn-xs sup-strip-logout-btn" onclick="Auth.logout()" title="${I18n.t('logout') || 'خروج از حساب'}">
-                                        <span>🚪</span>
-                                        <span>${I18n.t('logout') || 'خروج'}</span>
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 

@@ -290,14 +290,33 @@ async def cleanup_old_snapshots(
     except Exception as e:
         logger.error("Error during orphaned snapshot cleanup: %s", e)
 
+    # Clean archived snapshots older than cutoff across all monthly archive directories
+    arch_deleted_files = 0
+    try:
+        from backend.archive_manager import cleanup_archived_snapshots
+        arch_deleted_files, arch_freed_bytes, arch_records_updated = await asyncio.to_thread(
+            cleanup_archived_snapshots, cutoff
+        )
+        deleted_files += arch_deleted_files
+        freed_bytes += arch_freed_bytes
+        records_updated += arch_records_updated
+    except Exception as e:
+        logger.error("Error during archive snapshot cleanup: %s", e)
+
     freed_mb = round(freed_bytes / (1024 * 1024), 2)
     logger.info(
-        "Snapshot cleanup finished: deleted %d files, freed %.2f MB, cleared %d DB event snapshot references (retention=%d days).",
+        "Snapshot cleanup finished: deleted %d files (%d from archives), freed %.2f MB, cleared %d DB event snapshot references (retention=%d days).",
         deleted_files,
+        arch_deleted_files,
         freed_mb,
         records_updated,
         days,
     )
+
+    msg = f"Successfully deleted {deleted_files} old snapshots"
+    if arch_deleted_files > 0:
+        msg += f" ({arch_deleted_files} from monthly archives)"
+    msg += f" and freed {freed_mb} MB."
 
     return {
         "success": True,
@@ -305,7 +324,7 @@ async def cleanup_old_snapshots(
         "freed_bytes": freed_bytes,
         "freed_mb": freed_mb,
         "records_removed": records_updated,
-        "message": f"Successfully deleted {deleted_files} old snapshots and freed {freed_mb} MB.",
+        "message": msg,
     }
 
 
@@ -381,14 +400,33 @@ async def cleanup_old_events(
             "message": f"Event log cleanup encountered an error: {e}",
         }
 
+    # Clean archived event logs older than cutoff across all monthly archive directories
+    arch_records_deleted = 0
+    try:
+        from backend.archive_manager import cleanup_archived_events
+        arch_deleted_files, arch_freed_bytes, arch_records_deleted = await asyncio.to_thread(
+            cleanup_archived_events, cutoff
+        )
+        deleted_files += arch_deleted_files
+        freed_bytes += arch_freed_bytes
+        records_deleted += arch_records_deleted
+    except Exception as e:
+        logger.error("Error during archive event logs cleanup: %s", e)
+
     freed_mb = round(freed_bytes / (1024 * 1024), 2)
     logger.info(
-        "Event logs cleanup finished: deleted %d records from DB and %d associated snapshot files (freed %.2f MB, retention=%d days).",
+        "Event logs cleanup finished: deleted %d records (%d from archives) and %d associated snapshot files (freed %.2f MB, retention=%d days).",
         records_deleted,
+        arch_records_deleted,
         deleted_files,
         freed_mb,
         days,
     )
+
+    msg = f"Successfully deleted {records_deleted} old event logs"
+    if arch_records_deleted > 0:
+        msg += f" ({arch_records_deleted} from monthly archives)"
+    msg += f" ({deleted_files} files removed, {freed_mb} MB freed)."
 
     return {
         "success": True,
@@ -396,7 +434,7 @@ async def cleanup_old_events(
         "freed_bytes": freed_bytes,
         "freed_mb": freed_mb,
         "records_removed": records_deleted,
-        "message": f"Successfully deleted {records_deleted} old event logs ({deleted_files} files removed, {freed_mb} MB freed).",
+        "message": msg,
     }
 
 

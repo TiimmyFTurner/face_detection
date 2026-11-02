@@ -7245,7 +7245,8 @@ html[dir="rtl"] textarea {
     }
 }
 
-
+
+
 
 /* ── Day Absence Intervals Dialog Overlay ── */
 .day-absence-modal-overlay {
@@ -7398,37 +7399,6 @@ html[dir="ltr"] .sup-header-user-menu {
     left: auto !important;
 }
 
-.sup-user-quick-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-top: 0.55rem;
-    padding-top: 0.45rem;
-    border-top: 1px dashed rgba(255, 255, 255, 0.08);
-}
-.sup-quick-user-info {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-.sup-quick-actions-row {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-.sup-quick-actions-row .btn {
-    font-size: 0.72rem;
-    padding: 4px 9px;
-    border-radius: 9999px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    white-space: nowrap;
-}
 
 /* ═══════════════════════════════════════════════════════════
    Supervisor Cockpit — Phone & Mobile Screen Optimizations

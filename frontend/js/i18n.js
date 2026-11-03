@@ -995,6 +995,21 @@ const I18n = {
             sort_absence: 'بیشترین زمان غیبت',
             filter_section: 'فیلتر بخش',
             all_sections: 'همه بخش‌ها',
+            report_attendance_btn: 'گزارش اکسل حضور',
+            report_modal_title: 'گزارش اکسل حضور و غیاب پرسنل',
+            report_modal_subtitle: 'صدور فایل استاندارد اکسل شامل حضور مفید، تأخیر، تعجیل، غیبت‌ها و انضباط شیفت',
+            report_quick_today: 'امروز',
+            report_quick_yesterday: 'دیروز',
+            report_date_select_label: 'تاریخ گزارش:',
+            report_section_label: 'بخش / واحد سازمانی:',
+            report_all_sections: 'همه بخش‌های مجاز من',
+            report_person_label: 'پرسنل انتخابی:',
+            report_all_persons: 'همه پرسنل (گزارش تیمی)',
+            report_download_btn: 'دریافت گزارش اکسل (.xlsx)',
+            report_downloading: 'در حال آماده‌سازی گزارش اکسل...',
+            report_download_success: 'فایل اکسل با موفقیت دانلود شد.',
+            system_language: 'زبان سامانه',
+            no_recent_events: 'هیچ رویدادی در این بازه ثبت نشده است.',
             quick_leave_action: 'ثبت مرخصی پرسنل',
             timeline_filter_all: 'همه ترددها',
             timeline_filter_alerts: 'فقط هشدارها',
@@ -2188,6 +2203,21 @@ const I18n = {
             analytics_and_report: 'Comprehensive Analytics & Report',
             all_assigned_sections: 'All Supervised Sections',
             privacy_shield_label: '100% Privacy Protection (No Photos/Cameras)',
+            report_attendance_btn: 'Excel Attendance Report',
+            report_modal_title: 'Personnel Attendance Excel Report',
+            report_modal_subtitle: 'Export comprehensive shift attendance, presence, delays, absences, and compliance',
+            report_quick_today: 'Today',
+            report_quick_yesterday: 'Yesterday',
+            report_date_select_label: 'Report Date:',
+            report_section_label: 'Section / Department:',
+            report_all_sections: 'All My Permitted Sections',
+            report_person_label: 'Target Staff:',
+            report_all_persons: 'All Personnel (Team Report)',
+            report_download_btn: 'Download Excel (.xlsx)',
+            report_downloading: 'Generating and downloading Excel report...',
+            report_download_success: 'Excel report downloaded successfully.',
+            system_language: 'Language',
+            no_recent_events: 'No events recorded in this period.',
             quick_leave_action: 'Record Leave',
             view_today_events: 'View Today Events Log',
             sort_urgency: 'Urgency Status (Absent > Grace > Break > Present)',
@@ -2278,6 +2308,10 @@ const I18n = {
      * Check if currently in RTL (Persian) mode.
      */
     isRTL() {
+        return I18n._lang === 'fa';
+    },
+
+    isRtl() {
         return I18n._lang === 'fa';
     },
 

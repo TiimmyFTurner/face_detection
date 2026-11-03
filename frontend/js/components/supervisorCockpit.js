@@ -307,16 +307,21 @@ const SupervisorCockpit = {
                         </button>
                         <div class="user-dropdown-menu sup-header-user-menu" id="sup-header-user-menu" style="display: none;">
                             <div class="user-dropdown-header">
-                                <div class="user-dropdown-name">${this.escapeHtml(userName)}</div>
-                                <div class="user-dropdown-username" style="direction: ltr; text-align: start;">@${this.escapeHtml(user.username || '')}</div>
-                                <span class="badge sup-role-badge" style="font-size: 0.68rem; margin-top: 4px; display: inline-block; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 7px; border-radius: 9999px;">👑 ${I18n.t('role_supervisor_badge') || 'سرپرست واحد'}</span>
+                                <div class="user-dropdown-name" style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 2px;">${this.escapeHtml(userName)}</div>
+                                <div class="user-dropdown-username" style="display: inline-flex; align-items: center; font-size: 0.76rem; color: var(--text-tertiary); direction: ltr; unicode-bidi: isolate;">@${this.escapeHtml(user.username || '')}</div>
+                                <div style="margin-top: 6px;">
+                                    <span class="badge sup-role-badge" style="font-size: 0.68rem; display: inline-flex; align-items: center; gap: 4px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 8px; border-radius: 9999px;">👑 ${I18n.t('role_supervisor_badge') || 'سرپرست واحد'}</span>
+                                </div>
                             </div>
                             <div class="user-dropdown-divider"></div>
                             <div style="padding: 0.45rem 0.65rem;">
-                                <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 5px;">🌐 ${I18n.t('system_language') || 'زبان سیستم'}</div>
+                                <div style="font-size: 0.74rem; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; gap: 5px;">
+                                    <span>🌐</span>
+                                    <span>${I18n.t('system_language') || 'زبان سامانه'}</span>
+                                </div>
                                 <div class="lang-btn-group" style="display: flex; gap: 4px; width: 100%;">
-                                    <button type="button" class="lang-btn ${isRtl ? 'active' : ''}" style="flex: 1; padding: 4px 6px; font-size: 0.74rem;" onclick="I18n.setLanguage('fa')">فارسی</button>
-                                    <button type="button" class="lang-btn ${!isRtl ? 'active' : ''}" style="flex: 1; padding: 4px 6px; font-size: 0.74rem;" onclick="I18n.setLanguage('en')">English</button>
+                                    <button type="button" class="lang-btn ${isRtl ? 'active' : ''}" style="flex: 1; padding: 4px 6px; font-size: 0.74rem; border-radius: 6px;" onclick="I18n.setLanguage('fa')">فارسی</button>
+                                    <button type="button" class="lang-btn ${!isRtl ? 'active' : ''}" style="flex: 1; padding: 4px 6px; font-size: 0.74rem; border-radius: 6px;" onclick="I18n.setLanguage('en')">English</button>
                                 </div>
                             </div>
                             <div class="user-dropdown-divider"></div>
@@ -377,10 +382,7 @@ const SupervisorCockpit = {
                                         : `<span class="badge badge-subtle text-xs">${I18n.t('all_assigned_sections') || 'کل بخش‌ها'}</span>`
                                     }
                                 </div>
-                                <span class="sup-strip-divider" style="color: var(--border-color);">|</span>
-                                <span class="sup-strip-privacy" style="color: #60a5fa; display: inline-flex; align-items: center; gap: 4px;">
-                                    🔒 ${I18n.t('privacy_shield_label') || 'حفاظت حریم خصوصی ۱۰۰٪ (بدون تصویر و دوربین)'}
-                                </span>
+
                             </div>
 
                         </div>
@@ -394,7 +396,11 @@ const SupervisorCockpit = {
                             <span style="color: var(--border-color);">|</span>
                             <span id="sup-live-time" class="sup-live-clock">--:--:--</span>
                         </div>
-                        <div class="sup-strip-btn-group">
+                        <div class="sup-strip-btn-group" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-outline-primary btn-sm sup-strip-btn" onclick="SupervisorReportModal.show()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2); background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.45); color: #60a5fa;">
+                                <span>📊</span>
+                                <span>${I18n.t('report_attendance_btn') || 'گزارش اکسل حضور'}</span>
+                            </button>
                             <button type="button" class="btn btn-outline-primary btn-sm sup-strip-btn" onclick="SupervisorCockpit.showQuickLeavePicker()" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
                                 <span>🏖️</span>
                                 <span>${I18n.t('quick_leave_action') || 'ثبت مرخصی پرسنل'}</span>
@@ -529,9 +535,7 @@ const SupervisorCockpit = {
                                     <span>📋</span>
                                     <span>${I18n.t('shift_activity_timeline') || 'رویدادها و هشدارهای تردد پرسنل'}</span>
                                 </h4>
-                                <small class="text-muted" style="font-size: 0.78rem;">
-                                    🔒 ${I18n.t('timeline_privacy_notice') || 'ثبت رویدادها به صورت متنی (بدون تصاویر اسنپ‌شات)'}
-                                </small>
+
                             </div>
 
                             <!-- Timeline Filter Tabs -->

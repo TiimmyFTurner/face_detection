@@ -417,6 +417,10 @@ def get_relevant_archive_dbs(
     if not archive_dir.is_dir():
         return []
 
+    # Normalize callers' bounds to naive UTC for safe, uniform comparisons
+    s_dt = _normalize_utc_naive(start_dt) if start_dt is not None else None
+    e_dt = _normalize_utc_naive(end_dt) if end_dt is not None else None
+
     relevant = []
     for folder in sorted(archive_dir.iterdir(), reverse=True):
         if not folder.is_dir() or not MONTH_SLUG_REGEX.match(folder.name):
@@ -431,13 +435,15 @@ def get_relevant_archive_dbs(
             parts = slug.split("_")
             y, m = int(parts[0]), int(parts[1])
             m_start, m_end = get_month_date_range(y, m)
+            m_start_naive = m_start.replace(tzinfo=None)
+            m_end_naive = m_end.replace(tzinfo=None)
         except Exception:
             continue
 
         # Check overlap
-        if start_dt is not None and m_end <= start_dt:
+        if s_dt is not None and m_end_naive <= s_dt:
             continue
-        if end_dt is not None and m_start > end_dt:
+        if e_dt is not None and m_start_naive > e_dt:
             continue
 
         relevant.append((slug, db_path))

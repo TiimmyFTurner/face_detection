@@ -1109,3 +1109,197 @@ def generate_person_analytics_csv(
     csv_text = output.getvalue()
     return b"\xef\xbb\xbf" + csv_text.encode("utf-8")
 
+
+# ── Supervisor Daily Attendance Export (Excel) ────────────────────────
+
+def generate_supervisor_daily_attendance_xlsx(
+    records: list[dict],
+    target_date: datetime,
+    supervisor_name: str = "",
+    section_name: str = "",
+    report_created_at: Optional[datetime] = None,
+) -> bytes:
+    """
+    Generate a comprehensive executive Excel (.xlsx) file for supervisor daily attendance.
+    Features:
+    - RTL (Right-to-Left) sheet
+    - Header banner with dual Shamsi and Gregorian dates, supervisor name, section name
+    - Executive KPI summary card block (Total, Present, Absent, Leave/Off, Avg Compliance)
+    - 16 data columns with color-coded status badges and compliance tiers
+    """
+    if report_created_at is None:
+        report_created_at = datetime.now()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "گزارش حضور روزانه"
+    ws.sheet_view.rightToLeft = True
+
+    shamsi_target_str = format_jalali_date(target_date)
+    gregorian_target_str = target_date.strftime("%Y-%m-%d")
+    day_fa = DAY_NAMES_FA.get(target_date.strftime("%a"), target_date.strftime("%a"))
+    shamsi_created_str = format_jalali_datetime(report_created_at)
+
+    # 1. Title Banner (Row 1)
+    ws.merge_cells("A1:P1")
+    title_cell = ws["A1"]
+    title_cell.value = f"🎯 سامانه پایش هوشمند FaceTrack — گزارش جامع حضور و غیاب پرسنل ({day_fa} {shamsi_target_str})"
+    title_cell.font = FONT_TITLE
+    title_cell.fill = FILL_TITLE
+    title_cell.alignment = ALIGN_CENTER
+    ws.row_dimensions[1].height = 36
+
+    # 2. Sub-banner / Metadata (Row 2)
+    sec_display = section_name or "همه بخش‌های تحت نظر"
+    sup_display = supervisor_name or "سرپرست واحد"
+    ws.merge_cells("A2:P2")
+    meta_cell = ws["A2"]
+    meta_cell.value = (
+        f"تاریخ روز: {day_fa} {shamsi_target_str} (شمسی) | {gregorian_target_str} (میلادی)  •  "
+        f"سرپرست: {sup_display}  •  بخش: {sec_display}  •  "
+        f"تعداد پرسنل: {len(records)} نفر  •  زمان صدور: {shamsi_created_str}"
+    )
+    meta_cell.font = FONT_META
+    meta_cell.fill = FILL_TITLE
+    meta_cell.alignment = ALIGN_CENTER
+    ws.row_dimensions[2].height = 22
+
+    # Row 3 empty
+    ws.append([])
+    ws.row_dimensions[3].height = 10
+
+    # 3. Executive KPI Summary Cards (Rows 4 & 5)
+    total_staff = len(records)
+    total_present = sum(1 for r in records if r.get("status_code") == "present")
+    total_absent = sum(1 for r in records if r.get("status_code") == "absent")
+    total_leave = sum(1 for r in records if r.get("status_code") in ("leave", "off_duty"))
+
+    compliance_values = [float(r.get("compliance_pct", 100.0) or 0.0) for r in records]
+    avg_compliance = round(sum(compliance_values) / total_staff, 1) if total_staff > 0 else 100.0
+
+    kpi_headers = ["تعداد کل پرسنل", "حاضر در شیفت", "غایب / عدم حضور", "مرخصی / آف شیفت", "میانگین انضباط شیفت"]
+    kpi_values = [str(total_staff), str(total_present), str(total_absent), str(total_leave), f"{avg_compliance}%"]
+
+    for c_idx, (kh, kv) in enumerate(zip(kpi_headers, kpi_values), start=2):
+        cell_h = ws.cell(row=4, column=c_idx, value=kh)
+        cell_h.font = Font(name="Tahoma", size=9, bold=True, color="94A3B8")
+        cell_h.fill = FILL_KPI_HEADER
+        cell_h.alignment = ALIGN_CENTER
+        cell_h.border = BORDER_CELL
+
+        cell_v = ws.cell(row=5, column=c_idx, value=kv)
+        cell_v.font = Font(name="Tahoma", size=12, bold=True, color="FFFFFF")
+        cell_v.fill = FILL_TITLE
+        cell_v.alignment = ALIGN_CENTER
+        cell_v.border = BORDER_CELL
+    ws.row_dimensions[4].height = 20
+    ws.row_dimensions[5].height = 26
+
+    # Row 6 empty
+    ws.append([])
+    ws.row_dimensions[6].height = 12
+
+    # 4. Table Headers (Row 7)
+    headers = [
+        "ردیف",
+        "نام و نام خانوادگی",
+        "سمت / نقش",
+        "بخش / واحد",
+        "ایستگاه کاری / زون",
+        "برنامه شیفت",
+        "وضعیت حضور",
+        "ساعت ورود (اولین تردد)",
+        "میزان تأخیر ورود",
+        "ساعت خروج (آخرین تردد)",
+        "تعجیل در خروج",
+        "مدت حضور مفید",
+        "مجموع غیبت در شیفت",
+        "درصد انضباط شیفت",
+        "تعداد دفعات خروج",
+        "جزئیات بازه‌های زمانی غیبت",
+    ]
+    ws.append(headers)
+    header_row_idx = 7
+    ws.row_dimensions[header_row_idx].height = 28
+    for col_idx in range(1, len(headers) + 1):
+        c = ws.cell(row=header_row_idx, column=col_idx)
+        c.font = FONT_HEADER
+        c.fill = FILL_HEADER
+        c.alignment = ALIGN_CENTER
+        c.border = BORDER_CELL
+
+    # 5. Data Rows (Row 8+)
+    STATUS_COLORS_DAILY = {
+        "present": {"fill": "DCFCE7", "font": "15803D"},        # Emerald
+        "absent": {"fill": "FEE2E2", "font": "B91C1C"},         # Red
+        "leave": {"fill": "DBEAFE", "font": "1D4ED8"},          # Blue
+        "off_duty": {"fill": "EDE9FE", "font": "6D28D9"},       # Purple
+        "no_shift": {"fill": "F1F5F9", "font": "475569"},       # Gray
+    }
+
+    for idx, r in enumerate(records, start=1):
+        row_num = header_row_idx + idx
+        ws.row_dimensions[row_num].height = 25
+        fill_zebra = FILL_ZEBRA_EVEN if idx % 2 == 0 else FILL_ZEBRA_ODD
+
+        status_code = r.get("status_code", "no_shift")
+        style_info = STATUS_COLORS_DAILY.get(status_code, STATUS_COLORS_DAILY["no_shift"])
+        status_fill = PatternFill(start_color=style_info["fill"], end_color=style_info["fill"], fill_type="solid")
+        status_font = Font(name="Tahoma", size=9, bold=True, color=style_info["font"])
+
+        compliance_pct = float(r.get("compliance_pct", 100.0) or 0.0)
+        if compliance_pct >= 90.0:
+            comp_font = Font(name="Tahoma", size=9, bold=True, color="15803D")
+        elif compliance_pct >= 75.0:
+            comp_font = Font(name="Tahoma", size=9, bold=True, color="B45309")
+        else:
+            comp_font = Font(name="Tahoma", size=9, bold=True, color="B91C1C")
+
+        row_values = [
+            idx,
+            r.get("person_name", ""),
+            r.get("role", "") or "—",
+            r.get("section", "") or "—",
+            r.get("zone_name", "") or "—",
+            r.get("shift_window", "") or "—",
+            r.get("status", ""),
+            r.get("arrival_time", "") or "—",
+            r.get("arrival_delay_str", "") or "بدون تأخیر",
+            r.get("departure_time", "") or "—",
+            r.get("early_departure_str", "") or "بدون تعجیل",
+            r.get("presence_str", "") or "0 دقیقه",
+            r.get("absence_str", "") or "0 دقیقه",
+            f"{compliance_pct}%",
+            r.get("absence_count", 0),
+            r.get("absence_intervals_str", "") or "—",
+        ]
+
+        for col_idx, val in enumerate(row_values, start=1):
+            cell = ws.cell(row=row_num, column=col_idx, value=val)
+            cell.border = BORDER_CELL
+            if col_idx == 7:  # Status
+                cell.fill = status_fill
+                cell.font = status_font
+                cell.alignment = ALIGN_CENTER
+            elif col_idx == 14:  # Compliance %
+                cell.fill = fill_zebra
+                cell.font = comp_font
+                cell.alignment = ALIGN_CENTER
+            elif col_idx in (1, 6, 8, 9, 10, 11, 12, 13, 15):
+                cell.fill = fill_zebra
+                cell.font = FONT_DATA
+                cell.alignment = ALIGN_CENTER
+            elif col_idx in (2, 3, 4, 5):
+                cell.fill = fill_zebra
+                cell.font = FONT_DATA
+                cell.alignment = ALIGN_RIGHT
+            else:
+                cell.fill = fill_zebra
+                cell.font = FONT_DATA
+                cell.alignment = ALIGN_LEFT
+
+    _autofit_columns(ws, min_width=11, max_width=50)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()

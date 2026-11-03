@@ -26,8 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth import require_permission, require_any_permission, get_user_scope
 from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User, ShiftSubstitution
-from backend.archive_manager import get_events_since_multi_db
-from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv
+from backend.archive_manager import get_events_since_multi_db, get_person_events_multi_db
+from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv, generate_supervisor_daily_attendance_xlsx
 from backend.shift_utils import get_rotation_day_state, get_interval_free_minutes
 from backend.schemas import (
     CameraZoneCreate,
@@ -51,10 +51,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["zones"])
 
 
-def _to_local_dt(dt: datetime) -> datetime:
+def _to_local_dt(dt: Any) -> datetime:
     """Convert UTC or naive datetime to local timezone datetime (naive representation for direct comparisons)."""
     if dt is None:
         return datetime.now()
+    if isinstance(dt, str):
+        from backend.archive_manager import _normalize_utc_naive
+        dt = _normalize_utc_naive(dt)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone().replace(tzinfo=None)
@@ -1109,6 +1112,488 @@ async def export_duty_roster(
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+async def compute_supervisor_attendance_report(
+    db: AsyncSession,
+    target_date_str: str,
+    section: Optional[str] = None,
+    person_id: Optional[int] = None,
+    user: Optional[User] = None,
+) -> dict:
+    """
+    Compute full-day attendance telemetry for all personnel scoped under a supervisor on a target date.
+    Accurately handles:
+    - Today's in-progress shift vs historical concluded days
+    - Scheduled shift matching, custom person shifts, zone shifts, and shift templates
+    - Free times (lunch / breaks) deduction from absence and required shift duration
+    - Approved daily leaves and off-duty records
+    - Active shift substitutions (who is subbing for whom)
+    - Full absence metrics: arrival delay, mid-shift gaps, early departure, compliance %
+    """
+    try:
+        target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    except Exception:
+        target_date = datetime.now().date()
+        target_date_str = target_date.strftime("%Y-%m-%d")
+
+    day_name = target_date.strftime("%a")  # e.g., "Mon", "Sat"
+    local_now = datetime.now()
+    is_today = (target_date == local_now.date())
+
+    scope = await get_user_scope(user, db) if user else None
+
+    # Fetch persons
+    stmt = select(Person)
+    if scope and scope.is_scoped and scope.person_ids is not None:
+        stmt = stmt.where(Person.id.in_(scope.person_ids))
+    if section and section != "all":
+        stmt = stmt.where(Person.section == section)
+    if person_id and person_id > 0:
+        stmt = stmt.where(Person.id == person_id)
+    stmt = stmt.order_by(Person.section.asc(), Person.name.asc())
+    p_res = await db.execute(stmt)
+    persons = p_res.scalars().all()
+
+    # Fetch active zones
+    z_res = await db.execute(select(CameraZone).where(CameraZone.is_active == True))
+    all_zones = z_res.scalars().all()
+    zone_by_person: dict[int, CameraZone] = {}
+    for z in all_zones:
+        pids = _parse_list_field(z.assigned_person_ids, [])
+        for pid in pids:
+            if isinstance(pid, int) and pid not in zone_by_person:
+                zone_by_person[pid] = z
+
+    # Fetch active substitutions covering target_date
+    sub_res = await db.execute(
+        select(ShiftSubstitution).where(
+            ShiftSubstitution.start_date <= target_date_str,
+            ShiftSubstitution.end_date >= target_date_str,
+        )
+    )
+    active_subs = sub_res.scalars().all()
+    sub_by_original: dict[int, ShiftSubstitution] = {s.original_person_id: s for s in active_subs}
+    sub_by_substitute: dict[int, ShiftSubstitution] = {s.substitute_person_id: s for s in active_subs}
+
+    # Preload person names to safely resolve substitutions without async relationship lazy-loading
+    all_p_res = await db.execute(select(Person.id, Person.name))
+    person_name_map: dict[int, str] = {row[0]: row[1] for row in all_p_res.all()}
+
+    # Fetch shift templates
+    t_res = await db.execute(select(ShiftTemplate))
+    templates_by_id = {t.id: t for t in t_res.scalars().all()}
+
+    # Calculate UTC window for target_date (timezone-aware UTC for multi-db archive queries)
+    day_start_local = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0)
+    day_end_local = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59)
+    tz_offset = local_now.astimezone().utcoffset() or timedelta(0)
+    start_utc = (day_start_local - tz_offset).replace(tzinfo=timezone.utc)
+    end_utc = (day_end_local - tz_offset).replace(tzinfo=timezone.utc)
+
+    records = []
+
+    for idx, p in enumerate(persons, start=1):
+        z = zone_by_person.get(p.id)
+        zone_name = z.name if z else "فاقد ایستگاه منتسب"
+        sub_orig = sub_by_original.get(p.id)
+        sub_sub = sub_by_substitute.get(p.id)
+
+        # 1. Resolve Shift Definition
+        s_name = ""
+        s_start = "08:00"
+        s_end = "16:00"
+        s_days = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"]
+        s_timeout = 5
+        s_grace = 10
+        s_free = []
+
+        if p.custom_shift and isinstance(p.custom_shift, dict):
+            cs = p.custom_shift
+            s_name = cs.get("name") or "شیفت اختصاصی"
+            s_start = cs.get("start_time") or s_start
+            s_end = cs.get("end_time") or s_end
+            s_days = _parse_list_field(cs.get("active_days"), s_days)
+            s_timeout = int(cs.get("absence_timeout_minutes") or s_timeout)
+            s_grace = int(cs.get("grace_period_minutes") or s_grace)
+            s_free = _parse_list_field(cs.get("free_times"), [])
+        elif z:
+            s_name = z.name
+            s_start = z.start_time or s_start
+            s_end = z.end_time or s_end
+            s_days = _parse_list_field(z.active_days, s_days)
+            s_timeout = int(z.absence_timeout_minutes or s_timeout)
+            s_grace = int(z.grace_period_minutes or s_grace)
+            s_free = _parse_list_field(z.free_times, [])
+        elif p.shift_template_id and p.shift_template_id in templates_by_id:
+            st = templates_by_id[p.shift_template_id]
+            s_name = st.name
+            s_start = st.start_time or s_start
+            s_end = st.end_time or s_end
+            s_days = _parse_list_field(st.active_days, s_days)
+            s_timeout = int(st.absence_timeout_minutes or s_timeout)
+            s_grace = int(st.grace_period_minutes or s_grace)
+            s_free = _parse_list_field(st.free_times, [])
+
+        # 2. Check Leaves
+        is_on_leave = False
+        leave_label = ""
+        for l in _parse_list_field(p.leaves, []):
+            if isinstance(l, dict):
+                s_d = str(l.get("start_date", "")).strip()
+                e_d = str(l.get("end_date", "")).strip() or s_d
+                if s_d <= target_date_str <= e_d:
+                    is_on_leave = True
+                    lt = l.get("leave_type")
+                    leave_label = "مرخصی روزانه" if lt == "daily_leave" else ("استعلاجی" if lt == "sick" else "آف شیفت")
+                    if l.get("note"):
+                        leave_label += f" ({l.get('note')})"
+                    break
+
+        # 3. Calculate Shift Window
+        try:
+            sh, sm = map(int, s_start.split(":"))
+            eh, em = map(int, s_end.split(":"))
+        except Exception:
+            sh, sm, eh, em = 8, 0, 16, 0
+
+        shift_start_dt = datetime(target_date.year, target_date.month, target_date.day, sh, sm, 0)
+        if eh < sh or (eh == sh and em < sm):
+            shift_end_dt = datetime(target_date.year, target_date.month, target_date.day, eh, em, 0) + timedelta(days=1)
+            is_overnight = True
+        else:
+            shift_end_dt = datetime(target_date.year, target_date.month, target_date.day, eh, em, 0)
+            is_overnight = False
+
+        shift_dur_mins = max(1, int((shift_end_dt - shift_start_dt).total_seconds() // 60))
+        shift_dur_h = round(shift_dur_mins / 60, 1)
+        shift_window_str = f"{s_start} - {s_end} ({shift_dur_h} ساعت)"
+        if is_overnight:
+            shift_window_str += " 🌙"
+
+        # Check if day was scheduled
+        is_scheduled = (day_name in s_days) and (not is_on_leave)
+
+        # 4. Fetch person events for this day
+        raw_events = await get_person_events_multi_db(db, p.id, start_utc, end_utc)
+        p_events = sorted(raw_events, key=lambda ev: ev.timestamp)
+
+        # 5. Build Attendance Record
+        if is_on_leave:
+            sub_info = ""
+            if sub_orig:
+                s_name = person_name_map.get(sub_orig.substitute_person_id, "جانشین")
+                sub_info = f" (جانشین: {s_name})"
+            records.append({
+                "row_index": idx,
+                "person_id": p.id,
+                "person_name": p.name,
+                "role": p.role,
+                "section": p.section,
+                "zone_name": zone_name,
+                "shift_window": shift_window_str,
+                "status": f"{leave_label}{sub_info}",
+                "status_code": "leave",
+                "arrival_time": "—",
+                "arrival_delay_str": "بدون تأخیر (معاف)",
+                "departure_time": "—",
+                "early_departure_str": "بدون تعجیل",
+                "presence_str": "0 دقیقه",
+                "absence_str": "0 دقیقه (معاف از شیفت)",
+                "compliance_pct": 100.0,
+                "absence_count": 0,
+                "absence_intervals_str": "مرخصی مصوب معاف از کسر کار",
+            })
+            continue
+
+        if not is_scheduled:
+            if p_events:
+                first_loc = _to_local_dt(p_events[0].timestamp)
+                last_loc = _to_local_dt(p_events[-1].timestamp)
+                dur = max(0, int((last_loc - first_loc).total_seconds() // 60))
+                records.append({
+                    "row_index": idx,
+                    "person_id": p.id,
+                    "person_name": p.name,
+                    "role": p.role,
+                    "section": p.section,
+                    "zone_name": zone_name,
+                    "shift_window": shift_window_str,
+                    "status": "حضور خارج از برنامه (اضافه کار)",
+                    "status_code": "present",
+                    "arrival_time": first_loc.strftime("%H:%M:%S"),
+                    "arrival_delay_str": "خارج از شیفت",
+                    "departure_time": last_loc.strftime("%H:%M:%S"),
+                    "early_departure_str": "—",
+                    "presence_str": _format_duration(dur * 60),
+                    "absence_str": "0 دقیقه",
+                    "compliance_pct": 100.0,
+                    "absence_count": 0,
+                    "absence_intervals_str": "تردد خارج از شیفت موظف",
+                })
+            else:
+                records.append({
+                    "row_index": idx,
+                    "person_id": p.id,
+                    "person_name": p.name,
+                    "role": p.role,
+                    "section": p.section,
+                    "zone_name": zone_name,
+                    "shift_window": shift_window_str,
+                    "status": "روز بدون شیفت (استراحت)",
+                    "status_code": "no_shift",
+                    "arrival_time": "—",
+                    "arrival_delay_str": "—",
+                    "departure_time": "—",
+                    "early_departure_str": "—",
+                    "presence_str": "0 دقیقه",
+                    "absence_str": "0 دقیقه",
+                    "compliance_pct": 100.0,
+                    "absence_count": 0,
+                    "absence_intervals_str": "روز تعطیل / غیرموظف",
+                })
+            continue
+
+        # Scheduled Work Day
+        free_mins = get_interval_free_minutes(shift_start_dt, shift_end_dt, s_free)
+        req_work_mins = max(1, shift_dur_mins - free_mins)
+
+        # Filter events during shift
+        shift_events = [ev for ev in p_events if shift_start_dt <= _to_local_dt(ev.timestamp) <= shift_end_dt]
+
+        if not shift_events:
+            if is_today and local_now < shift_start_dt:
+                records.append({
+                    "row_index": idx,
+                    "person_id": p.id,
+                    "person_name": p.name,
+                    "role": p.role,
+                    "section": p.section,
+                    "zone_name": zone_name,
+                    "shift_window": shift_window_str,
+                    "status": "پیش از شروع شیفت",
+                    "status_code": "no_shift",
+                    "arrival_time": "—",
+                    "arrival_delay_str": "—",
+                    "departure_time": "—",
+                    "early_departure_str": "—",
+                    "presence_str": "0 دقیقه",
+                    "absence_str": "0 دقیقه",
+                    "compliance_pct": 100.0,
+                    "absence_count": 0,
+                    "absence_intervals_str": "شیفت هنوز آغاز نشده است",
+                })
+            else:
+                sub_note = ""
+                if sub_orig:
+                    s_name = person_name_map.get(sub_orig.substitute_person_id, "جانشین")
+                    sub_note = f" (جانشین موقت: {s_name})"
+                records.append({
+                    "row_index": idx,
+                    "person_id": p.id,
+                    "person_name": p.name,
+                    "role": p.role,
+                    "section": p.section,
+                    "zone_name": zone_name,
+                    "shift_window": shift_window_str,
+                    "status": f"غایب (عدم حضور در کل شیفت){sub_note}",
+                    "status_code": "absent",
+                    "arrival_time": "—",
+                    "arrival_delay_str": "غیبت کامل",
+                    "departure_time": "—",
+                    "early_departure_str": "—",
+                    "presence_str": "0 دقیقه",
+                    "absence_str": _format_duration(req_work_mins * 60),
+                    "compliance_pct": 0.0,
+                    "absence_count": 1,
+                    "absence_intervals_str": f"{s_start} - {s_end} (عدم ثبت تردد در شیفت)",
+                })
+            continue
+
+        # Sighted during shift
+        first_loc = _to_local_dt(shift_events[0].timestamp)
+        last_loc = _to_local_dt(shift_events[-1].timestamp)
+        arrival_time_str = first_loc.strftime("%H:%M:%S")
+        departure_time_str = last_loc.strftime("%H:%M:%S")
+
+        intervals_list = []
+
+        # Arrival delay
+        raw_delay = max(0, int((first_loc - shift_start_dt).total_seconds() // 60))
+        free_arr = get_interval_free_minutes(shift_start_dt, first_loc, s_free)
+        net_delay = max(0, raw_delay - free_arr)
+        if net_delay <= s_grace:
+            arrival_delay_str = "به موقع"
+            effective_delay = 0
+        else:
+            arrival_delay_str = f"{net_delay} دقیقه تأخیر"
+            effective_delay = net_delay
+            intervals_list.append(f"{s_start} - {first_loc.strftime('%H:%M')} (تأخیر: {net_delay}m)")
+
+        # Mid-shift gaps
+        gaps_absence = 0
+        for i in range(len(shift_events) - 1):
+            t1 = _to_local_dt(shift_events[i].timestamp)
+            t2 = _to_local_dt(shift_events[i + 1].timestamp)
+            raw_gap = max(0, int((t2 - t1).total_seconds() // 60))
+            if raw_gap >= s_timeout:
+                free_gap = get_interval_free_minutes(t1, t2, s_free)
+                net_gap = max(0, raw_gap - free_gap)
+                if net_gap >= s_timeout:
+                    gaps_absence += net_gap
+                    intervals_list.append(f"{t1.strftime('%H:%M')} - {t2.strftime('%H:%M')} ({net_gap}m)")
+
+        # Departure / Trailing
+        ref_end = min(local_now, shift_end_dt) if is_today else shift_end_dt
+        departure_absence = 0
+        if last_loc < ref_end:
+            raw_early = max(0, int((ref_end - last_loc).total_seconds() // 60))
+            free_early = get_interval_free_minutes(last_loc, ref_end, s_free)
+            net_early = max(0, raw_early - free_early)
+            if net_early >= s_timeout:
+                departure_absence = net_early
+                early_departure_str = f"{net_early} دقیقه تعجیل / ترک پست"
+                intervals_list.append(f"{last_loc.strftime('%H:%M')} - {ref_end.strftime('%H:%M')} ({net_early}m)")
+            else:
+                early_departure_str = "به موقع"
+        else:
+            early_departure_str = "به موقع"
+
+        elapsed_target = min(shift_dur_mins, max(0, int((ref_end - shift_start_dt).total_seconds() // 60)))
+        elapsed_free = get_interval_free_minutes(shift_start_dt, ref_end, s_free)
+        effective_req = max(1, elapsed_target - elapsed_free)
+
+        total_absence = min(effective_req, effective_delay + gaps_absence + departure_absence)
+        presence_mins = max(0, effective_req - total_absence)
+        compliance_pct = min(100.0, round((presence_mins / effective_req) * 100, 1))
+
+        absence_count = len(intervals_list)
+        absence_intervals_str = " | ".join(intervals_list) if intervals_list else "بدون ثبت خروج و غیبت"
+        presence_str = _format_duration(presence_mins * 60)
+        absence_str = _format_duration(total_absence * 60) if total_absence > 0 else "0 دقیقه"
+
+        if compliance_pct >= 85.0:
+            status_text = "حاضر در ایستگاه"
+            status_code = "present"
+        elif presence_mins > 0:
+            status_text = "حاضر با تأخیر/کسر کار"
+            status_code = "present"
+        else:
+            status_text = "غایب"
+            status_code = "absent"
+
+        if sub_sub:
+            orig_name = person_name_map.get(sub_sub.original_person_id, "پرسنل اصلی")
+            status_text += f" (جانشین {orig_name})"
+
+        records.append({
+            "row_index": idx,
+            "person_id": p.id,
+            "person_name": p.name,
+            "role": p.role,
+            "section": p.section,
+            "zone_name": zone_name,
+            "shift_window": shift_window_str,
+            "status": status_text,
+            "status_code": status_code,
+            "arrival_time": arrival_time_str,
+            "arrival_delay_str": arrival_delay_str,
+            "departure_time": departure_time_str,
+            "early_departure_str": early_departure_str,
+            "presence_str": presence_str,
+            "absence_str": absence_str,
+            "compliance_pct": compliance_pct,
+            "absence_count": absence_count,
+            "absence_intervals_str": absence_intervals_str,
+        })
+
+    # Summary KPIs
+    total_staff = len(records)
+    total_present = sum(1 for r in records if r["status_code"] == "present")
+    total_absent = sum(1 for r in records if r["status_code"] == "absent")
+    total_leave = sum(1 for r in records if r["status_code"] in ("leave", "off_duty"))
+    comp_list = [r["compliance_pct"] for r in records]
+    avg_comp = round(sum(comp_list) / total_staff, 1) if total_staff > 0 else 100.0
+
+    return {
+        "date": target_date_str,
+        "section": section,
+        "total_staff": total_staff,
+        "total_present": total_present,
+        "total_absent": total_absent,
+        "total_leave": total_leave,
+        "avg_compliance": avg_comp,
+        "records": records,
+    }
+
+
+@router.get("/api/zones/supervisor/attendance-report")
+async def get_supervisor_attendance_report(
+    date: str = Query(..., description="Target date in YYYY-MM-DD format"),
+    section: Optional[str] = Query(None, description="Optional section filter"),
+    person_id: Optional[int] = Query(None, description="Optional person ID filter"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("duty:view")),
+):
+    """Get calculated supervisor daily attendance data as JSON."""
+    try:
+        return await compute_supervisor_attendance_report(
+            db=db,
+            target_date_str=date,
+            section=section,
+            person_id=person_id,
+            user=_user,
+        )
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error("Error in get_supervisor_attendance_report: %s", tb)
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)} | {tb}")
+
+
+@router.get("/api/zones/supervisor/attendance-report/export")
+async def export_supervisor_attendance_report(
+    date: str = Query(..., description="Target date in YYYY-MM-DD format"),
+    section: Optional[str] = Query(None, description="Optional section filter"),
+    person_id: Optional[int] = Query(None, description="Optional person ID filter"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("duty:view")),
+):
+    """Export calculated supervisor daily attendance as styled Excel (.xlsx)."""
+    try:
+        report_data = await compute_supervisor_attendance_report(
+            db=db,
+            target_date_str=date,
+            section=section,
+            person_id=person_id,
+            user=_user,
+        )
+        records = report_data.get("records", [])
+        target_date = datetime.strptime(date, "%Y-%m-%d")
+        sup_name = getattr(_user, "full_name", "") or getattr(_user, "username", "سرپرست")
+        sec_name = section if (section and section != "all") else "همه بخش‌های تحت نظر"
+
+        file_bytes = generate_supervisor_daily_attendance_xlsx(
+            records=records,
+            target_date=target_date,
+            supervisor_name=sup_name,
+            section_name=sec_name,
+            report_created_at=datetime.now(),
+        )
+        filename = f"supervisor_attendance_{date}.xlsx"
+        return Response(
+            content=file_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error("Error in export_supervisor_attendance_report: %s", tb)
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)} | {tb}")
 
 
 @router.get("/api/zones/logs", response_model=EventListResponse)

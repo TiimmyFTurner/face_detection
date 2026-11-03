@@ -7595,6 +7595,9 @@ html[dir="ltr"] .sup-header-user-menu {
         gap: 0.5rem !important;
         width: 100% !important;
     }
+    .sup-strip-btn-group > :first-child {
+        grid-column: span 2 !important;
+    }
     .sup-strip-btn {
         width: 100% !important;
         justify-content: center !important;

@@ -139,6 +139,7 @@ class StreamProcessor:
         self._known_persons_cache: list[KnownPerson] = []
         self._latest_frames: dict[int, bytes] = {}  # camera_id -> JPEG bytes
         self._camera_names: dict[int, str] = {}  # camera_id -> camera_name
+        self._camera_sections: dict[int, str] = {}  # camera_id -> section name
         self._zones_cache: dict[int, list[dict]] = {}  # camera_id -> list of zone dicts
         self._persons_shift_cache: dict[int, dict] = {}  # person_id -> supervisor shift & leaves info
         self._shift_templates_cache: dict[int, dict] = {}  # template_id -> template config dict
@@ -294,6 +295,7 @@ class StreamProcessor:
         self._stop_events.pop(camera_id, None)
         self._latest_frames.pop(camera_id, None)
         self._camera_names.pop(camera_id, None)
+        self._camera_sections.pop(camera_id, None)
         self._camera_connected.pop(camera_id, None)
         self._camera_last_frame_time.pop(camera_id, None)
         self._last_preview_time.pop(camera_id, None)
@@ -362,6 +364,7 @@ class StreamProcessor:
                 all_cams = cams_result.scalars().all()
                 active_cam_ids = {c.id for c in all_cams if c.is_active}
                 self._camera_names = {c.id: c.name for c in all_cams if c.is_active}
+                self._camera_sections = {c.id: (c.section or "").strip() for c in all_cams if c.is_active}
 
                 result = await session.execute(
                     select(CameraZone).where(CameraZone.is_active == True)  # noqa: E712
@@ -453,6 +456,7 @@ class StreamProcessor:
                     p.id: {
                         "id": p.id,
                         "name": p.name,
+                        "section": (p.section or "").strip(),
                         "custom_shift": p.custom_shift if isinstance(p.custom_shift, dict) else None,
                         "shift_template_id": p.shift_template_id,
                         "leaves": p.leaves if isinstance(p.leaves, list) else [],
@@ -567,6 +571,68 @@ class StreamProcessor:
                     is_cam_online = self.is_camera_online(camera_id)
                     camera_name = self._camera_names.get(camera_id, f"Camera #{camera_id}")
 
+                    # Camera offline handling at camera level (throttled to once per 5 minutes per camera)
+                    if not is_cam_online:
+                        last_disc = self._camera_last_disconnect_alert.get(camera_id, 0)
+                        if (now - last_disc) >= 300.0:
+                            self._camera_last_disconnect_alert[camera_id] = now
+                            disc_message = f"⚠️ Camera Disconnected: '{camera_name}' is offline."
+                            logger.warning(disc_message)
+
+                            saved_event_id = None
+                            try:
+                                async with async_session() as session:
+                                    evt = Event(
+                                        timestamp=datetime.now(timezone.utc),
+                                        camera_id=camera_id,
+                                        person_id=None,
+                                        person_name=None,
+                                        confidence_score=0.0,
+                                        snapshot_path="",
+                                        is_known=False,
+                                        zone_id=None,
+                                        zone_name="",
+                                        alert_type="camera_disconnected",
+                                        duration_seconds=0,
+                                    )
+                                    session.add(evt)
+                                    await session.commit()
+                                    await session.refresh(evt)
+                                    saved_event_id = evt.id
+                            except Exception as db_err:
+                                logger.error("Failed to log camera disconnected event to DB: %s", db_err)
+
+                            await ws_manager.broadcast({
+                                "type": "zone_alert",
+                                "alert_type": "camera_disconnected",
+                                "message": disc_message,
+                                "event": {
+                                    "id": saved_event_id or int(time.time()),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "camera_id": camera_id,
+                                    "camera_name": camera_name,
+                                    "person_id": None,
+                                    "person_name": None,
+                                    "confidence_score": 0.0,
+                                    "snapshot_url": "",
+                                    "snapshot_path": "",
+                                    "is_known": False,
+                                    "zone_id": None,
+                                    "zone_name": "",
+                                    "alert_type": "camera_disconnected",
+                                    "duration_seconds": 0,
+                                    "duration_str": "Camera Disconnected",
+                                },
+                                "camera_id": camera_id,
+                                "camera_name": camera_name,
+                            })
+                        # Skip presence/absence monitoring while camera is offline
+                        continue
+
+                    # Camera is online — clear any offline alert throttle
+                    if camera_id in self._camera_last_disconnect_alert:
+                        self._camera_last_disconnect_alert.pop(camera_id, None)
+
                     for zone in zones:
                         mode = zone.get("alert_mode", "absence")
                         if mode not in ("absence", "both", "out_of_zone"):
@@ -598,6 +664,22 @@ class StreamProcessor:
                         for person_id in assigned_pids_set:
                             person_name = known_persons_map.get(person_id, f"Person #{person_id}")
                             person_cfg = persons_shift_map.get(person_id, {})
+
+                            # Cross-section guard: person section must match camera section if both defined
+                            p_sec = str(person_cfg.get("section", "") or "").strip()
+                            cam_sec = str(self._camera_sections.get(camera_id, "") or "").strip()
+                            if p_sec and cam_sec and p_sec.lower() != cam_sec.lower():
+                                continue
+
+                            # Check if person has an active substitute covering their shift today
+                            subst_rec = self._active_substitutions_by_original.get(person_id)
+                            effective_person_id = person_id
+                            effective_person_name = person_name
+                            subst_prefix = ""
+                            if subst_rec:
+                                effective_person_id = subst_rec["substitute_person_id"]
+                                effective_person_name = known_persons_map.get(effective_person_id, f"Substitute #{effective_person_id}")
+                                subst_prefix = f" (جانشین {person_name})"
 
                             p_custom = person_cfg.get("custom_shift")
                             p_tmpl_id = person_cfg.get("shift_template_id")
@@ -710,105 +792,6 @@ class StreamProcessor:
                             timeout_secs = float(timeout_mins * 60)
                             grace_mins = cur_grace
                             shift_start_ts = cur_shift_start_dt.timestamp() if cur_shift_start_dt else 0
-
-                            # If camera is NOT online/connected:
-                            if not is_cam_online:
-                                if (
-                                    camera_id not in self._threads
-                                    or camera_id not in self._camera_names
-                                    or (camera_id in self._stop_events and self._stop_events[camera_id].is_set())
-                                ):
-                                    continue
-
-                                # Log camera disconnected alert (throttled to once per 5 minutes per camera)
-                                # AND CRITICALLY: DO NOT LOG ABSENCE and DO NOT fake last_seen to now!
-                                last_disc = self._camera_last_disconnect_alert.get(camera_id, 0)
-                                if (now - last_disc) >= 300.0:
-                                    self._camera_last_disconnect_alert[camera_id] = now
-                                    disc_message = (
-                                        f"⚠️ Camera Disconnected: '{camera_name}' is offline. "
-                                        f"Presence monitoring suspended for {person_name} in '{zone.get('name')}'."
-                                    )
-                                    logger.warning(disc_message)
-
-                                    saved_event_id = None
-                                    saved_snapshot = ""
-                                    try:
-                                        async with async_session() as session:
-                                            pres = await session.execute(
-                                                select(PersonEmbedding)
-                                                .where(PersonEmbedding.person_id == person_id)
-                                                .order_by(PersonEmbedding.id.asc())
-                                            )
-                                            emb_obj = pres.scalars().first()
-                                            if emb_obj and emb_obj.reference_photo_path:
-                                                ref_name = Path(emb_obj.reference_photo_path).name
-                                                saved_snapshot = f"ref_{ref_name}"
-
-                                            evt = Event(
-                                                timestamp=datetime.now(timezone.utc),
-                                                camera_id=camera_id,
-                                                person_id=effective_person_id,
-                                                person_name=f"{effective_person_name}{subst_prefix}", 
-                                                confidence_score=0.0,
-                                                snapshot_path=saved_snapshot,
-                                                is_known=True,
-                                                zone_id=zone["id"],
-                                                zone_name=zone["name"],
-                                                alert_type="camera_disconnected",
-                                                duration_seconds=0,
-                                            )
-                                            session.add(evt)
-                                            await session.commit()
-                                            await session.refresh(evt)
-                                            saved_event_id = evt.id
-                                    except Exception as db_err:
-                                        logger.error("Failed to log camera disconnected event to DB: %s", db_err)
-
-                                    await ws_manager.broadcast({
-                                        "type": "zone_alert",
-                                        "alert_type": "camera_disconnected",
-                                        "message": disc_message,
-                                        "event": {
-                                            "id": saved_event_id or int(time.time()),
-                                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                                            "camera_id": camera_id,
-                                            "camera_name": camera_name,
-                                            "person_id": person_id,
-                                            "person_name": person_name,
-                                            "confidence_score": 0.0,
-                                            "snapshot_url": f"/api/snapshots/{saved_snapshot}" if saved_snapshot else "",
-                                            "snapshot_path": saved_snapshot,
-                                            "is_known": True,
-                                            "zone_id": zone["id"],
-                                            "zone_name": zone["name"],
-                                            "alert_type": "camera_disconnected",
-                                            "duration_seconds": 0,
-                                            "duration_str": "Camera Disconnected",
-                                        },
-                                        "zone_id": zone["id"],
-                                        "zone_name": zone["name"],
-                                        "camera_id": camera_id,
-                                        "camera_name": camera_name,
-                                        "person_id": person_id,
-                                        "person_name": person_name,
-                                    })
-                                # Skip absence check when camera is offline (without modifying _zone_last_seen)
-                                continue
-
-                            # Camera is online — clear any offline alert throttle
-                            if camera_id in self._camera_last_disconnect_alert:
-                                self._camera_last_disconnect_alert.pop(camera_id, None)
-
-                            # Check if person has an active substitute covering their shift today
-                            subst_rec = self._active_substitutions_by_original.get(person_id)
-                            effective_person_id = person_id
-                            effective_person_name = person_name
-                            subst_prefix = ""
-                            if subst_rec:
-                                effective_person_id = subst_rec["substitute_person_id"]
-                                effective_person_name = known_persons_map.get(effective_person_id, f"Substitute #{effective_person_id}")
-                                subst_prefix = f" (جانشین {person_name})"
 
                             key = (zone["id"], effective_person_id)
                             last_seen = self._zone_last_seen.get(key, 0)

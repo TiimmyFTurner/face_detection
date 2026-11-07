@@ -118,18 +118,19 @@ const EventCard = {
             EventCard._cache[event.id] = event;
         }
 
-        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
+        const isCamDisc = event.alert_type === 'camera_disconnected';
+        const isWarningAlert = isCamDisc || event.alert_type === 'absence_timeout';
         const isKnown = event.is_known;
         const statusClass = isWarningAlert ? 'alert-warning-card' : (isKnown ? 'known' : 'unknown');
-        const badgeText = isKnown ? I18n.t('known') : I18n.t('unknown');
+        const badgeText = isCamDisc ? (I18n.t('alert_camera_offline_short') || 'قطع ارتباط') : (isKnown ? I18n.t('known') : I18n.t('unknown'));
         const timeInfo = EventCard.getTimeInfo(event);
         const timestamp = timeInfo.timestampStr;
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
         const snapshotUrl = EventCard.getSnapshotUrl(event);
-        const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
+        const personName = isCamDisc ? cameraName : (event.person_name || I18n.t('unknown'));
 
         return `
             <div class="event-card ${statusClass}" data-event-id="${event.id}" onclick="EventCard.showDetailModal(${event.id})" style="cursor: pointer;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
@@ -208,18 +209,19 @@ const EventCard = {
             EventCard._cache[event.id] = event;
         }
 
-        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
+        const isCamDisc = event.alert_type === 'camera_disconnected';
+        const isWarningAlert = isCamDisc || event.alert_type === 'absence_timeout';
         const isKnown = event.is_known;
         const statusClass = isWarningAlert ? 'alert-warning-card' : (isKnown ? 'known' : 'unknown');
-        const badgeText = isKnown ? I18n.t('known') : I18n.t('unknown');
+        const badgeText = isCamDisc ? (I18n.t('alert_camera_offline_short') || 'قطع ارتباط') : (isKnown ? I18n.t('known') : I18n.t('unknown'));
         const timeInfo = EventCard.getTimeInfo(event);
         const timestamp = timeInfo.timestampStr;
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
         const snapshotUrl = EventCard.getSnapshotUrl(event);
-        const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
+        const personName = isCamDisc ? cameraName : (event.person_name || I18n.t('unknown'));
 
         return `
             <div class="event-card list-item ${statusClass}" data-event-id="${event.id}" onclick="EventCard.showDetailModal(${event.id})" style="cursor: pointer;" title="${EventCard.escapeAttr(I18n.t('click_to_view'))}">
@@ -280,18 +282,19 @@ const EventCard = {
         const event = EventCard._cache[eventId];
         if (!event) return;
 
-        const isWarningAlert = event.alert_type === 'camera_disconnected' || event.alert_type === 'absence_timeout';
+        const isCamDisc = event.alert_type === 'camera_disconnected';
+        const isWarningAlert = isCamDisc || event.alert_type === 'absence_timeout';
         const isKnown = event.is_known;
         const statusClass = isWarningAlert ? 'alert-warning-card' : (isKnown ? 'known' : 'unknown');
-        const badgeText = isKnown ? I18n.t('known_identity') : I18n.t('unidentified');
+        const badgeText = isCamDisc ? (I18n.t('alert_camera_offline_short') || 'قطع ارتباط') : (isKnown ? I18n.t('known_identity') : I18n.t('unidentified'));
         const confidence = Math.round((event.confidence_score || 0) * 100);
         const confidenceDisplay = I18n.isRTL() ? I18n.toPersianDigits(confidence) : confidence;
         const confidenceClass = isWarningAlert ? 'warning' : (confidence >= 70 ? 'high' : confidence >= 40 ? 'medium' : 'low');
         const snapshotUrl = EventCard.getSnapshotUrl(event);
         const timeInfo = EventCard.getTimeInfo(event);
         const fullTimeStr = timeInfo.isConsolidated ? timeInfo.timestampStr : I18n.formatFullTimestamp(event.timestamp);
-        const personName = event.person_name || I18n.t('unknown');
         const cameraName = event.camera_name || (I18n.t('event_camera') + ' ' + (I18n.isRTL() ? I18n.toPersianDigits(event.camera_id) : event.camera_id));
+        const personName = isCamDisc ? cameraName : (event.person_name || I18n.t('unknown'));
         const eventIdStr = I18n.isRTL() ? I18n.toPersianDigits(event.id) : event.id;
 
         const content = `

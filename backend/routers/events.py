@@ -34,7 +34,13 @@ async def _apply_user_scope_to_conditions(user: User, db: AsyncSession, conditio
         if scope.camera_ids:
             scope_clauses.append(Event.camera_id.in_(scope.camera_ids))
         if scope.person_ids:
-            scope_clauses.append(Event.person_id.in_(scope.person_ids))
+            # Person scoping matches personal attendance alerts, never camera hardware disconnection alerts
+            scope_clauses.append(
+                and_(
+                    Event.person_id.in_(scope.person_ids),
+                    Event.alert_type != "camera_disconnected",
+                )
+            )
         if scope_clauses:
             conditions.append(or_(*scope_clauses))
         else:
@@ -179,21 +185,31 @@ async def list_events(
         s_path = "" if is_sup else raw_snap
         s_url = "" if is_sup else (f"/api/snapshots/{raw_snap}" if raw_snap else "")
 
+        raw_alert = r.get("alert_type") or "normal"
+        raw_person_name = r.get("person_name")
+        raw_person_id = r.get("person_id")
+        if raw_alert == "camera_disconnected":
+            person_id = None
+            person_name = camera_name or "دوربین"
+        else:
+            person_id = raw_person_id
+            person_name = raw_person_name or "Unknown"
+
         event_responses.append(
             EventResponse(
                 id=r["id"],
                 timestamp=r["timestamp"],
                 camera_id=cid,
                 camera_name=camera_name,
-                person_id=r.get("person_id"),
-                person_name=r.get("person_name") or "Unknown",
+                person_id=person_id,
+                person_name=person_name,
                 confidence_score=r.get("confidence_score") or 0.0,
                 snapshot_path=s_path,
                 snapshot_url=s_url,
                 is_known=bool(r.get("is_known")),
                 zone_id=r.get("zone_id"),
                 zone_name=r.get("zone_name") or "",
-                alert_type=r.get("alert_type") or "normal",
+                alert_type=raw_alert,
                 duration_seconds=r.get("duration_seconds"),
             )
         )
@@ -224,7 +240,13 @@ async def get_event_stats(
         if scope.camera_ids:
             scope_clauses.append(Event.camera_id.in_(scope.camera_ids))
         if scope.person_ids:
-            scope_clauses.append(Event.person_id.in_(scope.person_ids))
+            # Person scoping matches personal attendance alerts, never camera hardware disconnection alerts
+            scope_clauses.append(
+                and_(
+                    Event.person_id.in_(scope.person_ids),
+                    Event.alert_type != "camera_disconnected",
+                )
+            )
         if scope_clauses:
             scope_conditions.append(or_(*scope_clauses))
         else:

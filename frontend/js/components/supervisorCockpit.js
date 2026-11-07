@@ -1546,7 +1546,29 @@ const SupervisorCockpit = {
         if (!container) return;
 
         const isRtl = I18n.isRTL();
-        let events = this._events || [];
+        const myPersonIds = new Set((this._persons || []).map(p => Number(p.id)));
+        const myCamIds = new Set();
+        if (this._rosterData && Array.isArray(this._rosterData.cameras)) {
+            this._rosterData.cameras.forEach(c => myCamIds.add(Number(c.id)));
+        } else if (this._rosterData && Array.isArray(this._rosterData.zones)) {
+            this._rosterData.zones.forEach(z => myCamIds.add(Number(z.camera_id)));
+        }
+
+        let events = (this._events || []).filter(ev => {
+            const isCamDisc = ev.alert_type === 'camera_disconnected';
+            if (isCamDisc) {
+                // If supervisor has assigned cameras, only show disconnect alerts for those cameras
+                if (myCamIds.size > 0 && ev.camera_id && !myCamIds.has(Number(ev.camera_id))) {
+                    return false;
+                }
+            } else if (ev.person_id) {
+                // Only show events for persons belonging to supervisor's scope
+                if (myPersonIds.size > 0 && !myPersonIds.has(Number(ev.person_id))) {
+                    return false;
+                }
+            }
+            return true;
+        });
 
         if (this._timelineFilter === 'alerts') {
             events = events.filter(ev => ev.alert_type && ev.alert_type !== 'normal');
@@ -1566,13 +1588,14 @@ const SupervisorCockpit = {
 
         const itemsHtml = events.map(ev => {
             const isAlert = ev.alert_type && ev.alert_type !== 'normal';
+            const isCamDisc = ev.alert_type === 'camera_disconnected';
             const rowClass = isAlert ? 'sup-timeline-row alert' : 'sup-timeline-row';
             const alertBadge = this.formatAlertBadge(ev);
             const timeStr = I18n.formatDateTimeNumeric ? I18n.formatDateTimeNumeric(ev.timestamp) : (I18n.formatTimestamp ? I18n.formatTimestamp(ev.timestamp) : new Date(ev.timestamp).toLocaleTimeString());
             const relTime = this.formatRelativeTime(ev.timestamp);
-            const personName = ev.person_name || 'پرسنل';
-            const initial = personName.charAt(0).toUpperCase();
-            const avatarGrad = this.getAvatarGradient(personName);
+            const personName = isCamDisc ? (ev.camera_name || I18n.t('event_camera') || 'دوربین') : (ev.person_name || 'پرسنل');
+            const initial = isCamDisc ? '📹' : personName.charAt(0).toUpperCase();
+            const avatarGrad = isCamDisc ? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)' : this.getAvatarGradient(personName);
 
             return `
                 <div class="${rowClass}">
@@ -1613,7 +1636,7 @@ const SupervisorCockpit = {
      */
     showPersonEvents(personId, personName) {
         const isRtl = I18n.isRTL();
-        const personEvents = (this._events || []).filter(e => e.person_id === personId);
+        const personEvents = (this._events || []).filter(e => e.person_id === personId && e.alert_type !== 'camera_disconnected');
         const avatarGrad = this.getAvatarGradient(personName);
         const initial = (personName || 'P').trim().charAt(0).toUpperCase();
 

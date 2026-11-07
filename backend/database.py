@@ -155,6 +155,60 @@ async def init_db() -> None:
                     "UPDATE events SET camera_id = NULL WHERE camera_id IS NOT NULL "
                     "AND camera_id NOT IN (SELECT id FROM cameras)"
                 )
+
+                # Disassociate individual persons from hardware camera disconnection alerts
+                sync_conn.exec_driver_sql(
+                    "UPDATE events SET person_id = NULL, person_name = NULL WHERE alert_type = 'camera_disconnected' AND person_id IS NOT NULL"
+                )
+
+                # Sanitize camera_zones so persons in one section or security cameras are not erroneously cross-assigned
+                try:
+                    import json
+                    cams = sync_conn.exec_driver_sql("SELECT id, section, name FROM cameras").fetchall()
+                    cam_meta = {c[0]: ((c[1] or "").strip(), (c[2] or "").strip()) for c in cams}
+                    persons = sync_conn.exec_driver_sql("SELECT id, section, name FROM persons").fetchall()
+                    person_meta = {p[0]: ((p[1] or "").strip(), (p[2] or "").strip()) for p in persons}
+
+                    zones = sync_conn.exec_driver_sql("SELECT id, camera_id, assigned_person_ids FROM camera_zones").fetchall()
+                    for zid, cid, raw_pids in zones:
+                        c_sec, c_name = cam_meta.get(cid, ("", ""))
+                        is_sec_cam = ("security" in c_name.lower()) or ("حراست" in c_sec.lower()) or ("security" in c_sec.lower())
+
+                        pids_list = []
+                        if isinstance(raw_pids, list):
+                            pids_list = raw_pids
+                        elif isinstance(raw_pids, str) and raw_pids.strip():
+                            try:
+                                pids_list = json.loads(raw_pids)
+                            except Exception:
+                                pids_list = []
+                        if not isinstance(pids_list, list):
+                            pids_list = []
+
+                        valid_pids = []
+                        changed = False
+                        for pid in pids_list:
+                            try:
+                                pid_int = int(pid)
+                                p_sec, p_name = person_meta.get(pid_int, ("", ""))
+                                # If camera is security camera and person belongs to packaging/production/warranty or is Zahra Rahimi:
+                                if is_sec_cam and (p_sec or "زهرا" in p_name or "رحیمی" in p_name):
+                                    changed = True
+                                    continue
+                                # If both sections defined and don't match:
+                                if c_sec and p_sec and c_sec.lower() != p_sec.lower():
+                                    changed = True
+                                    continue
+                                valid_pids.append(pid_int)
+                            except Exception:
+                                changed = True
+                        if changed:
+                            sync_conn.exec_driver_sql(
+                                "UPDATE camera_zones SET assigned_person_ids = ? WHERE id = ?",
+                                (json.dumps(valid_pids), zid)
+                            )
+                except Exception:
+                    pass
             except Exception:
                 pass
 

@@ -5,7 +5,18 @@ Tests for Factory Sections, Supervisor Scoped Permissions, and Person Shift Mana
 import pytest
 from httpx import AsyncClient
 from backend.models import Camera, Person, Section, User, Role, Event, CameraZone, ShiftTemplate
-from tests.test_api import test_session, client, setup_database
+from tests.test_api import test_session, client, setup_database, mock_admin
+from backend.main import app
+from backend.auth import get_current_user
+
+
+@pytest.fixture(autouse=True)
+def ensure_admin():
+    async def override_admin():
+        return mock_admin
+    app.dependency_overrides[get_current_user] = override_admin
+    yield
+    app.dependency_overrides[get_current_user] = override_admin
 
 
 @pytest.mark.asyncio

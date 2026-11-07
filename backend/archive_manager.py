@@ -504,7 +504,7 @@ def _build_sql_conditions_for_archive(
             params.extend(scope_camera_ids)
         if scope_person_ids:
             placeholders = ",".join("?" for _ in scope_person_ids)
-            scope_conditions.append(f"person_id IN ({placeholders})")
+            scope_conditions.append(f"(person_id IN ({placeholders}) AND (alert_type IS NULL OR alert_type != 'camera_disconnected'))")
             params.extend(scope_person_ids)
         if scope_conditions:
             clauses.append(f"({' OR '.join(scope_conditions)})")
@@ -670,7 +670,12 @@ async def query_events_multi_db(
         if scope_camera_ids:
             scope_clauses.append(Event.camera_id.in_(scope_camera_ids))
         if scope_person_ids:
-            scope_clauses.append(Event.person_id.in_(scope_person_ids))
+            scope_clauses.append(
+                and_(
+                    Event.person_id.in_(scope_person_ids),
+                    Event.alert_type != "camera_disconnected",
+                )
+            )
         if scope_clauses:
             active_conditions.append(or_(*scope_clauses))
         else:

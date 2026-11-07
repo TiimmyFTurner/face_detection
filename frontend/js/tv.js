@@ -148,7 +148,7 @@ const TVBoard = {
         const h = Math.floor(mins / 60);
         const m = Math.round(mins % 60);
         if (this._lang === 'fa') {
-            if (h > 0 && m > 0) return `${this.toDigits(h)}س ${this.toDigits(m)}د`;
+            if (h > 0 && m > 0) return `${this.toDigits(h)} ساعت و ${this.toDigits(m)} دقیقه`;
             if (h > 0) return `${this.toDigits(h)} ساعت`;
             return `${this.toDigits(m)} دقیقه`;
         } else {

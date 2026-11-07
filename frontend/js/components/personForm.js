@@ -1177,6 +1177,278 @@ const PersonForm = {
     /**
      * Reset form state.
      */
+    /**
+     * Entrypoint to show Edit Modal for an existing person.
+     * @param {number} personId - ID of the person to edit
+     */
+    async showEditModal(personId) {
+        if (!personId) return;
+
+        try {
+            // Find in cache or fetch fresh details
+            let cachedPerson = (typeof PersonsPage !== 'undefined' && PersonsPage._persons)
+                ? PersonsPage._persons.find(p => p.id === personId)
+                : null;
+
+            // Fetch fresh details, sections, and shift templates in parallel
+            const [freshPerson, sections, shiftTemplates] = await Promise.all([
+                App.api(`/api/persons/${personId}`).catch(() => cachedPerson),
+                App.api('/api/sections').catch(() => []),
+                App.api('/api/shift-templates').catch(() => []),
+            ]);
+
+            const person = freshPerson || cachedPerson;
+            if (!person) {
+                App.toast(I18n.t('person_not_found') || 'فرد مورد نظر یافت نشد.', 'error');
+                return;
+            }
+
+            PersonForm._editPersonData = person;
+            PersonForm._editSections = sections || [];
+            PersonForm._editShiftTemplates = shiftTemplates || [];
+
+            App.openModal(PersonForm.renderEditModal(person, sections, shiftTemplates), 'modal-md');
+        } catch (err) {
+            console.error('Failed to open person edit modal:', err);
+            App.toast(I18n.t('err_generic', { msg: err.message || err }), 'error');
+        }
+    },
+
+    /**
+     * Render the "Edit Person" modal content.
+     * @param {Object} person - Person data
+     * @param {Array<Object>} sections - Available sections
+     * @param {Array<Object>} shiftTemplates - Available shift templates
+     * @returns {string} HTML string
+     */
+    renderEditModal(person, sections = [], shiftTemplates = []) {
+        const isRtl = (typeof I18n !== 'undefined' && typeof I18n.isRTL === 'function') ? I18n.isRTL() : true;
+        const photosCount = (person.photos && person.photos.length) || (person.reference_photos && person.reference_photos.length) || 0;
+        const photosCountDisplay = isRtl && typeof I18n.toPersianDigits === 'function' ? I18n.toPersianDigits(photosCount) : photosCount;
+        const avatarUrl = (person.reference_photos && person.reference_photos[0]) || '';
+        const initials = person.name ? person.name.slice(0, 2) : '??';
+
+        // Build sections datalist
+        const sectionNames = Array.from(new Set([
+            ...(sections || []).map(s => s.name || s),
+            ...(person.section ? [person.section] : [])
+        ])).filter(Boolean);
+
+        const sectionDatalistHtml = sectionNames.map(s => `<option value="${PersonForm.escapeAttr(s)}"></option>`).join('');
+
+        // Build shift templates options
+        let shiftTemplateOptionsHtml = `<option value="">${I18n.t('no_shift_assigned') || 'شناور (بدون شیفت ثابت)'}</option>`;
+        (shiftTemplates || []).forEach(tmpl => {
+            const isSelected = Number(person.shift_template_id) === Number(tmpl.id);
+            const timeDesc = (tmpl.start_time && tmpl.end_time) ? ` (${tmpl.start_time} - ${tmpl.end_time})` : '';
+            shiftTemplateOptionsHtml += `
+                <option value="${tmpl.id}" ${isSelected ? 'selected' : ''}>
+                    ${PersonForm.escapeHtml(tmpl.name)}${timeDesc}
+                </option>
+            `;
+        });
+
+        return `
+            <div class="modal-header" style="padding: 1.15rem 1.5rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.4rem;">✏️</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700;">${I18n.t('modal_edit_person') || 'ویرایش مشخصات فرد'}</h2>
+                        <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.2rem; display: flex; align-items: center; gap: 6px;">
+                            <span>${PersonForm.escapeHtml(person.name)}</span>
+                            ${person.id ? `<span>• ID: #${isRtl && typeof I18n.toPersianDigits === 'function' ? I18n.toPersianDigits(person.id) : person.id}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="App.closeModal()">✕</button>
+            </div>
+
+            <div class="modal-body" style="padding: 1.25rem 1.5rem; max-height: 74vh; overflow-y: auto;">
+                <form id="edit-person-form" onsubmit="PersonForm.handleEditSubmit(event, ${person.id})">
+                    
+                    <!-- Profile Banner & Photos Info -->
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 0.85rem 1rem;">
+                        <div style="position: relative; flex-shrink: 0;">
+                            ${avatarUrl ? `
+                                <img src="${avatarUrl}" alt="${PersonForm.escapeAttr(person.name)}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-blue);" onerror="this.outerHTML='<div class=\'person-avatar-placeholder\' style=\'width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #60a5fa; font-size: 1.1rem;\'>${initials}</div>'">
+                            ` : `
+                                <div class="person-avatar-placeholder" style="width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #60a5fa; font-size: 1.1rem;">${initials}</div>
+                            `}
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 6px;">
+                                <span>📸</span>
+                                <span>${I18n.t('person_photos_count') || 'تصاویر چهره'}: <strong>${photosCountDisplay}</strong> ${isRtl ? 'عکس' : 'photos'}</span>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-xs" onclick="App.closeModal(); PersonForm.showAddPhotosModal(${person.id}, '${PersonForm.escapeAttr(person.name)}')" style="font-size: 0.74rem; padding: 3px 10px; display: inline-flex; align-items: center; gap: 4px;">
+                                <span>📸</span>
+                                <span>${I18n.t('manage_photos') || 'مدیریت و افزودن عکس'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Full Name Field -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label" for="edit-person-name" style="font-weight: 700; font-size: 0.85rem;">
+                            ${I18n.t('label_full_name')} <span style="color: var(--accent-rose);">*</span>
+                        </label>
+                        <input
+                            class="form-input"
+                            type="text"
+                            id="edit-person-name"
+                            name="name"
+                            value="${PersonForm.escapeAttr(person.name || '')}"
+                            placeholder="${PersonForm.escapeAttr(I18n.t('placeholder_full_name'))}"
+                            required
+                            autofocus
+                        />
+                    </div>
+
+                    <!-- Role & Section (2 Columns) -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" for="edit-person-role" style="font-weight: 700; font-size: 0.85rem;">
+                                ${I18n.t('label_role')}
+                            </label>
+                            <input
+                                class="form-input"
+                                type="text"
+                                id="edit-person-role"
+                                name="role"
+                                value="${PersonForm.escapeAttr(person.role || '')}"
+                                placeholder="${PersonForm.escapeAttr(I18n.t('placeholder_role'))}"
+                            />
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" for="edit-person-section" style="font-weight: 700; font-size: 0.85rem;">
+                                🏢 ${I18n.t('tab_sections') || 'بخش سازمانی'}
+                            </label>
+                            <input
+                                class="form-input"
+                                type="text"
+                                id="edit-person-section"
+                                name="section"
+                                list="edit-person-sections-datalist"
+                                value="${PersonForm.escapeAttr(person.section || '')}"
+                                placeholder="مثال: بسته‌بندی، خط تولید"
+                            />
+                            <datalist id="edit-person-sections-datalist">
+                                ${sectionDatalistHtml}
+                            </datalist>
+                        </div>
+                    </div>
+
+                    <!-- Shift Template Assignment -->
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 4px;">
+                            <label class="form-label" for="edit-person-shift-template" style="margin-bottom: 0; font-weight: 700; font-size: 0.85rem;">
+                                ⏰ ${I18n.t('shift_template') || 'قالب شیفت کاری'}
+                            </label>
+                            <button type="button" class="btn btn-ghost btn-xs text-primary" onclick="App.closeModal(); PersonShiftModal.show(${person.id});" style="font-size: 0.74rem; padding: 2px 6px;">
+                                ⚙️ ${I18n.t('advanced_shift_settings') || 'تنظیمات پیشرفته شیفت'}
+                            </button>
+                        </div>
+                        <select
+                            class="form-input"
+                            id="edit-person-shift-template"
+                            name="shift_template_id"
+                        >
+                            ${shiftTemplateOptionsHtml}
+                        </select>
+                        <small class="text-muted" style="font-size: 0.74rem; display: block; margin-top: 4px; line-height: 1.4;">
+                            ${isRtl 
+                                ? 'جهت تنظیم ساعات شناور/چرخشی، اوقات استراحت قانونی و اختصاص ایستگاه کاری، از بخش «تنظیمات پیشرفته شیفت» استفاده فرمایید.' 
+                                : 'For custom rotational patterns, lunch/breaks, or assigned workstations, use the Advanced Shift Settings modal.'}
+                        </small>
+                    </div>
+
+                    <!-- Modal Footer Actions -->
+                    <div class="modal-footer" style="padding: 1rem 0 0 0; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; gap: 0.75rem;">
+                        <button class="btn btn-secondary" type="button" onclick="App.closeModal()">
+                            ${I18n.t('cancel')}
+                        </button>
+                        <button class="btn btn-primary" type="submit" id="btn-save-person">
+                            <span>💾</span>
+                            <span>${I18n.t('save_changes') || 'ذخیره تغییرات'}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+    },
+
+    /**
+     * Submit handler for updating person details.
+     */
+    async handleEditSubmit(event, personId) {
+        if (event) event.preventDefault();
+        if (!personId) return;
+
+        const nameInput = document.getElementById('edit-person-name');
+        const roleInput = document.getElementById('edit-person-role');
+        const sectionInput = document.getElementById('edit-person-section');
+        const shiftTemplateSelect = document.getElementById('edit-person-shift-template');
+        const submitBtn = document.getElementById('btn-save-person');
+
+        const name = (nameInput ? nameInput.value : '').trim();
+        const role = (roleInput ? roleInput.value : '').trim();
+        const section = (sectionInput ? sectionInput.value : '').trim();
+        const shiftTemplateVal = shiftTemplateSelect ? shiftTemplateSelect.value : '';
+
+        if (!name) {
+            App.toast(I18n.t('err_enter_name') || 'لطفاً نام را وارد نمایید.', 'error');
+            if (nameInput) nameInput.focus();
+            return;
+        }
+
+        const payload = {
+            name: name,
+            role: role,
+            section: section,
+        };
+
+        if (shiftTemplateVal !== undefined && shiftTemplateVal !== '') {
+            payload.shift_template_id = parseInt(shiftTemplateVal, 10);
+        } else {
+            payload.shift_template_id = 0;
+        }
+
+        try {
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<span class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; vertical-align: middle; margin-inline-end: 6px;"></span> <span>${I18n.t('saving') || 'در حال ذخیره...'}</span>`;
+            }
+
+            const updated = await App.api(`/api/persons/${personId}`, 'PUT', payload);
+
+            App.closeModal();
+            App.toast(I18n.t('person_updated_success', { name: updated.name || name }) || 'مشخصات فرد با موفقیت ذخیره شد.', 'success');
+
+            // Refresh Persons page if active
+            if (typeof PersonsPage !== 'undefined' && PersonsPage.loadPersons) {
+                await PersonsPage.loadPersons();
+            }
+
+            // Refresh Dashboard events if active
+            if (typeof DashboardPage !== 'undefined' && DashboardPage.loadEvents) {
+                DashboardPage.loadEvents();
+            }
+
+            // Refresh Supervisor Cockpit if active
+            if (typeof SupervisorCockpit !== 'undefined' && SupervisorCockpit.loadCockpitData) {
+                SupervisorCockpit.loadCockpitData();
+            }
+        } catch (err) {
+            console.error('Failed to update person:', err);
+            App.toast(I18n.t('err_generic', { msg: err.message || err }), 'error');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<span>💾</span> <span>${I18n.t('save_changes') || 'ذخیره تغییرات'}</span>`;
+            }
+        }
+    },
+
     reset() {
         PersonForm._selectedPhotos = [];
         PersonForm._selectedFiles = [];

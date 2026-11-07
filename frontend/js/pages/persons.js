@@ -735,6 +735,10 @@ const PersonsPage = {
     /**
      * Show add photos modal for existing person.
      */
+    showEditModal(personId) {
+        PersonForm.showEditModal(personId);
+    },
+
     showAddPhotosModal(personId, personName) {
         PersonForm.showAddPhotosModal(personId, personName);
     },

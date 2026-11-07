@@ -1073,7 +1073,9 @@ const SupervisorCockpit = {
                 : (duty ? (isRtl ? I18n.toPersianDigits(duty.current_absence_str) : duty.current_absence_str) : '—'));
 
         const sumShiftAbsenceDisplay = duty
-            ? (isRtl ? I18n.toPersianDigits(duty.shift_absence_str) : duty.shift_absence_str)
+            ? ((duty.shift_absence_minutes !== undefined && duty.shift_absence_minutes !== null)
+                ? (duty.shift_absence_minutes === 0 ? (isRtl ? '۰ دقیقه' : '0m') : I18n.formatDuration(duty.shift_absence_minutes * 60))
+                : (isRtl ? I18n.toPersianDigits(duty.shift_absence_str) : duty.shift_absence_str))
             : '—';
 
         const elapsedStr = duty
@@ -1324,7 +1326,11 @@ const SupervisorCockpit = {
         const hasIntervals = duty && Array.isArray(duty.absence_intervals) && duty.absence_intervals.length > 0;
         const isExpanded = this._expandedWindows.has(person.id);
 
-        const sumAbsenceDisp = duty ? (isRtl ? I18n.toPersianDigits(duty.shift_absence_str) : duty.shift_absence_str) : '0m';
+        const sumAbsenceDisp = duty
+            ? ((duty.shift_absence_minutes !== undefined && duty.shift_absence_minutes !== null)
+                ? (duty.shift_absence_minutes === 0 ? (isRtl ? '۰ دقیقه' : '0m') : I18n.formatDuration(duty.shift_absence_minutes * 60))
+                : (isRtl ? I18n.toPersianDigits(duty.shift_absence_str) : duty.shift_absence_str))
+            : (isRtl ? '۰ دقیقه' : '0m');
 
         return `
             <tr style="background: var(--bg-surface); border-radius: var(--radius-sm); border-bottom: 1px solid var(--border-subtle);">

@@ -383,6 +383,12 @@ const I18n = {
 
             // Person Form Modal
             modal_add_person: 'ثبت شخص جدید',
+            toggle_select_tooltip: 'انتخاب / لغو انتخاب',
+            modal_edit_person: 'ویرایش مشخصات فرد',
+            person_updated_success: 'مشخصات «{name}» با موفقیت به‌روزرسانی شد.',
+            manage_photos: 'مدیریت و افزودن عکس',
+            advanced_shift_settings: 'تنظیمات پیشرفته شیفت',
+            person_not_found: 'فرد مورد نظر یافت نشد.',
             modal_add_photos: 'افزودن عکس‌های بیشتر — {name}',
             label_full_name: 'نام و نام خانوادگی',
             placeholder_full_name: 'مثلاً علی رضایی',
@@ -1526,6 +1532,12 @@ const I18n = {
 
             // Person Form Modal
             modal_add_person: 'Add Known Person',
+            toggle_select_tooltip: 'Toggle selection',
+            modal_edit_person: 'Edit Person Details',
+            person_updated_success: '"{name}" updated successfully.',
+            manage_photos: 'Manage Photos',
+            advanced_shift_settings: 'Advanced Shift Settings',
+            person_not_found: 'Person not found.',
             modal_add_photos: 'Add Photos — {name}',
             label_full_name: 'Full Name',
             placeholder_full_name: 'e.g., John Doe',

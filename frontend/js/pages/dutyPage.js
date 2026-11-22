@@ -610,7 +610,8 @@ const DutyPage = {
             const overnightBadgeHtml = person.is_overnight
                 ? `<span style="background: rgba(168, 85, 247, 0.18); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">🌙 ${I18n.t('overnight_badge')}</span>`
                 : '';
-            const graceBadgeHtml = person.is_within_grace_period
+            const isGrace = Boolean(person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined));
+            const graceBadgeHtml = isGrace
                 ? `<span style="background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;" title="${I18n.t('status_on_time_grace', { mins: person.grace_period_minutes || 10 })}">✓ ${I18n.t('within_grace_period_tag')}</span>`
                 : '';
             const shiftNameHtml = person.shift_name

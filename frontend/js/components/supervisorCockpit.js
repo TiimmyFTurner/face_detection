@@ -587,8 +587,9 @@ const SupervisorCockpit = {
 
         // Calculate counts
         const totalAssigned = this._persons.length;
-        const presentCount = roster.filter(r => r.status === 'present' && !r.is_within_grace_period).length;
-        const graceCount = roster.filter(r => r.is_within_grace_period).length;
+        const isGracePeriod = (r) => Boolean(r.is_within_grace_period && (r.last_seen_seconds_ago === null || r.last_seen_seconds_ago === undefined));
+        const presentCount = roster.filter(r => r.status === 'present' && !isGracePeriod(r)).length;
+        const graceCount = roster.filter(r => isGracePeriod(r)).length;
         const breakCount = roster.filter(r => r.status === 'on_break').length;
         const leaveCount = roster.filter(r => r.status === 'on_leave').length;
         const absentCount = roster.filter(r => r.status === 'absent').length;
@@ -761,7 +762,7 @@ const SupervisorCockpit = {
 
             if (duty) {
                 status = duty.status;
-                isGrace = Boolean(duty.is_within_grace_period);
+                isGrace = Boolean(duty.is_within_grace_period && (duty.last_seen_seconds_ago === null || duty.last_seen_seconds_ago === undefined));
             } else if (person.leaves && Array.isArray(person.leaves)) {
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const hasLeave = person.leaves.some(l => l.start_date <= todayStr && todayStr <= (l.end_date || l.start_date));

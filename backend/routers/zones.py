@@ -845,7 +845,8 @@ async def compute_duty_roster_data(
                         raw_arrival_delay = raw_delay
 
                         if 0 <= raw_delay <= s_grace:
-                            is_within_grace = True
+                            # Arrived on time within grace window - excused, no late arrival penalty.
+                            # Person has arrived and is present, so is_within_grace remains False.
                             effective_delay = 0
                         else:
                             free_arr = get_interval_free_minutes(cur_shift_start_dt, first_ev_loc, combined_free) if cur_shift_start_dt else 0

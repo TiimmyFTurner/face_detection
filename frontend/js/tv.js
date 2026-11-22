@@ -595,8 +595,8 @@ const TVBoard = {
                         ${durationFormatted ? `<span class="tv-shift-hours">(${durationFormatted})</span>` : ''}
                         ${person.is_overnight ? `<span class="tv-overnight-badge" style="font-size: 0.65rem; background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); padding: 1px 5px; border-radius: 4px; margin-inline-start: 4px; font-weight: 600;">🌙 ${this.t('shift_night')}</span>` : ''}
                     </div>
-                    <div class="tv-shift-state-tag ${person.is_in_free_time ? 'state-break' : (person.is_within_grace_period ? 'state-break' : (person.is_in_duty_hours ? 'state-duty' : 'state-off'))}">
-                        ${person.is_in_free_time ? `☕ ${person.current_break_name || this.t('status_on_break')}` : (person.is_within_grace_period ? `✓ ${this.t('grace_period')}` : (person.is_in_duty_hours ? `⚡ ${this.t('shift_on_duty')}` : `💤 ${this.t('status_off_duty')}`))}
+                    <div class="tv-shift-state-tag ${person.is_in_free_time ? 'state-break' : ((person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) ? 'state-break' : (person.is_in_duty_hours ? 'state-duty' : 'state-off'))}">
+                        ${person.is_in_free_time ? `☕ ${person.current_break_name || this.t('status_on_break')}` : ((person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) ? `✓ ${this.t('grace_period')}` : (person.is_in_duty_hours ? `⚡ ${this.t('shift_on_duty')}` : `💤 ${this.t('status_off_duty')}`))}
                     </div>
                 </div>
 

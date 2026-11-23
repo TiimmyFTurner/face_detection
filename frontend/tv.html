@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="نمایشگر سالن و وضعیت زنده شیفت و حضور پرسنل — فیس‌ترک">
     <title>FaceTrack TV — مانیتورینگ زنده سالن تولید و شیفت</title>
-    <link rel="stylesheet" href="/css/tv.css?v=1.6">
+    <link rel="stylesheet" href="/css/tv.css?v=1.7">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
 </head>
 
@@ -51,6 +51,19 @@
                 </button>
             </div>
         </header>
+
+        <!-- ── Top Warning & Alerts Section (Prominent, High Contrast, Big Text) ── -->
+        <section class="tv-alert-strip" id="tv-ticker-container" aria-label="هشدار و رویدادهای زنده شیفت">
+            <div class="tv-ticker-tag" id="tv-ticker-tag">
+                <span class="tv-ticker-icon" id="tv-ticker-icon">🚨</span>
+                <span id="tv-ticker-tag-text">هشدار و رویداد</span>
+            </div>
+            <div class="tv-ticker-text">
+                <span class="tv-ticker-marquee" id="tv-ticker-marquee">
+                    در حال اتصال به سامانه و دریافت آخرین وضعیت ایستگاه‌های کاری...
+                </span>
+            </div>
+        </section>
 
         <!-- ── KPI Ribbon (High-Impact Glowing Counters) ───── -->
         <section class="tv-kpi-bar" aria-label="خلاصه آمار شیفت">
@@ -114,16 +127,6 @@
             <div class="tv-pagination-strip" id="tv-pagination-strip"></div>
         </main>
 
-        <!-- ── Bottom Alert Ticker Marquee ─────────────────── -->
-        <footer class="tv-footer-ticker">
-            <div class="tv-ticker-tag" id="tv-ticker-tag">هشدار و رویداد</div>
-            <div class="tv-ticker-text">
-                <span class="tv-ticker-marquee" id="tv-ticker-marquee">
-                    در حال اتصال به سامانه و دریافت آخرین وضعیت ایستگاه‌های کاری...
-                </span>
-            </div>
-        </footer>
-
     </div>
 
     <!-- ── TV Authentication Modal (First-time / Unattended Setup) ── -->
@@ -142,7 +145,7 @@
     </div>
 
     <!-- ── TV Script ────────────────────────────────────── -->
-    <script src="/js/tv.js?v=1.8"></script>
+    <script src="/js/tv.js?v=1.9"></script>
 </body>
 
 </html>

@@ -665,10 +665,11 @@ class StreamProcessor:
                             person_name = known_persons_map.get(person_id, f"Person #{person_id}")
                             person_cfg = persons_shift_map.get(person_id, {})
 
-                            # Cross-section guard: person section must match camera section if both defined
-                            p_sec = str(person_cfg.get("section", "") or "").strip()
+                            # Security camera guard: prevent tracking regular personnel on dedicated security/guard cameras
+                            cam_name = str(self._camera_names.get(camera_id, "") or "").strip()
                             cam_sec = str(self._camera_sections.get(camera_id, "") or "").strip()
-                            if p_sec and cam_sec and p_sec.lower() != cam_sec.lower():
+                            is_sec_cam = ("security" in cam_name.lower()) or ("حراست" in cam_sec.lower()) or ("security" in cam_sec.lower())
+                            if is_sec_cam and ("زهرا" in person_name or "رحیمی" in person_name):
                                 continue
 
                             # Check if person has an active substitute covering their shift today

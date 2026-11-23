@@ -74,36 +74,36 @@
 }
 
 :root {
-    --tv-bg-base: #060913;
-    --tv-bg-surface: rgba(14, 21, 44, 0.75);
-    --tv-bg-card: rgba(18, 26, 54, 0.82);
-    --tv-bg-card-hover: rgba(26, 38, 76, 0.95);
-    --tv-border: rgba(255, 255, 255, 0.12);
-    --tv-border-bright: rgba(255, 255, 255, 0.22);
+    --tv-bg-base: #000000;
+    --tv-bg-surface: #0a0a0a;
+    --tv-bg-card: #080808;
+    --tv-bg-card-hover: #141414;
+    --tv-border: rgba(255, 255, 255, 0.22);
+    --tv-border-bright: rgba(255, 255, 255, 0.40);
 
-    --tv-text-main: #f1f5f9;
-    --tv-text-muted: #94a3b8;
-    --tv-text-dim: #64748b;
+    --tv-text-main: #ffffff;
+    --tv-text-muted: #e2e8f0;
+    --tv-text-dim: #94a3b8;
 
-    /* High-contrast status colors for distance visibility */
+    /* Ultra high-contrast status colors for distance visibility */
     --tv-emerald: #10b981;
-    --tv-emerald-glow: rgba(16, 185, 129, 0.35);
-    --tv-emerald-bg: rgba(16, 185, 129, 0.12);
+    --tv-emerald-glow: rgba(16, 185, 129, 0.45);
+    --tv-emerald-bg: rgba(16, 185, 129, 0.20);
 
     --tv-rose: #f43f5e;
-    --tv-rose-glow: rgba(244, 63, 94, 0.45);
-    --tv-rose-bg: rgba(244, 63, 94, 0.14);
+    --tv-rose-glow: rgba(244, 63, 94, 0.55);
+    --tv-rose-bg: rgba(244, 63, 94, 0.24);
 
     --tv-amber: #f59e0b;
-    --tv-amber-glow: rgba(245, 158, 11, 0.35);
-    --tv-amber-bg: rgba(245, 158, 11, 0.14);
+    --tv-amber-glow: rgba(245, 158, 11, 0.45);
+    --tv-amber-bg: rgba(245, 158, 11, 0.22);
 
     --tv-blue: #3b82f6;
-    --tv-blue-glow: rgba(59, 130, 246, 0.35);
-    --tv-blue-bg: rgba(59, 130, 246, 0.14);
+    --tv-blue-glow: rgba(59, 130, 246, 0.45);
+    --tv-blue-bg: rgba(59, 130, 246, 0.22);
 
     --tv-purple: #8b5cf6;
-    --tv-purple-glow: rgba(139, 92, 246, 0.35);
+    --tv-purple-glow: rgba(139, 92, 246, 0.45);
 
     --tv-radius: 14px;
     --tv-radius-sm: 8px;
@@ -126,11 +126,8 @@ html, body {
     height: 100vh;
     max-height: 100vh;
     overflow: hidden;
-    background-color: var(--tv-bg-base);
-    background-image: 
-        radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 90% 90%, rgba(139, 92, 246, 0.06) 0%, transparent 40%),
-        radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.4) 0%, transparent 100%);
+    background-color: #000000;
+    background-image: none;
     color: var(--tv-text-main);
     font-family: 'Vazirmatn', 'Inter', -apple-system, sans-serif;
     line-height: 1.4;
@@ -161,13 +158,11 @@ body[dir="ltr"] input {
     align-items: center;
     justify-content: space-between;
     padding: 10px 18px;
-    background: var(--tv-bg-surface);
-    border: 1px solid var(--tv-border);
+    background: #080808;
+    border: 1.5px solid var(--tv-border);
     border-radius: var(--tv-radius);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     flex: 0 0 auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
 }
 
 .tv-brand {
@@ -182,21 +177,22 @@ body[dir="ltr"] input {
 }
 
 .tv-brand-title {
-    font-size: 1.25rem;
-    font-weight: 800;
-    color: #fff;
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: #ffffff;
     letter-spacing: -0.02em;
     display: flex;
     align-items: center;
     gap: 10px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .tv-shift-tag {
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 4px 10px;
-    background: var(--tv-blue-bg);
-    border: 1px solid var(--tv-blue);
+    font-size: 0.92rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1.5px solid var(--tv-blue);
     color: #93c5fd;
     border-radius: 999px;
     display: inline-flex;
@@ -206,8 +202,8 @@ body[dir="ltr"] input {
 }
 
 .tv-shift-tag.no-shift {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.12);
+    background: #141414;
+    border-color: rgba(255, 255, 255, 0.2);
     color: var(--tv-text-dim);
 }
 
@@ -220,11 +216,11 @@ body[dir="ltr"] input {
 
 .tv-clock-time {
     font-family: 'JetBrains Mono', 'Vazirmatn', monospace;
-    font-size: 2.1rem;
-    font-weight: 800;
+    font-size: 2.3rem;
+    font-weight: 900;
     letter-spacing: 0.05em;
     color: #ffffff;
-    text-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
     line-height: 1;
 }
 
@@ -238,9 +234,9 @@ body[dir="ltr"] input {
 }
 
 .tv-clock-date {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--tv-text-muted);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #cbd5e1;
     margin-top: 3px;
 }
 
@@ -252,13 +248,13 @@ body[dir="ltr"] input {
 
 .tv-btn {
     font-family: inherit;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid var(--tv-border);
-    color: var(--tv-text-main);
-    padding: 7px 12px;
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    padding: 8px 14px;
     border-radius: var(--tv-radius-sm);
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: 0.88rem;
+    font-weight: 700;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -267,7 +263,7 @@ body[dir="ltr"] input {
 }
 
 .tv-btn:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background: #222222;
     border-color: var(--tv-border-bright);
     transform: translateY(-1px);
 }
@@ -275,7 +271,7 @@ body[dir="ltr"] input {
 .tv-btn.active {
     background: var(--tv-blue);
     border-color: var(--tv-blue);
-    box-shadow: 0 0 12px var(--tv-blue-glow);
+    box-shadow: 0 0 14px var(--tv-blue-glow);
 }
 
 .tv-sync-pill {
@@ -283,12 +279,13 @@ body[dir="ltr"] input {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.8rem;
-    color: var(--tv-text-muted);
-    background: rgba(0, 0, 0, 0.3);
-    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: #000000;
+    padding: 6px 14px;
     border-radius: 999px;
-    border: 1px solid var(--tv-border);
+    border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .tv-sync-dot {
@@ -318,8 +315,8 @@ body[dir="ltr"] input {
 }
 
 .tv-kpi-card {
-    background: var(--tv-bg-surface);
-    border: 1px solid var(--tv-border);
+    background: #080808;
+    border: 1.5px solid var(--tv-border);
     border-radius: var(--tv-radius);
     padding: 10px 16px;
     display: flex;
@@ -327,7 +324,7 @@ body[dir="ltr"] input {
     justify-content: space-between;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
 .tv-kpi-card::before {
@@ -335,7 +332,7 @@ body[dir="ltr"] input {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 5px;
+    width: 6px;
 }
 
 body[dir="rtl"] .tv-kpi-card::before { right: 0; }
@@ -353,29 +350,29 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
 }
 
 .tv-kpi-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--tv-text-muted);
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #cbd5e1;
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
 
 .tv-kpi-value {
-    font-size: 2.2rem;
+    font-size: 2.3rem;
     font-weight: 900;
     line-height: 1.1;
-    color: #fff;
+    color: #ffffff;
     font-family: 'JetBrains Mono', 'Vazirmatn', sans-serif;
     margin-top: 2px;
 }
 
 .tv-kpi-card.kpi-present .tv-kpi-value {
-    color: #6ee7b7;
+    color: #34d399;
     text-shadow: 0 0 16px var(--tv-emerald-glow);
 }
 
 .tv-kpi-card.kpi-absent .tv-kpi-value {
-    color: #fca5a5;
+    color: #f87171;
     text-shadow: 0 0 16px var(--tv-rose-glow);
 }
 
@@ -385,22 +382,22 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
 
 @keyframes alertBorderPulse {
     0%, 100% { border-color: var(--tv-border); }
-    50% { border-color: var(--tv-rose); box-shadow: 0 0 20px var(--tv-rose-glow); }
+    50% { border-color: var(--tv-rose); box-shadow: 0 0 24px var(--tv-rose-glow); }
 }
 
 .tv-kpi-card.kpi-break .tv-kpi-value {
-    color: #fde68a;
+    color: #fbbf24;
     text-shadow: 0 0 16px var(--tv-amber-glow);
 }
 
 .tv-kpi-card.kpi-compliance .tv-kpi-value {
-    color: #c4b5fd;
+    color: #c084fc;
     text-shadow: 0 0 16px var(--tv-purple-glow);
 }
 
 .tv-kpi-icon {
     font-size: 2rem;
-    opacity: 0.7;
+    opacity: 0.85;
 }
 
 /* ── Main Roster Grid (Zero-Scroll Auto-Fit) ──────────────────── */
@@ -461,8 +458,8 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
 
 /* ── Worker Status Card ───────────────────────────────────────── */
 .tv-card {
-    background: var(--tv-bg-card);
-    border: 1px solid var(--tv-border);
+    background: #080808;
+    border: 1.5px solid var(--tv-border);
     border-radius: var(--tv-radius);
     padding: 12px 14px;
     display: flex;
@@ -470,7 +467,7 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     justify-content: space-between;
     height: 100%;
     position: relative;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     overflow: hidden;
 }
@@ -480,9 +477,8 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     height: auto;
     max-height: 100%;
     justify-content: flex-start;
-    background: linear-gradient(155deg, rgba(19, 27, 49, 0.96) 0%, rgba(11, 16, 31, 0.98) 100%);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #0a0a0a;
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
 }
 
 .tv-roster-grid.is-few-cards .tv-card-footer {
@@ -495,49 +491,49 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 4px;
+    width: 5px;
 }
 
 body[dir="rtl"] .tv-card::after { right: 0; }
 body[dir="ltr"] .tv-card::after { left: 0; }
 
 .tv-card.status-present {
-    border-color: rgba(16, 185, 129, 0.3);
+    border-color: rgba(16, 185, 129, 0.45);
 }
 .tv-card.status-present::after {
     background: var(--tv-emerald);
-    box-shadow: 0 0 10px var(--tv-emerald);
+    box-shadow: 0 0 12px var(--tv-emerald);
 }
 
 .tv-card.status-absent {
-    border-color: rgba(244, 63, 94, 0.45);
-    background: linear-gradient(145deg, rgba(24, 18, 32, 0.9) 0%, rgba(45, 15, 25, 0.7) 100%);
-    animation: absentCardPulse 3s infinite ease-in-out;
+    border-color: #ef4444;
+    background: linear-gradient(145deg, #160406 0%, #28080c 100%);
+    animation: absentCardPulse 2.5s infinite ease-in-out;
 }
 .tv-card.status-absent::after {
     background: var(--tv-rose);
-    box-shadow: 0 0 14px var(--tv-rose);
+    box-shadow: 0 0 16px var(--tv-rose);
 }
 
 @keyframes absentCardPulse {
-    0%, 100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
-    50% { box-shadow: 0 6px 24px var(--tv-rose-glow); border-color: rgba(244, 63, 94, 0.7); }
+    0%, 100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
+    50% { box-shadow: 0 6px 28px var(--tv-rose-glow); border-color: #ff4d6d; }
 }
 
 .tv-card.status-on_break {
-    border-color: rgba(245, 158, 11, 0.3);
+    border-color: rgba(245, 158, 11, 0.45);
 }
 .tv-card.status-on_break::after {
     background: var(--tv-amber);
-    box-shadow: 0 0 10px var(--tv-amber);
+    box-shadow: 0 0 12px var(--tv-amber);
 }
 
 .tv-card.status-camera_offline {
-    border-color: rgba(234, 179, 8, 0.35);
+    border-color: rgba(234, 179, 8, 0.5);
 }
 .tv-card.status-camera_offline::after {
     background: #eab308;
-    box-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
+    box-shadow: 0 0 12px rgba(234, 179, 8, 0.6);
 }
 
 /* Card Header (Name + Status Dot + Badges + Station) */
@@ -619,22 +615,23 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-person-name {
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: #fff;
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #ffffff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     letter-spacing: -0.01em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .tv-id-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: #94a3b8;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1px 6px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: #181818;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    padding: 2px 7px;
     border-radius: 4px;
     font-family: 'JetBrains Mono', monospace;
     white-space: nowrap;
@@ -648,9 +645,9 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-person-role {
-    font-size: 0.76rem;
-    font-weight: 500;
-    color: var(--tv-text-muted);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #cbd5e1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -659,7 +656,7 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 .tv-tags-row {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     flex-wrap: wrap;
     margin-top: 2px;
 }
@@ -668,34 +665,34 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: #93c5fd;
-    background: rgba(59, 130, 246, 0.12);
-    border: 1px solid rgba(59, 130, 246, 0.22);
-    padding: 1px 6px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #60a5fa;
+    background: rgba(37, 99, 235, 0.22);
+    border: 1.5px solid #3b82f6;
+    padding: 2px 8px;
     border-radius: 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 170px;
+    max-width: 180px;
 }
 
 .tv-camera-name {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: #c4b5fd;
-    background: rgba(139, 92, 246, 0.1);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    padding: 1px 6px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #c084fc;
+    background: rgba(147, 51, 234, 0.22);
+    border: 1.5px solid #a855f7;
+    padding: 2px 8px;
     border-radius: 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 150px;
+    max-width: 160px;
 }
 
 /* Shift Info Strip */
@@ -704,101 +701,107 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    background: rgba(10, 16, 34, 0.75);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: #111111;
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 5px 9px;
     margin: 5px 0 4px 0;
-    font-size: 0.74rem;
+    font-size: 0.82rem;
 }
 
 .tv-shift-window {
     display: flex;
     align-items: center;
-    gap: 5px;
-    color: #93c5fd;
-    font-weight: 600;
+    gap: 6px;
+    color: #ffffff;
+    font-weight: 800;
     white-space: nowrap;
 }
 
 .tv-shift-icon {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
 .tv-shift-hours {
-    color: var(--tv-text-dim);
-    font-size: 0.7rem;
-    font-weight: 500;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    font-weight: 700;
 }
 
 .tv-shift-state-tag {
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 1px 6px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    padding: 2px 8px;
     border-radius: 4px;
     white-space: nowrap;
 }
 
 .tv-shift-state-tag.state-duty {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.22);
     color: #34d399;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border: 1.5px solid rgba(16, 185, 129, 0.5);
 }
 
 .tv-shift-state-tag.state-break {
-    background: rgba(245, 158, 11, 0.18);
+    background: rgba(245, 158, 11, 0.22);
     color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.35);
+    border: 1.5px solid rgba(245, 158, 11, 0.5);
 }
 
 .tv-shift-state-tag.state-off {
-    background: rgba(148, 163, 184, 0.12);
-    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Card Body (Status Banner) */
 .tv-card-body {
     margin: 4px 0 6px 0;
-    padding: 5px 9px;
+    padding: 6px 10px;
     border-radius: var(--tv-radius-sm);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.82rem;
-    font-weight: 700;
+    font-size: 0.92rem;
+    font-weight: 800;
 }
 
 .status-present .tv-card-body {
-    background: var(--tv-emerald-bg);
+    background: rgba(16, 185, 129, 0.2);
     color: #34d399;
+    border: 1.5px solid rgba(16, 185, 129, 0.45);
 }
 
 .status-absent .tv-card-body {
-    background: var(--tv-rose-bg);
-    color: #fb7185;
+    background: rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    border: 1.5px solid #ef4444;
 }
 
 .status-on_break .tv-card-body {
-    background: var(--tv-amber-bg);
-    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.22);
+    color: #fde047;
+    border: 1.5px solid rgba(245, 158, 11, 0.45);
 }
 
 .status-camera_offline .tv-card-body {
-    background: rgba(234, 179, 8, 0.12);
-    color: #fde047;
-    border: 1px solid rgba(234, 179, 8, 0.25);
+    background: rgba(234, 179, 8, 0.22);
+    color: #fef08a;
+    border: 1.5px solid rgba(234, 179, 8, 0.5);
 }
 
 .tv-status-text {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
+    font-size: 0.96rem;
+    font-weight: 900;
 }
 
 .tv-status-sub {
-    font-size: 0.74rem;
-    font-weight: 500;
-    opacity: 0.9;
+    font-size: 0.82rem;
+    font-weight: 700;
+    opacity: 0.95;
     white-space: nowrap;
 }
 
@@ -808,13 +811,13 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     flex-direction: column;
     gap: 4px;
     padding-top: 5px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .tv-stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 3px 6px;
+    gap: 4px 6px;
     margin-bottom: 3px;
 }
 
@@ -823,22 +826,23 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    background: rgba(255, 255, 255, 0.035);
-    padding: 3px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 4px 7px;
     border-radius: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .tv-stat-box-label {
-    font-size: 0.68rem;
-    color: var(--tv-text-muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #cbd5e1;
     white-space: nowrap;
 }
 
 .tv-stat-box-val {
-    font-size: 0.74rem;
-    font-weight: 700;
-    color: var(--tv-text-main);
+    font-size: 0.82rem;
+    font-weight: 900;
+    color: #ffffff;
     white-space: nowrap;
 }
 
@@ -848,12 +852,12 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 
 .tv-stat-box-val.val-absence.alert {
     color: #f87171;
-    font-weight: 800;
+    font-weight: 900;
 }
 
 .tv-stat-box-val.val-incidents.warning {
     color: #fbbf24;
-    font-weight: 800;
+    font-weight: 900;
 }
 
 .tv-progress-track {
@@ -879,23 +883,29 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     padding: 26px 32px;
     gap: 16px;
     border-radius: 22px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 40px rgba(59, 130, 246, 0.08);
+    background: #080808;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(59, 130, 246, 0.12);
 }
 
 .tv-roster-grid.is-single-card .tv-card.status-present {
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 45px rgba(16, 185, 129, 0.16);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 45px rgba(16, 185, 129, 0.25);
+    border-color: rgba(16, 185, 129, 0.6);
 }
 
 .tv-roster-grid.is-single-card .tv-card.status-absent {
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 50px rgba(244, 63, 94, 0.25);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 50px rgba(244, 63, 94, 0.35);
+    border-color: #ef4444;
 }
 
 .tv-roster-grid.is-single-card .tv-card.status-on_break {
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 45px rgba(245, 158, 11, 0.16);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 45px rgba(245, 158, 11, 0.25);
+    border-color: rgba(245, 158, 11, 0.6);
 }
 
 .tv-roster-grid.is-single-card .tv-card.status-camera_offline {
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 45px rgba(234, 179, 8, 0.18);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 45px rgba(234, 179, 8, 0.25);
+    border-color: rgba(234, 179, 8, 0.6);
 }
 
 .tv-roster-grid.is-single-card .tv-card-header {
@@ -903,25 +913,25 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-roster-grid.is-single-card .tv-status-indicator {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
 .tv-roster-grid.is-single-card .tv-person-name {
-    font-size: 1.65rem;
-    font-weight: 800;
+    font-size: 1.85rem;
+    font-weight: 900;
 }
 
 .tv-roster-grid.is-single-card .tv-id-badge {
-    font-size: 0.88rem;
-    padding: 3px 10px;
+    font-size: 0.95rem;
+    padding: 4px 12px;
     border-radius: 6px;
 }
 
 .tv-roster-grid.is-single-card .tv-person-role {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #94a3b8;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #cbd5e1;
 }
 
 .tv-roster-grid.is-single-card .tv-tags-row {
@@ -930,15 +940,15 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-roster-grid.is-single-card .tv-zone-name {
-    font-size: 0.85rem;
-    padding: 3px 10px;
+    font-size: 0.92rem;
+    padding: 4px 12px;
     max-width: none;
     border-radius: 6px;
 }
 
 .tv-roster-grid.is-single-card .tv-camera-name {
-    font-size: 0.85rem;
-    padding: 3px 10px;
+    font-size: 0.92rem;
+    padding: 4px 12px;
     max-width: none;
     border-radius: 6px;
 }
@@ -946,42 +956,43 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 .tv-roster-grid.is-single-card .tv-shift-strip {
     padding: 10px 16px;
     border-radius: 10px;
-    font-size: 0.92rem;
+    font-size: 0.96rem;
     margin: 2px 0 0 0;
-    background: rgba(8, 14, 28, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #111111;
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .tv-roster-grid.is-single-card .tv-shift-window {
-    font-size: 0.95rem;
+    font-size: 1rem;
     gap: 8px;
 }
 
 .tv-roster-grid.is-single-card .tv-shift-hours {
-    font-size: 0.82rem;
+    font-size: 0.88rem;
+    color: #cbd5e1;
 }
 
 .tv-roster-grid.is-single-card .tv-shift-state-tag {
-    font-size: 0.82rem;
-    padding: 3px 10px;
+    font-size: 0.88rem;
+    padding: 3px 12px;
     border-radius: 6px;
 }
 
 .tv-roster-grid.is-single-card .tv-card-body {
-    padding: 12px 18px;
+    padding: 14px 20px;
     border-radius: 10px;
-    font-size: 1.05rem;
+    font-size: 1.15rem;
     margin: 0;
 }
 
 .tv-roster-grid.is-single-card .tv-status-text {
-    font-size: 1.15rem;
+    font-size: 1.25rem;
     gap: 8px;
 }
 
 .tv-roster-grid.is-single-card .tv-status-sub {
-    font-size: 0.95rem;
-    font-weight: 600;
+    font-size: 1.05rem;
+    font-weight: 700;
 }
 
 .tv-roster-grid.is-single-card .tv-card-footer {
@@ -998,25 +1009,26 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 .tv-roster-grid.is-single-card .tv-stat-box {
     flex-direction: column;
     align-items: flex-start;
-    padding: 10px 12px;
+    padding: 10px 14px;
     gap: 4px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .tv-roster-grid.is-single-card .tv-stat-box-label {
-    font-size: 0.78rem;
-    color: var(--tv-text-dim);
+    font-size: 0.84rem;
+    color: #cbd5e1;
+    font-weight: 700;
 }
 
 .tv-roster-grid.is-single-card .tv-stat-box-val {
-    font-size: 1.22rem;
-    font-weight: 800;
+    font-size: 1.35rem;
+    font-weight: 900;
 }
 
 .tv-roster-grid.is-single-card .tv-progress-track {
-    height: 7px;
+    height: 8px;
 }
 
 /* ── 2 Cards: Duo Mode ────────────────────────────────────────── */
@@ -1045,7 +1057,9 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-roster-grid.is-two-cards .tv-person-role {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #cbd5e1;
 }
 
 .tv-roster-grid.is-two-cards .tv-tags-row {
@@ -1055,20 +1069,20 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 
 .tv-roster-grid.is-two-cards .tv-zone-name,
 .tv-roster-grid.is-two-cards .tv-camera-name {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     padding: 2px 8px;
     max-width: 220px;
 }
 
 .tv-roster-grid.is-two-cards .tv-shift-strip {
     padding: 8px 12px;
-    font-size: 0.84rem;
+    font-size: 0.88rem;
     margin: 2px 0 0 0;
 }
 
 .tv-roster-grid.is-two-cards .tv-card-body {
     padding: 10px 14px;
-    font-size: 0.95rem;
+    font-size: 1rem;
     margin: 0;
 }
 
@@ -1081,14 +1095,19 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 .tv-roster-grid.is-two-cards .tv-stat-box {
     padding: 7px 10px;
     border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .tv-roster-grid.is-two-cards .tv-stat-box-label {
-    font-size: 0.74rem;
+    font-size: 0.78rem;
+    color: #cbd5e1;
+    font-weight: 700;
 }
 
 .tv-roster-grid.is-two-cards .tv-stat-box-val {
-    font-size: 0.95rem;
+    font-size: 1.05rem;
+    font-weight: 900;
 }
 
 .tv-roster-grid.is-two-cards .tv-progress-track {
@@ -1134,14 +1153,19 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 
 .tv-roster-grid.is-three-cards .tv-stat-box {
     padding: 5px 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .tv-roster-grid.is-three-cards .tv-stat-box-label {
-    font-size: 0.7rem;
+    font-size: 0.74rem;
+    color: #cbd5e1;
+    font-weight: 700;
 }
 
 .tv-roster-grid.is-three-cards .tv-stat-box-val {
-    font-size: 0.86rem;
+    font-size: 0.92rem;
+    font-weight: 900;
 }
 
 /* ── 4 Cards: Quad Mode ────────────────────────────────────────── */
@@ -1178,7 +1202,20 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-roster-grid.is-four-cards .tv-stat-box {
-    padding: 4px 7px;
+    padding: 5px 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.tv-roster-grid.is-four-cards .tv-stat-box-label {
+    font-size: 0.74rem;
+    color: #cbd5e1;
+    font-weight: 700;
+}
+
+.tv-roster-grid.is-four-cards .tv-stat-box-val {
+    font-size: 0.90rem;
+    font-weight: 900;
 }
 
 /* ── Responsive & Ultra-wide Breakpoints ─────────────────────── */
@@ -1245,46 +1282,85 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     box-shadow: 0 0 10px var(--tv-blue-glow);
 }
 
-/* ── Bottom Alert Ticker Marquee ─────────────────────────────── */
+/* ── Top Warning / Alert Strip (High Contrast, Big Text on Top) ─ */
+.tv-alert-strip,
 .tv-footer-ticker {
     display: flex;
     align-items: center;
-    background: var(--tv-bg-surface);
-    border: 1px solid var(--tv-border);
+    background: #080808;
+    border: 2px solid rgba(255, 255, 255, 0.28);
     border-radius: var(--tv-radius);
-    padding: 8px 16px;
-    gap: 14px;
+    padding: 10px 18px;
+    gap: 16px;
     flex: 0 0 auto;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.8);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.tv-alert-strip.has-alerts,
+.tv-footer-ticker.has-alerts {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.28) 0%, #160406 50%, rgba(239, 68, 68, 0.28) 100%);
+    border-color: #ef4444;
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.5), inset 0 0 15px rgba(239, 68, 68, 0.25);
+    animation: alertStripPulse 2s infinite ease-in-out;
+}
+
+@keyframes alertStripPulse {
+    0%, 100% {
+        border-color: #ef4444;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        border-color: #f87171;
+        box-shadow: 0 0 35px rgba(239, 68, 68, 0.7), inset 0 0 20px rgba(239, 68, 68, 0.35);
+    }
 }
 
 .tv-ticker-tag {
-    font-size: 0.8rem;
-    font-weight: 800;
-    color: #fff;
-    background: var(--tv-rose);
-    padding: 3px 8px;
-    border-radius: 6px;
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #ffffff;
+    background: #059669;
+    padding: 6px 14px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex: 0 0 auto;
     letter-spacing: 0.02em;
+    box-shadow: 0 0 14px rgba(5, 150, 105, 0.5);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+    transition: all 0.25s ease;
+}
+
+.tv-alert-strip.has-alerts .tv-ticker-tag,
+.tv-footer-ticker.has-alerts .tv-ticker-tag {
+    background: #dc2626;
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.7);
     animation: alertBadgeBlink 1.5s infinite;
 }
 
-@keyframes alertBadgeBlink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+.tv-ticker-icon {
+    font-size: 1.35rem;
+    line-height: 1;
 }
 
 .tv-ticker-text {
     flex: 1 1 auto;
     overflow: hidden;
     white-space: nowrap;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--tv-text-main);
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #34d399;
+    letter-spacing: 0.01em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.tv-alert-strip.has-alerts .tv-ticker-text,
+.tv-footer-ticker.has-alerts .tv-ticker-text {
+    color: #ffffff;
+    font-weight: 900;
 }
 
 .tv-ticker-marquee {

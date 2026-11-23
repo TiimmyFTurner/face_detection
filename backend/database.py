@@ -161,7 +161,7 @@ async def init_db() -> None:
                     "UPDATE events SET person_id = NULL, person_name = NULL WHERE alert_type = 'camera_disconnected' AND person_id IS NOT NULL"
                 )
 
-                # Sanitize camera_zones so persons in one section or security cameras are not erroneously cross-assigned
+                # Sanitize camera_zones: clean up deleted orphan person IDs and disassociate legacy security camera links
                 try:
                     import json
                     cams = sync_conn.exec_driver_sql("SELECT id, section, name FROM cameras").fetchall()
@@ -190,13 +190,13 @@ async def init_db() -> None:
                         for pid in pids_list:
                             try:
                                 pid_int = int(pid)
-                                p_sec, p_name = person_meta.get(pid_int, ("", ""))
-                                # If camera is security camera and person belongs to packaging/production/warranty or is Zahra Rahimi:
-                                if is_sec_cam and (p_sec or "زهرا" in p_name or "رحیمی" in p_name):
+                                # Drop orphan person ID if person was deleted from the system
+                                if pid_int not in person_meta:
                                     changed = True
                                     continue
-                                # If both sections defined and don't match:
-                                if c_sec and p_sec and c_sec.lower() != p_sec.lower():
+                                p_sec, p_name = person_meta[pid_int]
+                                # Disassociate Zahra Rahimi from dedicated security cameras if legacy data linked her
+                                if is_sec_cam and ("زهرا" in p_name or "رحیمی" in p_name):
                                     changed = True
                                     continue
                                 valid_pids.append(pid_int)

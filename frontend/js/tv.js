@@ -42,6 +42,7 @@ const TVBoard = {
             no_workers_scheduled: 'هیچ پرسنلی برای شیفت جاری ثبت نشده است',
             no_workers_sub: 'برای تعریف شیفت‌ها به بخش «منطقه‌ها و شیفت‌ها» در پنل مدیریت مراجعه کنید.',
             ticker_title: 'هشدار و رویداد',
+            ticker_title_normal: 'وضعیت ایستگاه‌ها',
             ticker_all_normal: 'کلیه ایستگاه‌های فعال در وضعیت پایدار می‌باشند. انضباط کلی شیفت مطلوب است.',
             sync_ok: 'متصل به سامانه',
             sync_reconnecting: 'در حال اتصال مجدد...',
@@ -91,6 +92,7 @@ const TVBoard = {
             no_workers_scheduled: 'No personnel assigned to active shifts right now',
             no_workers_sub: 'Configure zones and shifts from the main administration panel.',
             ticker_title: 'ALERTS',
+            ticker_title_normal: 'STATIONS OK',
             ticker_all_normal: 'All active workstations operational. Factory shift attendance is normal.',
             sync_ok: 'Live Connected',
             sync_reconnecting: 'Reconnecting...',
@@ -635,18 +637,36 @@ const TVBoard = {
         `;
     },
 
-    // ── Render Bottom Alert Ticker ───────────────────────────
+    // ── Render Top Alert & Warning Strip ─────────────────────
     renderAlertTicker(data) {
         const marqueeEl = document.getElementById('tv-ticker-marquee');
+        const containerEl = document.getElementById('tv-ticker-container') || document.querySelector('.tv-alert-strip') || document.querySelector('.tv-footer-ticker');
+        const iconEl = document.getElementById('tv-ticker-icon');
+        const tagTextEl = document.getElementById('tv-ticker-tag-text');
         if (!marqueeEl) return;
 
         const absentWorkers = (data.roster || []).filter(p => p.status === 'absent');
-        if (absentWorkers.length > 0) {
-            const alerts = absentWorkers.map(p => 
-                `⚠️ ${p.person_name} (${p.zone_name}): ${this.t('absent_for', { m: this.toDigits(p.current_absence_minutes || 1) })}`
-            ).join('  |  ');
-            marqueeEl.textContent = alerts;
+        const offlineWorkers = (data.roster || []).filter(p => p.status === 'camera_offline');
+
+        if (absentWorkers.length > 0 || offlineWorkers.length > 0) {
+            if (containerEl) containerEl.classList.add('has-alerts');
+            if (iconEl) iconEl.textContent = '🚨';
+            if (tagTextEl) tagTextEl.textContent = this.t('ticker_title');
+
+            const alertParts = [];
+            absentWorkers.forEach(p => {
+                const mins = this.toDigits(p.current_absence_minutes || 1);
+                alertParts.push(`⚠️ ${p.person_name} (${p.zone_name}): ${this.t('absent_for', { m: mins })}`);
+            });
+            offlineWorkers.forEach(p => {
+                alertParts.push(`🟡 ${p.person_name} (${p.camera_name || p.zone_name}): ${this.t('status_offline')}`);
+            });
+
+            marqueeEl.textContent = alertParts.join('      ⚡      ');
         } else {
+            if (containerEl) containerEl.classList.remove('has-alerts');
+            if (iconEl) iconEl.textContent = '✓';
+            if (tagTextEl) tagTextEl.textContent = this.t('ticker_title_normal');
             marqueeEl.textContent = this.t('ticker_all_normal');
         }
     },
@@ -755,8 +775,14 @@ const TVBoard = {
         const kpiComp = document.getElementById('tv-kpi-compliance-label');
         if (kpiComp) kpiComp.textContent = this.t('kpi_compliance');
 
-        const tickerTag = document.getElementById('tv-ticker-tag');
-        if (tickerTag) tickerTag.textContent = this.t('ticker_title');
+        const tagTextEl = document.getElementById('tv-ticker-tag-text');
+        if (tagTextEl) {
+            const hasAlerts = document.getElementById('tv-ticker-container')?.classList.contains('has-alerts');
+            tagTextEl.textContent = hasAlerts ? this.t('ticker_title') : this.t('ticker_title_normal');
+        } else {
+            const tickerTag = document.getElementById('tv-ticker-tag');
+            if (tickerTag) tickerTag.textContent = this.t('ticker_title');
+        }
 
         this.updateSoundUI();
     },

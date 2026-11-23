@@ -529,7 +529,9 @@ async def compute_duty_roster_data(
             shift_window_str = f"{start_str} - {end_str}"
             in_free_time, break_name = is_time_in_free_time(s_free, now_local)
 
-            raw_assigned = _parse_list_field(s.get("assigned_person_ids", z.assigned_person_ids), [])
+            s_assigned = _parse_list_field(s.get("assigned_person_ids"), [])
+            z_assigned = _parse_list_field(z.assigned_person_ids, [])
+            raw_assigned = list(dict.fromkeys(s_assigned + z_assigned))
             assigned_ids = [int(x) for x in raw_assigned if str(x).isdigit()]
 
             for pid in assigned_ids:

@@ -356,3 +356,76 @@ async def test_supervisor_camera_workstation_isolation(client: AsyncClient):
         async def override_admin():
             return mock_admin
         app.dependency_overrides[get_current_user] = override_admin
+
+
+@pytest.mark.asyncio
+async def test_cross_section_zone_assignment_persistence_across_upgrades(client: AsyncClient):
+    """
+    Verify that personnel assigned to workstation zones (e.g. 'محمد عباسی' in section 'بسته بندی 2'
+    assigned to a workstation on camera 'بسته بندی خط 2' with section 'بسته بندی') are NEVER
+    automatically unassigned or cleared during database startup migrations or upgrades,
+    and remain selected in both the shift config and live duty roster.
+    """
+    from backend.database import init_db
+
+    async with test_session() as session:
+        # Camera in section "بسته بندی"
+        cam = Camera(name="بسته بندی خط 2", rtsp_url="rtsp://localhost/pkg2", section="بسته بندی", is_active=True)
+        session.add(cam)
+        # Person in section "بسته بندی 2" (sub-department)
+        person = Person(
+            name="محمد عباسی",
+            role="اپراتور گارانتی",
+            section="بسته بندی 2",
+            custom_shift={
+                "shift_type": "fixed",
+                "name": "شیفت صبح (Morning)",
+                "start_time": "07:00",
+                "end_time": "15:00",
+                "active_days": ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"],
+                "grace_period_minutes": 10,
+                "absence_timeout_minutes": 10,
+            },
+        )
+        session.add(person)
+        await session.flush()
+
+        # Workstation zone on camera assigned to Mohammad Abbasi
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="میز گارانتی بسته بندی دو",
+            x=10, y=10, width=50, height=50,
+            assigned_person_ids=[person.id],
+            start_time="07:00",
+            end_time="15:00",
+            active_days=["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"],
+            alert_mode="absence",
+            is_active=True,
+        )
+        session.add(zone)
+        await session.commit()
+
+        p_id = person.id
+        z_id = zone.id
+
+    # Simulate server upgrade / reboot by running init_db()
+    await init_db()
+
+    # 1. Verify zone still has person assigned in the database
+    async with test_session() as session:
+        z_after = await session.get(CameraZone, z_id)
+        assert p_id in (z_after.assigned_person_ids or []), "Person was stripped from camera zone during upgrade/startup!"
+
+    # 2. Verify GET /api/persons/{p_id}/shift returns the workstation as selected (assigned_zones)
+    shift_resp = await client.get(f"/api/persons/{p_id}/shift")
+    assert shift_resp.status_code == 200
+    shift_data = shift_resp.json()
+    assigned_ids = [z["id"] for z in shift_data.get("assigned_zones", [])]
+    assert z_id in assigned_ids, "Workstation is not selected in person shift configuration!"
+
+    # 3. Verify GET /api/zones/duty-roster contains Mohammad Abbasi
+    roster_resp = await client.get("/api/zones/duty-roster")
+    assert roster_resp.status_code == 200
+    roster = roster_resp.json().get("roster", [])
+    assert any(item["person_id"] == p_id for item in roster), "Person missing from live duty roster!"
+

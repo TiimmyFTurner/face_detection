@@ -11,8 +11,8 @@
 @font-face {
     font-family: 'Vazirmatn';
     src: local('Vazirmatn'),
-         url('../fonts/Vazirmatn-Regular.woff2') format('woff2'),
-         url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+        url('../fonts/Vazirmatn-Regular.woff2') format('woff2'),
+        url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -21,9 +21,9 @@
 @font-face {
     font-family: 'Vazirmatn';
     src: local('Vazirmatn Medium'),
-         local('Vazirmatn-Medium'),
-         url('../fonts/Vazirmatn-Medium.woff2') format('woff2'),
-         url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
+        local('Vazirmatn-Medium'),
+        url('../fonts/Vazirmatn-Medium.woff2') format('woff2'),
+        url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
     font-weight: 500;
     font-style: normal;
     font-display: swap;
@@ -32,9 +32,9 @@
 @font-face {
     font-family: 'Vazirmatn';
     src: local('Vazirmatn SemiBold'),
-         local('Vazirmatn-SemiBold'),
-         url('../fonts/Vazirmatn-SemiBold.woff2') format('woff2'),
-         url('/fonts/Vazirmatn-SemiBold.woff2') format('woff2');
+        local('Vazirmatn-SemiBold'),
+        url('../fonts/Vazirmatn-SemiBold.woff2') format('woff2'),
+        url('/fonts/Vazirmatn-SemiBold.woff2') format('woff2');
     font-weight: 600;
     font-style: normal;
     font-display: swap;
@@ -43,9 +43,9 @@
 @font-face {
     font-family: 'Vazirmatn';
     src: local('Vazirmatn Bold'),
-         local('Vazirmatn-Bold'),
-         url('../fonts/Vazirmatn-Bold.woff2') format('woff2'),
-         url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+        local('Vazirmatn-Bold'),
+        url('../fonts/Vazirmatn-Bold.woff2') format('woff2'),
+        url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
     font-weight: 700;
     font-style: normal;
     font-display: swap;
@@ -54,9 +54,9 @@
 @font-face {
     font-family: 'Vazirmatn';
     src: local('Vazirmatn ExtraBold'),
-         local('Vazirmatn-ExtraBold'),
-         url('../fonts/Vazirmatn-ExtraBold.woff2') format('woff2'),
-         url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+        local('Vazirmatn-ExtraBold'),
+        url('../fonts/Vazirmatn-ExtraBold.woff2') format('woff2'),
+        url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
     font-weight: 800;
     font-style: normal;
     font-display: swap;
@@ -65,9 +65,9 @@
 @font-face {
     font-family: 'Vazirmatn';
     src: local('Vazirmatn Black'),
-         local('Vazirmatn-Black'),
-         url('../fonts/Vazirmatn-Black.woff2') format('woff2'),
-         url('/fonts/Vazirmatn-Black.woff2') format('woff2');
+        local('Vazirmatn-Black'),
+        url('../fonts/Vazirmatn-Black.woff2') format('woff2'),
+        url('/fonts/Vazirmatn-Black.woff2') format('woff2');
     font-weight: 900;
     font-style: normal;
     font-display: swap;
@@ -117,11 +117,15 @@
     -webkit-user-select: none;
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
     font-family: inherit;
 }
 
-html, body {
+html,
+body {
     width: 100vw;
     height: 100vh;
     max-height: 100vh;
@@ -229,8 +233,16 @@ body[dir="ltr"] input {
 }
 
 @keyframes blinkColon {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0.2; }
+
+    0%,
+    49% {
+        opacity: 1;
+    }
+
+    50%,
+    100% {
+        opacity: 0.2;
+    }
 }
 
 .tv-clock-date {
@@ -301,9 +313,20 @@ body[dir="ltr"] input {
 }
 
 @keyframes pulseSync {
-    0% { transform: scale(1); filter: brightness(1); }
-    50% { transform: scale(1.6); filter: brightness(2); }
-    100% { transform: scale(1); filter: brightness(1); }
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+
+    50% {
+        transform: scale(1.6);
+        filter: brightness(2);
+    }
+
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
 }
 
 /* ── KPI Ribbon (High-Impact Counters) ────────────────────────── */
@@ -335,14 +358,33 @@ body[dir="ltr"] input {
     width: 6px;
 }
 
-body[dir="rtl"] .tv-kpi-card::before { right: 0; }
-body[dir="ltr"] .tv-kpi-card::before { left: 0; }
+body[dir="rtl"] .tv-kpi-card::before {
+    right: 0;
+}
 
-.tv-kpi-card.kpi-scheduled::before { background: var(--tv-blue); }
-.tv-kpi-card.kpi-present::before { background: var(--tv-emerald); }
-.tv-kpi-card.kpi-absent::before { background: var(--tv-rose); }
-.tv-kpi-card.kpi-break::before { background: var(--tv-amber); }
-.tv-kpi-card.kpi-compliance::before { background: var(--tv-purple); }
+body[dir="ltr"] .tv-kpi-card::before {
+    left: 0;
+}
+
+.tv-kpi-card.kpi-scheduled::before {
+    background: var(--tv-blue);
+}
+
+.tv-kpi-card.kpi-present::before {
+    background: var(--tv-emerald);
+}
+
+.tv-kpi-card.kpi-absent::before {
+    background: var(--tv-rose);
+}
+
+.tv-kpi-card.kpi-break::before {
+    background: var(--tv-amber);
+}
+
+.tv-kpi-card.kpi-compliance::before {
+    background: var(--tv-purple);
+}
 
 .tv-kpi-info {
     display: flex;
@@ -381,8 +423,16 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
 }
 
 @keyframes alertBorderPulse {
-    0%, 100% { border-color: var(--tv-border); }
-    50% { border-color: var(--tv-rose); box-shadow: 0 0 24px var(--tv-rose-glow); }
+
+    0%,
+    100% {
+        border-color: var(--tv-border);
+    }
+
+    50% {
+        border-color: var(--tv-rose);
+        box-shadow: 0 0 24px var(--tv-rose-glow);
+    }
 }
 
 .tv-kpi-card.kpi-break .tv-kpi-value {
@@ -420,34 +470,36 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
 
 /* ── Few-Card Centered Modes (1-4 cards) ─────────────────────── */
 .tv-roster-grid.is-few-cards {
-    align-content: center;
-    justify-content: center;
-    padding: 14px 20px;
+    align-content: stretch;
+    justify-content: stretch;
+    padding: 8px 12px;
     box-sizing: border-box;
+    height: 100%;
 }
 
 .tv-roster-grid.is-single-card {
-    grid-template-columns: minmax(380px, 860px);
-    grid-template-rows: auto;
+    grid-template-columns: minmax(400px, 920px);
+    grid-template-rows: 1fr;
+    justify-content: center;
     gap: 0;
 }
 
 .tv-roster-grid.is-two-cards {
-    grid-template-columns: repeat(2, minmax(360px, 720px));
-    grid-template-rows: auto;
-    gap: 24px;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: 1fr;
+    gap: 16px;
 }
 
 .tv-roster-grid.is-three-cards {
-    grid-template-columns: repeat(3, minmax(300px, 560px));
-    grid-template-rows: auto;
-    gap: 18px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: 1fr;
+    gap: 16px;
 }
 
 .tv-roster-grid.is-four-cards {
-    grid-template-columns: repeat(2, minmax(360px, 680px));
-    grid-template-rows: repeat(2, auto);
-    gap: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 14px;
 }
 
 .tv-roster-grid.is-empty {
@@ -472,11 +524,11 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     overflow: hidden;
 }
 
-/* In few-card mode, cards don't stretch 100vh height and use balanced flow */
+/* In few-card mode, cards stretch cleanly to fill available height without void */
 .tv-roster-grid.is-few-cards .tv-card {
-    height: auto;
+    height: 100%;
     max-height: 100%;
-    justify-content: flex-start;
+    justify-content: space-between;
     background: #0a0a0a;
     border: 1.5px solid rgba(255, 255, 255, 0.22);
 }
@@ -494,12 +546,18 @@ body[dir="ltr"] .tv-kpi-card::before { left: 0; }
     width: 5px;
 }
 
-body[dir="rtl"] .tv-card::after { right: 0; }
-body[dir="ltr"] .tv-card::after { left: 0; }
+body[dir="rtl"] .tv-card::after {
+    right: 0;
+}
+
+body[dir="ltr"] .tv-card::after {
+    left: 0;
+}
 
 .tv-card.status-present {
     border-color: rgba(16, 185, 129, 0.45);
 }
+
 .tv-card.status-present::after {
     background: var(--tv-emerald);
     box-shadow: 0 0 12px var(--tv-emerald);
@@ -510,19 +568,29 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     background: linear-gradient(145deg, #160406 0%, #28080c 100%);
     animation: absentCardPulse 2.5s infinite ease-in-out;
 }
+
 .tv-card.status-absent::after {
     background: var(--tv-rose);
     box-shadow: 0 0 16px var(--tv-rose);
 }
 
 @keyframes absentCardPulse {
-    0%, 100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
-    50% { box-shadow: 0 6px 28px var(--tv-rose-glow); border-color: #ff4d6d; }
+
+    0%,
+    100% {
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 6px 28px var(--tv-rose-glow);
+        border-color: #ff4d6d;
+    }
 }
 
 .tv-card.status-on_break {
     border-color: rgba(245, 158, 11, 0.45);
 }
+
 .tv-card.status-on_break::after {
     background: var(--tv-amber);
     box-shadow: 0 0 12px var(--tv-amber);
@@ -531,6 +599,7 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 .tv-card.status-camera_offline {
     border-color: rgba(234, 179, 8, 0.5);
 }
+
 .tv-card.status-camera_offline::after {
     background: #eab308;
     box-shadow: 0 0 12px rgba(234, 179, 8, 0.6);
@@ -589,10 +658,13 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 @keyframes tv-pulse-red {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: scale(1);
         box-shadow: 0 0 8px var(--tv-rose-glow);
     }
+
     50% {
         transform: scale(1.22);
         box-shadow: 0 0 14px var(--tv-rose);
@@ -817,33 +889,46 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 .tv-stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 4px 6px;
+    gap: 6px 8px;
     margin-bottom: 3px;
 }
 
 .tv-stat-box {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.06);
-    padding: 4px 7px;
-    border-radius: 5px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 6px 10px;
+    border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.12);
+    min-width: 0;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .tv-stat-box-label {
     font-size: 0.74rem;
     font-weight: 700;
-    color: #cbd5e1;
+    color: #94a3b8;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.2;
 }
 
 .tv-stat-box-val {
-    font-size: 0.82rem;
+    font-size: 0.98rem;
     font-weight: 900;
     color: #ffffff;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.2;
 }
 
 .tv-stat-box-val.val-presence {
@@ -1116,9 +1201,11 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 
 /* ── 3 Cards: Trio Mode ────────────────────────────────────────── */
 .tv-roster-grid.is-three-cards .tv-card {
-    padding: 18px 20px;
-    gap: 11px;
+    padding: 20px 22px;
+    gap: 12px;
     border-radius: 16px;
+    height: 100%;
+    justify-content: space-between;
 }
 
 .tv-roster-grid.is-three-cards .tv-card-header {
@@ -1126,95 +1213,110 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 .tv-roster-grid.is-three-cards .tv-status-indicator {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
 }
 
 .tv-roster-grid.is-three-cards .tv-person-name {
-    font-size: 1.25rem;
+    font-size: 1.4rem;
 }
 
 .tv-roster-grid.is-three-cards .tv-shift-strip {
-    padding: 7px 10px;
-    font-size: 0.78rem;
+    padding: 8px 12px;
+    font-size: 0.86rem;
     margin: 0;
 }
 
 .tv-roster-grid.is-three-cards .tv-card-body {
-    padding: 8px 12px;
-    font-size: 0.88rem;
+    padding: 10px 14px;
+    font-size: 1rem;
     margin: 0;
+}
+
+.tv-roster-grid.is-three-cards .tv-status-text {
+    font-size: 1.12rem;
+    gap: 8px;
+}
+
+.tv-roster-grid.is-three-cards .tv-status-sub {
+    font-size: 0.92rem;
 }
 
 .tv-roster-grid.is-three-cards .tv-stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 5px 8px;
+    gap: 6px 10px;
 }
 
 .tv-roster-grid.is-three-cards .tv-stat-box {
-    padding: 5px 8px;
+    padding: 8px 12px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .tv-roster-grid.is-three-cards .tv-stat-box-label {
-    font-size: 0.74rem;
-    color: #cbd5e1;
+    font-size: 0.78rem;
+    color: #94a3b8;
     font-weight: 700;
 }
 
 .tv-roster-grid.is-three-cards .tv-stat-box-val {
-    font-size: 0.92rem;
+    font-size: 1.1rem;
     font-weight: 900;
 }
 
 /* ── 4 Cards: Quad Mode ────────────────────────────────────────── */
 .tv-roster-grid.is-four-cards .tv-card {
     padding: 16px 18px;
-    gap: 9px;
+    gap: 10px;
     border-radius: 14px;
+    height: 100%;
+    justify-content: space-between;
+}
+
+.tv-roster-grid.is-four-cards .tv-card-header {
+    gap: 10px;
 }
 
 .tv-roster-grid.is-four-cards .tv-status-indicator {
-    width: 11px;
-    height: 11px;
+    width: 12px;
+    height: 12px;
 }
 
 .tv-roster-grid.is-four-cards .tv-person-name {
-    font-size: 1.18rem;
+    font-size: 1.25rem;
 }
 
 .tv-roster-grid.is-four-cards .tv-shift-strip {
-    padding: 6px 10px;
-    font-size: 0.76rem;
+    padding: 7px 12px;
+    font-size: 0.82rem;
     margin: 0;
 }
 
 .tv-roster-grid.is-four-cards .tv-card-body {
-    padding: 7px 10px;
-    font-size: 0.85rem;
+    padding: 8px 12px;
+    font-size: 0.92rem;
     margin: 0;
 }
 
 .tv-roster-grid.is-four-cards .tv-stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 4px 6px;
+    gap: 6px 8px;
 }
 
 .tv-roster-grid.is-four-cards .tv-stat-box {
-    padding: 5px 8px;
+    padding: 6px 10px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .tv-roster-grid.is-four-cards .tv-stat-box-label {
-    font-size: 0.74rem;
-    color: #cbd5e1;
+    font-size: 0.76rem;
+    color: #94a3b8;
     font-weight: 700;
 }
 
 .tv-roster-grid.is-four-cards .tv-stat-box-val {
-    font-size: 0.90rem;
+    font-size: 1.02rem;
     font-weight: 900;
 }
 
@@ -1226,6 +1328,7 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 @media (max-width: 768px) {
+
     .tv-roster-grid.is-single-card,
     .tv-roster-grid.is-two-cards,
     .tv-roster-grid.is-three-cards,
@@ -1234,6 +1337,7 @@ body[dir="ltr"] .tv-card::after { left: 0; }
         padding: 10px;
         gap: 12px;
     }
+
     .tv-roster-grid.is-single-card .tv-stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1243,17 +1347,230 @@ body[dir="ltr"] .tv-card::after { left: 0; }
     .tv-roster-grid.is-single-card {
         grid-template-columns: minmax(500px, 1100px);
     }
+
     .tv-roster-grid.is-two-cards {
         grid-template-columns: repeat(2, minmax(450px, 950px));
         gap: 36px;
     }
+
     .tv-roster-grid.is-three-cards {
         grid-template-columns: repeat(3, minmax(400px, 780px));
         gap: 28px;
     }
+
     .tv-roster-grid.is-four-cards {
         grid-template-columns: repeat(2, minmax(450px, 900px));
         gap: 24px;
+    }
+}
+
+/* ── TV Roster List View (Horizontal Streamlined Rows) ──────── */
+.tv-roster-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    padding: 4px 6px;
+    box-sizing: border-box;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tv-roster-list.is-few-rows {
+    gap: 12px;
+}
+
+.tv-list-row {
+    background: #080808;
+    border: 1.5px solid var(--tv-border);
+    border-radius: var(--tv-radius);
+    padding: 8px 16px;
+    display: grid;
+    grid-template-columns: 2.2fr 1.8fr 1.6fr 1.8fr 2.6fr;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.tv-roster-list.is-few-rows .tv-list-row {
+    padding: 14px 20px;
+}
+
+/* Status side glow border for list rows */
+.tv-list-row::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+}
+
+body[dir="rtl"] .tv-list-row::after {
+    right: 0;
+}
+
+body[dir="ltr"] .tv-list-row::after {
+    left: 0;
+}
+
+.tv-list-row.status-present {
+    border-color: rgba(16, 185, 129, 0.45);
+}
+
+.tv-list-row.status-present::after {
+    background: var(--tv-emerald);
+    box-shadow: 0 0 12px var(--tv-emerald);
+}
+
+.tv-list-row.status-absent {
+    border-color: #ef4444;
+    background: linear-gradient(90deg, #160406 0%, #22060a 100%);
+    animation: absentCardPulse 2.5s infinite ease-in-out;
+}
+
+.tv-list-row.status-absent::after {
+    background: var(--tv-rose);
+    box-shadow: 0 0 16px var(--tv-rose);
+}
+
+.tv-list-row.status-on_break {
+    border-color: rgba(245, 158, 11, 0.45);
+}
+
+.tv-list-row.status-on_break::after {
+    background: var(--tv-amber);
+    box-shadow: 0 0 12px var(--tv-amber);
+}
+
+.tv-list-row.status-camera_offline {
+    border-color: rgba(234, 179, 8, 0.5);
+}
+
+.tv-list-row.status-camera_offline::after {
+    background: #eab308;
+    box-shadow: 0 0 12px rgba(234, 179, 8, 0.6);
+}
+
+.tv-list-cell {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Col 1: Identity & Role */
+.tv-list-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tv-list-identity .tv-status-indicator {
+    width: 14px;
+    height: 14px;
+}
+
+.tv-list-name-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.tv-list-name-col .tv-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-start;
+}
+
+.tv-list-name-col .tv-person-name {
+    font-size: 1.15rem;
+    font-weight: 900;
+}
+
+.tv-list-role {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Col 2: Workstation & Camera */
+.tv-list-workstation {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.tv-list-workstation .tv-zone-name,
+.tv-list-workstation .tv-camera-name {
+    max-width: 100%;
+}
+
+/* Col 3: Shift Timetable */
+.tv-list-shift {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+.tv-list-shift .tv-shift-window {
+    font-size: 0.85rem;
+}
+
+/* Col 4: Status banner */
+.tv-list-status {
+    width: 100%;
+}
+
+.tv-list-status .tv-card-body {
+    width: 100%;
+    margin: 0;
+    padding: 8px 12px;
+}
+
+/* Col 5: Telemetry stats */
+.tv-list-stats {
+    width: 100%;
+}
+
+.tv-list-stats .tv-stats-grid {
+    width: 100%;
+    margin: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px 6px;
+}
+
+.tv-list-stats .tv-stat-box {
+    padding: 4px 6px;
+}
+
+.tv-list-stats .tv-stat-box-label {
+    font-size: 0.70rem;
+}
+
+.tv-list-stats .tv-stat-box-val {
+    font-size: 0.86rem;
+}
+
+@media (max-width: 1200px) {
+    .tv-list-row {
+        grid-template-columns: 1.8fr 1.4fr 1.6fr 2.2fr;
+    }
+
+    .tv-list-workstation {
+        display: none;
     }
 }
 
@@ -1307,10 +1624,13 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 @keyframes alertStripPulse {
-    0%, 100% {
+
+    0%,
+    100% {
         border-color: #ef4444;
         box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
     }
+
     50% {
         border-color: #f87171;
         box-shadow: 0 0 35px rgba(239, 68, 68, 0.7), inset 0 0 20px rgba(239, 68, 68, 0.35);
@@ -1370,8 +1690,13 @@ body[dir="ltr"] .tv-card::after { left: 0; }
 }
 
 @keyframes marqueeScroll {
-    0% { transform: translate3d(0, 0, 0); }
-    100% { transform: translate3d(-100%, 0, 0); }
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+
+    100% {
+        transform: translate3d(-100%, 0, 0);
+    }
 }
 
 body[dir="rtl"] .tv-ticker-marquee {
@@ -1381,8 +1706,13 @@ body[dir="rtl"] .tv-ticker-marquee {
 }
 
 @keyframes marqueeScrollRTL {
-    0% { transform: translate3d(0, 0, 0); }
-    100% { transform: translate3d(100%, 0, 0); }
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+
+    100% {
+        transform: translate3d(100%, 0, 0);
+    }
 }
 
 /* ── Login / Token Overlay (For Kiosk Display Setup) ─────────── */

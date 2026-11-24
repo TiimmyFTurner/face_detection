@@ -9,6 +9,7 @@ const TVBoard = {
     _data: null,
     _lang: localStorage.getItem('facetrack_tv_lang') || 'fa',
     _soundEnabled: localStorage.getItem('facetrack_tv_sound') === 'true',
+    _viewMode: localStorage.getItem('facetrack_tv_view_mode') || 'grid',
     _refreshTimer: null,
     _clockTimer: null,
     _carouselTimer: null,
@@ -38,7 +39,7 @@ const TVBoard = {
             status_off_duty: 'خارج از ساعت شیفت',
             seen_ago: 'آخرین رویت: {s} ثانیه قبل',
             absent_for: 'ترک پست: {m} دقیقه',
-            shift_absence_total: 'مجموع غیبت در شیفت:',
+            shift_absence_total: 'مجموع غیبت',
             no_workers_scheduled: 'هیچ پرسنلی برای شیفت جاری ثبت نشده است',
             no_workers_sub: 'برای تعریف شیفت‌ها به بخش «منطقه‌ها و شیفت‌ها» در پنل مدیریت مراجعه کنید.',
             ticker_title: 'هشدار و رویداد',
@@ -48,6 +49,10 @@ const TVBoard = {
             sync_reconnecting: 'در حال اتصال مجدد...',
             sound_on: 'صدای هشدار: فعال',
             sound_off: 'صدای هشدار: خاموش',
+            view_grid: 'نمای شبکه‌ای',
+            view_list: 'نمای لیستی',
+            btn_switch_to_list: 'نمای لیستی',
+            btn_switch_to_grid: 'نمای شبکه‌ای',
             fullscreen_btn: 'تمام صفحه (F11)',
             login_title: 'احراز هویت نمایشگر سالن',
             login_desc: 'جهت بارگذاری داده‌های زنده شیفت، نام کاربری و کلمه عبور سرپرست را وارد کنید:',
@@ -58,8 +63,8 @@ const TVBoard = {
             page_indicator: 'صفحه {current} از {total}',
             personnel_id: 'کد',
             shift_on_duty: 'شیفت موظف',
-            shift_presence_total: 'حضور مفید:',
-            shift_incidents: 'دفعات خروج:',
+            shift_presence_total: 'حضور مفید',
+            shift_incidents: 'دفعات خروج',
             shift_incidents_unit: 'بار',
             seen_just_now: 'آخرین رویت: لحظاتی پیش',
             not_seen_yet: 'عدم ثبت حضور تاکنون',
@@ -88,7 +93,7 @@ const TVBoard = {
             status_off_duty: 'Off Duty',
             seen_ago: 'Last seen: {s}s ago',
             absent_for: 'Missing for {m} mins',
-            shift_absence_total: 'Shift Absence Total:',
+            shift_absence_total: 'Shift Absence',
             no_workers_scheduled: 'No personnel assigned to active shifts right now',
             no_workers_sub: 'Configure zones and shifts from the main administration panel.',
             ticker_title: 'ALERTS',
@@ -98,6 +103,10 @@ const TVBoard = {
             sync_reconnecting: 'Reconnecting...',
             sound_on: 'Alert Sound: ON',
             sound_off: 'Alert Sound: OFF',
+            view_grid: 'Grid View',
+            view_list: 'List View',
+            btn_switch_to_list: 'List View',
+            btn_switch_to_grid: 'Grid View',
             fullscreen_btn: 'Fullscreen (F11)',
             login_title: 'Factory TV Authentication',
             login_desc: 'Enter supervisor credentials to display live duty roster data:',
@@ -108,8 +117,8 @@ const TVBoard = {
             page_indicator: 'Page {current} of {total}',
             personnel_id: 'ID',
             shift_on_duty: 'On Duty',
-            shift_presence_total: 'Active Duty:',
-            shift_incidents: 'Departures:',
+            shift_presence_total: 'Active Duty',
+            shift_incidents: 'Departures',
             shift_incidents_unit: 'x',
             seen_just_now: 'Last seen: Just now',
             not_seen_yet: 'Not detected yet today',
@@ -174,6 +183,7 @@ const TVBoard = {
     init() {
         this.applyLanguage();
         this.updateSoundUI();
+        this.updateViewModeUI();
         this.extractToken();
         this.setupClock();
         this.setupKeyboardShortcuts();
@@ -431,13 +441,14 @@ const TVBoard = {
         }
     },
 
-    // ── Render Roster (Zero-Scroll Auto-Fit Grid) ────────────
+    // ── Render Roster (Zero-Scroll Auto-Fit Grid / High-Contrast List) ──
     renderRoster(roster) {
         const container = document.getElementById('tv-roster-grid');
         const paginationStrip = document.getElementById('tv-pagination-strip');
         if (!container) return;
 
         if (!roster || roster.length === 0) {
+            container.className = 'tv-roster-grid is-empty';
             container.innerHTML = `
                 <div class="tv-empty-state" style="grid-column: 1 / -1;">
                     <div class="tv-empty-icon">🏭</div>
@@ -449,9 +460,11 @@ const TVBoard = {
             return;
         }
 
-        // Determine items per page (typically 12 or 16 for high-density 1080p display)
+        const isList = this._viewMode === 'list';
+        const pageSize = isList ? 6 : this._pageSize;
+
         const total = roster.length;
-        const totalPages = Math.ceil(total / this._pageSize);
+        const totalPages = Math.ceil(total / pageSize);
 
         if (this._pageIndex >= totalPages) {
             this._pageIndex = 0;
@@ -468,40 +481,41 @@ const TVBoard = {
             this._carouselTimer = null;
         }
 
-        const startIndex = this._pageIndex * this._pageSize;
-        const pageItems = roster.slice(startIndex, startIndex + this._pageSize);
-
-        // Dynamically compute optimal columns and rows for 100% height fit
+        const startIndex = this._pageIndex * pageSize;
+        const pageItems = roster.slice(startIndex, startIndex + pageSize);
         const count = pageItems.length;
 
         // Reset inline grid template styles
         container.style.gridTemplateColumns = '';
         container.style.gridTemplateRows = '';
 
-        if (count === 1) {
-            container.className = 'tv-roster-grid is-single-card is-few-cards';
-        } else if (count === 2) {
-            container.className = 'tv-roster-grid is-two-cards is-few-cards';
-        } else if (count === 3) {
-            container.className = 'tv-roster-grid is-three-cards is-few-cards';
-        } else if (count === 4) {
-            container.className = 'tv-roster-grid is-four-cards is-few-cards';
+        if (isList) {
+            container.className = count <= 4 ? 'tv-roster-list is-few-rows' : 'tv-roster-list';
+            container.innerHTML = pageItems.map(p => this.renderWorkerRow(p)).join('');
         } else {
-            container.className = 'tv-roster-grid is-many-cards';
-            let cols = 4;
-            let rows = 4;
-            if (count <= 6) { cols = 3; rows = 2; }
-            else if (count <= 8) { cols = 4; rows = 2; }
-            else if (count <= 12) { cols = 4; rows = 3; }
-            else if (count <= 16) { cols = 4; rows = 4; }
-            else { cols = 6; rows = 3; }
+            if (count === 1) {
+                container.className = 'tv-roster-grid is-single-card is-few-cards';
+            } else if (count === 2) {
+                container.className = 'tv-roster-grid is-two-cards is-few-cards';
+            } else if (count === 3) {
+                container.className = 'tv-roster-grid is-three-cards is-few-cards';
+            } else if (count === 4) {
+                container.className = 'tv-roster-grid is-four-cards is-few-cards';
+            } else {
+                container.className = 'tv-roster-grid is-many-cards';
+                let cols = 4;
+                let rows = 4;
+                if (count <= 6) { cols = 3; rows = 2; }
+                else if (count <= 8) { cols = 4; rows = 2; }
+                else if (count <= 12) { cols = 4; rows = 3; }
+                else if (count <= 16) { cols = 4; rows = 4; }
+                else { cols = 6; rows = 3; }
 
-            container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-            container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+                container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+            }
+            container.innerHTML = pageItems.map(p => this.renderWorkerCard(p)).join('');
         }
-
-        // Render Cards
-        container.innerHTML = pageItems.map(p => this.renderWorkerCard(p)).join('');
 
         // Render Page Dots
         if (paginationStrip) {
@@ -631,6 +645,118 @@ const TVBoard = {
                     </div>
                     <div class="tv-progress-track">
                         <div class="tv-progress-bar" style="width: ${compliance}%; background: ${compColor};"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderWorkerRow(person) {
+        const isPresent = person.status === 'present';
+        const isAbsent = person.status === 'absent';
+        const isOnBreak = person.status === 'on_break';
+        const isOffline = person.status === 'camera_offline';
+
+        let statusText = this.t('status_present');
+        let statusSub = '';
+
+        if (isAbsent) {
+            statusText = this.t('status_absent');
+            statusSub = this.t('absent_for', { m: this.toDigits(person.current_absence_minutes || 1) });
+        } else if (isOnBreak) {
+            statusText = this.t('status_on_break');
+            statusSub = person.current_break_name || this.t('status_on_break');
+        } else if (isOffline) {
+            statusText = this.t('status_offline');
+            statusSub = person.camera_name || '';
+        } else {
+            // Present
+            if (person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) {
+                statusText = this.t('status_in_grace');
+                const el = Math.round(person.shift_elapsed_minutes || 0);
+                const gr = person.grace_period_minutes || 10;
+                statusSub = this.t('grace_progress', { el: this.toDigits(el), gr: this.toDigits(gr) });
+            } else if (person.last_seen_seconds_ago !== null && person.last_seen_seconds_ago !== undefined) {
+                const s = Math.round(person.last_seen_seconds_ago);
+                statusSub = s < 5
+                    ? this.t('seen_just_now')
+                    : (s < 60 ? this.t('seen_ago', { s: this.toDigits(s) }) : this.t('seen_ago_m', { m: this.toDigits(Math.round(s / 60)) }));
+            } else {
+                statusSub = this.t('seen_just_now');
+            }
+        }
+
+        const compliance = Math.round(person.shift_compliance_pct ?? 100);
+        const compColor = compliance >= 90 ? 'var(--tv-emerald)' : (compliance >= 70 ? 'var(--tv-amber)' : 'var(--tv-rose)');
+
+        const presenceFormatted = this.formatMinutes(person.shift_presence_minutes || 0);
+        const absenceFormatted = this.formatMinutes(person.shift_absence_minutes || 0);
+        const durationFormatted = this.formatDurationHours(person.shift_duration_hours);
+        const incidentsCount = person.absence_count || 0;
+
+        return `
+            <div class="tv-list-row status-${person.status}">
+                <!-- Col 1: Identity & Role -->
+                <div class="tv-list-cell tv-list-identity">
+                    <span class="tv-status-indicator status-${person.status}"></span>
+                    <div class="tv-list-name-col">
+                        <div class="tv-list-name-row">
+                            <span class="tv-list-name" title="${person.person_name}">${person.person_name}</span>
+                            ${person.person_id ? `<span class="tv-id-badge" title="${this.t('personnel_id')} ${person.person_id}">#${this.toDigits(person.person_id)}</span>` : ''}
+                        </div>
+                        <span class="tv-list-role">${person.person_role || this.t('station_operator')}</span>
+                    </div>
+                </div>
+
+                <!-- Col 2: Workstation & Camera -->
+                <div class="tv-list-cell tv-list-workstation">
+                    <span class="tv-zone-name" title="${person.zone_name}">📍 ${person.zone_name}</span>
+                    ${person.camera_name ? `<span class="tv-camera-name" title="${person.camera_name}">📹 ${person.camera_name}</span>` : ''}
+                </div>
+
+                <!-- Col 3: Shift Window & State -->
+                <div class="tv-list-cell tv-list-shift">
+                    <div class="tv-shift-window">
+                        <span class="tv-shift-icon">${person.is_overnight ? '🌙' : '⏱️'}</span>
+                        ${person.shift_name ? `<span class="tv-shift-name" style="color: var(--tv-cyan, #38bdf8); font-weight: 800; margin-inline-end: 4px;">${person.shift_name}</span>` : ''}
+                        <span>${this.toDigits(person.shift_window_str || '--:--')}</span>
+                        ${durationFormatted ? `<span class="tv-shift-hours">(${durationFormatted})</span>` : ''}
+                    </div>
+                    <div class="tv-shift-state-tag ${person.is_in_free_time ? 'state-break' : ((person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) ? 'state-break' : (person.is_in_duty_hours ? 'state-duty' : 'state-off'))}">
+                        ${person.is_in_free_time ? `☕ ${person.current_break_name || this.t('status_on_break')}` : ((person.is_within_grace_period && (person.last_seen_seconds_ago === null || person.last_seen_seconds_ago === undefined)) ? `✓ ${this.t('grace_period')}` : (person.is_in_duty_hours ? `⚡ ${this.t('shift_on_duty')}` : `💤 ${this.t('status_off_duty')}`))}
+                    </div>
+                </div>
+
+                <!-- Col 4: Live Status Banner -->
+                <div class="tv-list-cell tv-list-status">
+                    <div class="tv-card-body" style="margin: 0; width: 100%;">
+                        <div class="tv-status-text">
+                            <span>${isAbsent ? '🔴' : (isPresent ? '🟢' : (isOnBreak ? '☕' : '🟡'))}</span>
+                            <span>${statusText}</span>
+                        </div>
+                        <div class="tv-status-sub">${statusSub}</div>
+                    </div>
+                </div>
+
+                <!-- Col 5: Telemetry Stats Grid -->
+                <div class="tv-list-cell tv-list-stats">
+                    <div class="tv-stats-grid" style="margin: 0;">
+                        <div class="tv-stat-box stat-presence" title="${this.t('shift_presence_total')}">
+                            <span class="tv-stat-box-label">⏱️ ${this.t('shift_presence_total')}</span>
+                            <span class="tv-stat-box-val val-presence">${presenceFormatted}</span>
+                        </div>
+                        <div class="tv-stat-box stat-absence" title="${this.t('shift_absence_total')}">
+                            <span class="tv-stat-box-label">🚪 ${this.t('shift_absence_total')}</span>
+                            <span class="tv-stat-box-val val-absence ${person.shift_absence_minutes > 0 ? 'alert' : ''}">${absenceFormatted}</span>
+                        </div>
+                        <div class="tv-stat-box stat-incidents" title="${this.t('shift_incidents')}">
+                            <span class="tv-stat-box-label">⚠️ ${this.t('shift_incidents')}</span>
+                            <span class="tv-stat-box-val val-incidents ${incidentsCount > 0 ? 'warning' : ''}">${this.toDigits(incidentsCount)} ${this.t('shift_incidents_unit')}</span>
+                        </div>
+                        <div class="tv-stat-box stat-compliance" title="${this.t('kpi_compliance')}">
+                            <span class="tv-stat-box-label">📈 ${this.t('kpi_compliance')}</span>
+                            <span class="tv-stat-box-val val-compliance" style="color: ${compColor};">${this.toDigits(compliance)}%</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -785,9 +911,35 @@ const TVBoard = {
         }
 
         this.updateSoundUI();
+        this.updateViewModeUI();
     },
 
-    // ── Keyboard Shortcuts (F for Fullscreen, S for Sound) ───
+    // ── View Mode Toggle (Grid / List) ───────────────────────
+    toggleViewMode() {
+        this._viewMode = this._viewMode === 'grid' ? 'list' : 'grid';
+        try {
+            localStorage.setItem('facetrack_tv_view_mode', this._viewMode);
+        } catch (e) {}
+        this.updateViewModeUI();
+        this._pageIndex = 0;
+        if (this._data && this._data.roster) {
+            this.renderRoster(this._data.roster);
+        }
+    },
+
+    updateViewModeUI() {
+        const btn = document.getElementById('tv-btn-view');
+        const icon = document.getElementById('tv-view-icon');
+        const text = document.getElementById('tv-view-text');
+        if (!btn) return;
+        const isGrid = this._viewMode === 'grid';
+        if (icon) icon.textContent = isGrid ? '☰' : '▦';
+        if (text) text.textContent = isGrid ? this.t('btn_switch_to_list') : this.t('btn_switch_to_grid');
+        btn.classList.toggle('active', !isGrid);
+        btn.setAttribute('title', isGrid ? `${this.t('btn_switch_to_list')} (V)` : `${this.t('btn_switch_to_grid')} (V)`);
+    },
+
+    // ── Keyboard Shortcuts (F for Fullscreen, S for Sound, V for View) ───
     setupKeyboardShortcuts() {
         window.addEventListener('keydown', (e) => {
             if (e.key === 'F11' || e.key === 'f' || e.key === 'F') {
@@ -795,11 +947,13 @@ const TVBoard = {
                 this.toggleFullscreen();
             } else if (e.key === 's' || e.key === 'S') {
                 this.toggleSound();
+            } else if (e.key === 'v' || e.key === 'V') {
+                this.toggleViewMode();
             } else if (e.key === 'l' || e.key === 'L') {
                 this.toggleLanguage();
             } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                 if (this._data && this._data.roster) {
-                    const totalPages = Math.ceil(this._data.roster.length / this._pageSize);
+                    const totalPages = Math.ceil(this._data.roster.length / (this._viewMode === 'list' ? 6 : this._pageSize));
                     if (totalPages > 1) {
                         this._pageIndex = (this._pageIndex + 1) % totalPages;
                         this.renderRoster(this._data.roster);

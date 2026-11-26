@@ -11,6 +11,7 @@ from httpx import AsyncClient
 from backend.main import app
 from backend.models import Person, Camera, CameraZone, Event, ShiftTemplate
 from backend.routers.zones import get_shift_window
+from backend.shift_utils import calculate_net_absence_with_breaks
 from backend.stream_processor import stream_processor
 from tests.test_api import test_session, test_engine, client, setup_database
 
@@ -937,5 +938,193 @@ async def test_duty_roster_deducts_scheduled_break_from_gap_absence(client: Asyn
     gap_intervals = [i for i in item["absence_intervals"] if i["interval_type"] == "gap"]
     assert len(gap_intervals) == 0
     assert item["current_absence_minutes"] == 0
+
+
+def test_calculate_net_absence_with_breaks_logic():
+    """Unit test to verify calculate_net_absence_with_breaks behavior across all scenarios."""
+    breaks = [{"name": "Lunch", "start_time": "12:00", "end_time": "13:00"}]
+    d = datetime(2026, 11, 25)
+
+    # 1. Absent 15m before break + absent 15m after break -> total 30m, eff_start 11:45
+    net, eff, was = calculate_net_absence_with_breaks(d.replace(hour=11, minute=45), d.replace(hour=13, minute=15), breaks)
+    assert net == 30
+    assert eff.strftime("%H:%M") == "11:45"
+    assert was is True
+
+    # 2. Present until 11:59 (1m before break) + absent 15m after break -> total 15m, eff_start 13:00
+    net, eff, was = calculate_net_absence_with_breaks(d.replace(hour=11, minute=59), d.replace(hour=13, minute=15), breaks)
+    assert net == 15
+    assert eff.strftime("%H:%M") == "13:00"
+    assert was is False
+
+    # 3. Absent 20m before break, now is during break (12:30) -> total 20m, eff_start 11:40
+    net, eff, was = calculate_net_absence_with_breaks(d.replace(hour=11, minute=40), d.replace(hour=12, minute=30), breaks)
+    assert net == 20
+    assert eff.strftime("%H:%M") == "11:40"
+    assert was is True
+
+    # 4. Present until 11:59, now is during break (12:30) -> total 0m
+    net, eff, was = calculate_net_absence_with_breaks(d.replace(hour=11, minute=59), d.replace(hour=12, minute=30), breaks)
+    assert net == 0
+    assert was is False
+
+    # 5. Overnight break (03:00 to 03:45)
+    breaks_night = [{"name": "Rest", "start_time": "03:00", "end_time": "03:45"}]
+    net, eff, was = calculate_net_absence_with_breaks(d.replace(hour=2, minute=40), d.replace(hour=4, minute=0), breaks_night)
+    assert net == 35
+    assert eff.strftime("%H:%M") == "02:40"
+    assert was is True
+
+
+@pytest.mark.asyncio
+async def test_duty_roster_accumulates_absence_across_break_when_absent_before_break(client: AsyncClient, monkeypatch):
+    """When a person leaves 15m before a 60m break and is still absent 15m after, net absence is 30m."""
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+
+    now_local = datetime.now()
+    shift_start_str = (now_local - timedelta(hours=3)).strftime("%H:%M")
+    shift_end_str = (now_local + timedelta(hours=3)).strftime("%H:%M")
+
+    # Break was from (now - 75m) to (now - 15m) -> 60m break
+    break_start_dt = now_local - timedelta(minutes=75)
+    break_end_dt = now_local - timedelta(minutes=15)
+
+    # Worker was last seen 15m before break -> (now - 90m)
+    last_seen_dt = break_start_dt - timedelta(minutes=15)
+
+    async with test_session() as session:
+        cam = Camera(name="Station Break Cam", rtsp_url="rtsp://127.0.0.1/test_brk", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="Break Worker", role="Operator")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Packaging Line",
+            x=0, y=0, width=100, height=100,
+            alert_mode="absence",
+            assigned_person_ids=[p.id],
+            start_time=shift_start_str,
+            end_time=shift_end_str,
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            absence_timeout_minutes=10,
+            free_times=[{
+                "name": "Lunch",
+                "start_time": break_start_dt.strftime("%H:%M"),
+                "end_time": break_end_dt.strftime("%H:%M"),
+            }],
+            is_active=True,
+        )
+        session.add(zone)
+        await session.flush()
+
+        ev = Event(
+            camera_id=cam.id,
+            zone_id=zone.id,
+            person_id=p.id,
+            person_name=p.name,
+            timestamp=last_seen_dt.astimezone(timezone.utc),
+            confidence_score=0.95,
+            snapshot_path="/snapshots/brk_worker.jpg",
+            alert_type="normal",
+        )
+        session.add(ev)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+
+    stream_processor._zone_last_seen[(zid, pid)] = last_seen_dt.timestamp()
+
+    resp = await client.get("/api/zones/duty-roster?only_active=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    item = next((r for r in data["roster"] if r["person_id"] == pid), None)
+    assert item is not None
+    assert item["status"] == "absent"
+    # Net absence: 15m before + 15m after = 30m
+    assert item["current_absence_minutes"] == 30
+    assert len(item["absence_intervals"]) >= 1
+    trailing_int = item["absence_intervals"][-1]
+    assert trailing_int["duration_minutes"] == 30
+    assert trailing_int["start_time"] == last_seen_dt.strftime("%H:%M")
+
+
+@pytest.mark.asyncio
+async def test_duty_roster_does_not_accumulate_absence_when_present_before_break(client: AsyncClient, monkeypatch):
+    """When a person is present right up to the break (1m before) and absent 15m after, absence is only 15m."""
+    monkeypatch.setattr(stream_processor, "is_camera_online", lambda cid: True)
+
+    now_local = datetime.now()
+    shift_start_str = (now_local - timedelta(hours=3)).strftime("%H:%M")
+    shift_end_str = (now_local + timedelta(hours=3)).strftime("%H:%M")
+
+    # Break was from (now - 75m) to (now - 15m) -> 60m break
+    break_start_dt = now_local - timedelta(minutes=75)
+    break_end_dt = now_local - timedelta(minutes=15)
+
+    # Worker was last seen 1m before break
+    last_seen_dt = break_start_dt - timedelta(minutes=1)
+
+    async with test_session() as session:
+        cam = Camera(name="Station OnTime Cam", rtsp_url="rtsp://127.0.0.1/test_ontime", is_active=True)
+        session.add(cam)
+        await session.flush()
+
+        p = Person(name="OnTime Worker", role="Operator")
+        session.add(p)
+        await session.flush()
+
+        zone = CameraZone(
+            camera_id=cam.id,
+            name="Assembly Line",
+            x=0, y=0, width=100, height=100,
+            alert_mode="absence",
+            assigned_person_ids=[p.id],
+            start_time=shift_start_str,
+            end_time=shift_end_str,
+            active_days=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            absence_timeout_minutes=10,
+            free_times=[{
+                "name": "Lunch",
+                "start_time": break_start_dt.strftime("%H:%M"),
+                "end_time": break_end_dt.strftime("%H:%M"),
+            }],
+            is_active=True,
+        )
+        session.add(zone)
+        await session.flush()
+
+        ev = Event(
+            camera_id=cam.id,
+            zone_id=zone.id,
+            person_id=p.id,
+            person_name=p.name,
+            timestamp=last_seen_dt.astimezone(timezone.utc),
+            confidence_score=0.95,
+            snapshot_path="/snapshots/ontime_worker.jpg",
+            alert_type="normal",
+        )
+        session.add(ev)
+        await session.commit()
+        pid = p.id
+        zid = zone.id
+
+    stream_processor._zone_last_seen[(zid, pid)] = last_seen_dt.timestamp()
+
+    resp = await client.get("/api/zones/duty-roster?only_active=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    item = next((r for r in data["roster"] if r["person_id"] == pid), None)
+    assert item is not None
+    assert item["status"] == "absent"
+    # Absence only starts after break: 15m
+    assert item["current_absence_minutes"] == 15
+    assert len(item["absence_intervals"]) >= 1
+    trailing_int = item["absence_intervals"][-1]
+    assert trailing_int["duration_minutes"] == 15
+    assert trailing_int["start_time"] == break_end_dt.strftime("%H:%M")
 
 

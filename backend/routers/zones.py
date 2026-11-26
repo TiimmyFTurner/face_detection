@@ -28,7 +28,7 @@ from backend.database import get_db
 from backend.models import Camera, CameraZone, Person, Event, PersonEmbedding, ShiftTemplate, User, ShiftSubstitution
 from backend.archive_manager import get_events_since_multi_db, get_person_events_multi_db
 from backend.reporting import generate_duty_roster_xlsx, generate_duty_roster_csv, generate_supervisor_daily_attendance_xlsx
-from backend.shift_utils import get_rotation_day_state, get_interval_free_minutes
+from backend.shift_utils import get_rotation_day_state, get_interval_free_minutes, calculate_net_absence_with_breaks
 from backend.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
@@ -774,8 +774,9 @@ async def compute_duty_roster_data(
                         last_seen_sec = round(now_ts - last_seen, 1)
                         raw_missing_mins = max(1, int(last_seen_sec // 60))
                         last_dt = datetime.fromtimestamp(last_seen)
-                        free_since = get_interval_free_minutes(last_dt, now_local, combined_free)
-                        net_missing = max(0, raw_missing_mins - free_since)
+                        net_missing, eff_dt, was_before = calculate_net_absence_with_breaks(
+                            last_dt, now_local, combined_free, timeout_minutes=s_timeout
+                        )
                         if net_missing < s_timeout:
                             status_str = "present"
                             is_in_zone = True
@@ -793,8 +794,13 @@ async def compute_duty_roster_data(
                         is_in_zone = False
                         last_seen_sec = None
                         last_seen_str = "Not Seen Yet"
-                        free_since_start = get_interval_free_minutes(cur_shift_start_dt, now_local, combined_free) if cur_shift_start_dt else 0
-                        curr_absence_mins = max(1, cur_elapsed_shift_mins - free_since_start) if cur_elapsed_shift_mins > 0 else 0
+                        if cur_shift_start_dt:
+                            net_missing_start, _, _ = calculate_net_absence_with_breaks(
+                                cur_shift_start_dt, now_local, combined_free, timeout_minutes=s_timeout
+                            )
+                            curr_absence_mins = max(1, net_missing_start) if cur_elapsed_shift_mins > 0 else 0
+                        else:
+                            curr_absence_mins = max(1, cur_elapsed_shift_mins) if cur_elapsed_shift_mins > 0 else 0
 
                 # Filter ONLY actual face detection sightings for this shift (from cur_shift_start_dt to min(now_local, cur_shift_end_dt))
                 shift_events = []
@@ -885,13 +891,14 @@ async def compute_duty_roster_data(
                             if gap_raw >= s_timeout:
                                 was_offline = any(t1 <= dev.timestamp <= t2 for dev in cam_disc_events)
                                 if not was_offline:
-                                    free_gap = get_interval_free_minutes(t1_loc, t2_loc, combined_free)
-                                    net_gap = max(0, gap_raw - free_gap)
+                                    net_gap, eff_gap_start, was_before = calculate_net_absence_with_breaks(
+                                        t1_loc, t2_loc, combined_free, timeout_minutes=s_timeout
+                                    )
                                     if net_gap >= s_timeout:
                                         gaps_mins += net_gap
                                         absence_intervals.append(
                                             AbsenceInterval(
-                                                start_time=t1_loc.strftime("%H:%M"),
+                                                start_time=eff_gap_start.strftime("%H:%M"),
                                                 end_time=t2_loc.strftime("%H:%M"),
                                                 duration_minutes=net_gap,
                                                 duration_str=_format_duration(net_gap * 60),
@@ -904,9 +911,9 @@ async def compute_duty_roster_data(
                             trailing_absence = 0
                         else:
                             last_ev_loc = _to_local_dt(shift_events[-1].timestamp)
-                            raw_trailing = max(0, int((now_local - last_ev_loc).total_seconds() // 60))
-                            free_trailing = get_interval_free_minutes(last_ev_loc, now_local, combined_free)
-                            net_trailing = max(0, raw_trailing - free_trailing)
+                            net_trailing, eff_trailing_start, was_before = calculate_net_absence_with_breaks(
+                                last_ev_loc, now_local, combined_free, timeout_minutes=s_timeout
+                            )
                             if net_trailing >= s_timeout:
                                 trailing_absence = net_trailing
                                 if cur_in_free_time and cur_break_start_str:
@@ -919,7 +926,7 @@ async def compute_duty_roster_data(
                                     int_type = "current"
                                 absence_intervals.append(
                                     AbsenceInterval(
-                                        start_time=last_ev_loc.strftime("%H:%M"),
+                                        start_time=eff_trailing_start.strftime("%H:%M"),
                                         end_time=end_trailing_str,
                                         duration_minutes=trailing_absence,
                                         duration_str=_format_duration(trailing_absence * 60),

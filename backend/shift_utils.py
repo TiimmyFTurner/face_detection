@@ -164,11 +164,19 @@ def is_time_in_free_time(
         b_end = beh * 60 + bem
 
         if b_start <= b_end:
-            if b_start <= now_hm_mins <= b_end:
-                return True, name
+            if b_end >= 1439:
+                if b_start <= now_hm_mins <= b_end:
+                    return True, name
+            else:
+                if b_start <= now_hm_mins < b_end:
+                    return True, name
         else:
-            if now_hm_mins >= b_start or now_hm_mins <= b_end:
-                return True, name
+            if b_end >= 1439:
+                if now_hm_mins >= b_start or now_hm_mins <= b_end:
+                    return True, name
+            else:
+                if now_hm_mins >= b_start or now_hm_mins < b_end:
+                    return True, name
 
     return False, None
 
@@ -202,6 +210,99 @@ def get_interval_free_minutes(
         curr += timedelta(minutes=1)
 
     return free_mins
+
+
+def calculate_net_absence_with_breaks(
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    free_times: Any,
+    timeout_minutes: int = 10,
+) -> tuple[int, datetime, bool]:
+    """
+    Calculate the net absence duration in minutes between start_dt and end_dt,
+    properly accounting for scheduled legal rest times / breaks.
+
+    Core Rule:
+    If a worker was absent BEFORE the legal rest time (i.e. left station > 2 mins
+    before break starts), their post-rest absence is added to the pre-rest absence,
+    and they are calculated together as a single continuous absence episode starting
+    at the original departure time before the rest period.
+    Conversely, if the worker was present right up to the start of the rest time
+    (heartbeat within 2 mins of break), their absence only begins from the end of the break.
+
+    Returns:
+      (net_absence_minutes, effective_start_datetime, was_absent_before_break)
+    """
+    if start_dt is None or end_dt is None:
+        fallback_dt = start_dt or end_dt or datetime.now()
+        return 0, fallback_dt, False
+
+    if start_dt.tzinfo is not None:
+        start_dt = _to_local_dt(start_dt)
+    if end_dt.tzinfo is not None:
+        end_dt = _to_local_dt(end_dt)
+
+    if start_dt >= end_dt:
+        return 0, start_dt, False
+
+    parsed_breaks = _parse_list_field(free_times, [])
+    raw_mins = max(0, int((end_dt - start_dt).total_seconds() // 60))
+
+    if not parsed_breaks:
+        return raw_mins, start_dt, False
+
+    free_mins = get_interval_free_minutes(start_dt, end_dt, parsed_breaks)
+    if free_mins <= 0:
+        return raw_mins, start_dt, False
+
+    # Find break windows that overlap with [start_dt, end_dt]
+    overlapping_breaks: list[tuple[datetime, datetime]] = []
+    dates_to_check = {start_dt.date(), end_dt.date(), (start_dt - timedelta(days=1)).date()}
+    for d in dates_to_check:
+        for b in parsed_breaks:
+            if not isinstance(b, dict):
+                continue
+            start_str = str(b.get("start_time") or "00:00")
+            end_str = str(b.get("end_time") or "00:00")
+            try:
+                bsh, bsm = map(int, start_str.split(":"))
+                beh, bem = map(int, end_str.split(":"))
+            except Exception:
+                continue
+
+            b_start_dt = datetime.combine(d, datetime.min.time()).replace(hour=bsh, minute=bsm)
+            if beh * 60 + bem >= bsh * 60 + bsm:
+                b_end_dt = datetime.combine(d, datetime.min.time()).replace(hour=beh, minute=bem)
+            else:
+                b_end_dt = datetime.combine(d + timedelta(days=1), datetime.min.time()).replace(hour=beh, minute=bem)
+
+            if b_start_dt < end_dt and b_end_dt > start_dt:
+                overlapping_breaks.append((b_start_dt, b_end_dt))
+
+    overlapping_breaks.sort(key=lambda x: x[0])
+
+    if not overlapping_breaks:
+        net_missing = max(0, raw_mins - free_mins)
+        return net_missing, start_dt, False
+
+    first_b_start, _ = overlapping_breaks[0]
+    mins_before = max(0, int((first_b_start - start_dt).total_seconds() // 60)) if start_dt < first_b_start else 0
+
+    # Presence heartbeat threshold: 2 minutes. If left > 2 min before break, they were absent before break.
+    was_absent_before = (mins_before > 2)
+
+    if was_absent_before:
+        # Add after rest time absence to before rest time absence
+        net_absence = max(0, raw_mins - free_mins)
+        effective_start = start_dt
+    else:
+        # Was present right up to the break; absence only starts after the break
+        _, last_b_end = overlapping_breaks[-1]
+        mins_after = max(0, int((end_dt - last_b_end).total_seconds() // 60)) if end_dt > last_b_end else 0
+        net_absence = mins_after
+        effective_start = last_b_end
+
+    return net_absence, effective_start, was_absent_before
 
 
 def get_rotation_day_state(

@@ -34,6 +34,7 @@ from backend.shift_utils import (
     is_time_in_timetable,
     is_time_in_free_time,
     get_rotation_day_state,
+    calculate_net_absence_with_breaks,
     _to_local_dt,
     _format_duration,
 )
@@ -798,11 +799,15 @@ class StreamProcessor:
                             last_seen = self._zone_last_seen.get(key, 0)
                             seen_in_shift = (last_seen > 0) and (last_seen >= shift_start_ts)
 
+                            now_local = datetime.now()
                             if seen_in_shift:
-                                absent_duration_secs = int(now - last_seen)
-                                if absent_duration_secs < timeout_secs:
+                                last_seen_dt = datetime.fromtimestamp(last_seen)
+                                net_missing, eff_dt, was_before = calculate_net_absence_with_breaks(
+                                    last_seen_dt, now_local, combined_breaks, timeout_minutes=timeout_mins
+                                )
+                                if net_missing < timeout_mins:
                                     continue  # Person/Substitute is currently present or within timeout threshold
-                                minutes_absent = max(1, absent_duration_secs // 60)
+                                minutes_absent = net_missing
                                 time_desc = f"{minutes_absent} min" if minutes_absent == 1 else f"{minutes_absent} mins"
                                 alert_msg = (
                                     f"⚠️ Absence Alert: {effective_person_name}{subst_prefix} is NOT in assigned area "
@@ -813,8 +818,12 @@ class StreamProcessor:
                                 if cur_elapsed_shift_mins < grace_mins:
                                     # Within arrival grace period — suppress absence alert
                                     continue
-                                absent_duration_secs = max(int(now - shift_start_ts), int(timeout_secs))
-                                minutes_absent = max(1, absent_duration_secs // 60)
+                                net_unseen, _, _ = calculate_net_absence_with_breaks(
+                                    cur_shift_start_dt, now_local, combined_breaks, timeout_minutes=timeout_mins
+                                ) if cur_shift_start_dt else (cur_elapsed_shift_mins, cur_shift_start_dt, False)
+                                if net_unseen < timeout_mins:
+                                    continue
+                                minutes_absent = max(1, net_unseen)
                                 time_desc = f"{minutes_absent} min" if minutes_absent == 1 else f"{minutes_absent} mins"
                                 alert_msg = (
                                     f"⚠️ Absence Alert: {effective_person_name}{subst_prefix} has NOT arrived for shift in "

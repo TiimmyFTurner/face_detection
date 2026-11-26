@@ -51,7 +51,7 @@ from backend.schemas import (
 )
 from backend.stream_processor import stream_processor
 from backend.routers.zones import is_time_in_timetable, _parse_list_field
-from backend.shift_utils import get_rotation_day_state, is_time_in_free_time, get_interval_free_minutes
+from backend.shift_utils import get_rotation_day_state, is_time_in_free_time, get_interval_free_minutes, calculate_net_absence_with_breaks
 
 logger = logging.getLogger(__name__)
 
@@ -1250,12 +1250,13 @@ async def get_person_analytics(
                         if gap_raw_mins >= p_timeout:
                             t1_loc = _to_local_dt(day_events[idx].timestamp).replace(tzinfo=None)
                             t2_loc = _to_local_dt(day_events[idx + 1].timestamp).replace(tzinfo=None)
-                            free_gap = get_interval_free_minutes(t1_loc, t2_loc, p_free)
-                            net_gap = max(0, gap_raw_mins - free_gap)
+                            net_gap, eff_gap_start, was_before = calculate_net_absence_with_breaks(
+                                t1_loc, t2_loc, p_free, timeout_minutes=p_timeout
+                            )
                             if net_gap >= p_timeout:
                                 day_absence_intervals.append(
                                     AbsenceInterval(
-                                        start_time=t1_loc.strftime("%H:%M"),
+                                        start_time=eff_gap_start.strftime("%H:%M"),
                                         end_time=t2_loc.strftime("%H:%M"),
                                         duration_minutes=net_gap,
                                         duration_str=_format_duration(net_gap * 60),
@@ -1443,8 +1444,9 @@ async def get_person_analytics(
                     current_absence_mins = 0
                 else:
                     last_ev_loc = _to_local_dt(last_seen_ev.timestamp).replace(tzinfo=None)
-                    free_since = get_interval_free_minutes(last_ev_loc, local_now, p_free)
-                    net_missing = max(0, int(seconds_since // 60) - free_since)
+                    net_missing, _, _ = calculate_net_absence_with_breaks(
+                        last_ev_loc, local_now, p_free, timeout_minutes=p_timeout
+                    )
                     if net_missing < p_timeout:
                         current_status = "present"
                         current_absence_mins = 0

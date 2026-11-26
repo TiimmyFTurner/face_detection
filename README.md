@@ -10,13 +10,14 @@ A production-ready, self-hosted platform for real-time face detection, recogniti
 - [Overview & Architecture](#-overview--architecture)
 - [Key Features](#-key-features)
 - [Localization & Persian Support (بومی‌سازی و زبان فارسی)](#-localization--persian-support)
-- [Live Duty & Shift Roster Monitoring (پایش زنده پرسنل در شیفت)](#-live-duty--shift-roster-monitoring)
-- [Zone Monitoring & Security Schedules](#-zone-monitoring--security-schedules)
+- [Live Duty, Break Rules & TV Hall Display (پایش زنده، قوانین استراحت و نمایشگر سالن)](#-live-duty--shift-roster-monitoring)
+- [Supervisor Executive Cockpit (پنل اختصاصی سرپرستان)](#-supervisor-executive-cockpit)
+- [Zone Monitoring, Shift Templates & Rotational Schedules](#-zone-monitoring--security-schedules)
 - [Identity & Comprehensive Person Analytics](#-identity--comprehensive-person-analytics)
 - [System Settings & Performance Optimization (تنظیمات سیستم و بهینه‌سازی بار)](#-system-settings--performance-optimization)
 - [InsightFace Models & Embedding Re-indexing (مدل‌های هوش مصنوعی و بازسازی بردارها)](#-insightface-models--embedding-re-indexing)
-- [Automated Storage Retention & Cleanup (مدیریت فضای دیسک و پاکسازی خودکار)](#-automated-storage-retention--cleanup)
-- [User Management & Access Control (کاربران و دسترسی‌ها)](#-user-management--access-control)
+- [Automated Storage Retention & Monthly Archiving (پاکسازی خودکار و بایگانی ماهانه)](#-automated-storage-retention--cleanup)
+- [User Management, Sections & Custom RBAC (کاربران، بخش‌ها و دسترسی‌ها)](#-user-management--access-control)
 - [Prerequisites](#-prerequisites)
 - [Quick Start](#-quick-start)
   - [Option A: Docker Compose (Recommended)](#option-a-docker-compose-recommended)
@@ -51,11 +52,11 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 │                                                                                   │
 │   ┌──────────────────────────────────────────────────────────────────────────┐    │
 │   │                         Stream Processor Worker                          │    │
-│   │  • Frame Skipping & Downscaling (CPU optimization)                       │    │
-│   │  • Zone Spatial Containment Check & Timetable Validator                  │    │
+│   │  • Frame Skipping, Downscaling & Station Zone ROI Cropping               │    │
+│   │  • Staggered Duty-Cycle Detection & Timetable / Rotation Validator       │    │
 │   │  • Real-Time Absence & Unauthorized Entry Watchdog Loops                 │    │
-│   │  • Absence Time Windows (Intervals) & Incident Count Tracking            │    │
-│   │  • Camera Offline State Isolation (Never Counted as Absence)             │    │
+│   │  • Legal Break Deduction & Pre/Post-Break Absence Accumulation           │    │
+│   │  • Scoped Camera Offline Isolation (Never Counted as Absence)            │    │
 │   │  • Auto-reconnect with exponential backoff on stream drops               │    │
 │   └──────────────────────────────────┬───────────────────────────────────────┘    │
 │                                      │ Frame Data                                 │
@@ -70,8 +71,8 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 │                 ┌────────────────────┴────────────────────┐                       │
 │                 ▼                                         ▼                       │
 │   ┌───────────────────────────┐             ┌───────────────────────────┐         │
-│   │    SQLite / PostgreSQL    │             │   WebSocket Broadcast     │         │
-│   │  (Events, Zones, Cameras) │             │       Server (/ws)        │         │
+│   │ SQLite/PostgreSQL+Archives│             │   WebSocket Broadcast     │         │
+│   │ (Transparent Monthly Query)             │    Server (/ws/events)    │         │
 │   └───────────────────────────┘             └─────────────┬─────────────┘         │
 └───────────────────────────────────────────────────────────┼───────────────────────┘
                                                             │ Real-time Alerts
@@ -79,10 +80,10 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
                                               ┌───────────────────────────┐
                                               │    Frontend Dashboard     │
                                               │  (HTML5 / CSS / Vanilla)  │
-                                              │  • Persian / English UI   │
-                                              │  • RTL & Jalali Timestamps│
-                                              │  • Live Duty Roster Board │
-                                              │  • Person Analytics Modal │
+                                              │  • Persian/English & RTL  │
+                                              │  • Live Duty & TV Display │
+                                              │  • Supervisor Cockpit     │
+                                              │  • 30-Day Person Analytics│
                                               └───────────────────────────┘
 ```
 
@@ -90,30 +91,30 @@ FaceTrack ingests video streams from IP security cameras, extracts face bounding
 
 ## ✨ Key Features
 
-- **Multi-Camera Processing:** Concurrently ingests and analyzes multiple RTSP camera streams in isolated asynchronous worker loops.
-- **State-of-the-Art Recognition:** Leverages **InsightFace (ArcFace `buffalo_l` or lightweight `buffalo_s`)** to extract 512-d face feature vectors.
-- **Dynamic Runtime Settings & Performance Tuning:** Live adjustment of downscaling (25%–100%), frame skipping (1–10), station zone ROI cropping, preview FPS, and retention policies directly from the web UI (`⚙️`) with instant `.env` persistence.
+- **Multi-Camera Processing & Batch Import:** Concurrently ingests and analyzes multiple RTSP camera streams in isolated asynchronous worker loops, with batch camera registration (`POST /api/cameras/batch`).
+- **State-of-the-Art Recognition:** Leverages **InsightFace (ArcFace `buffalo_s` lightweight default or `buffalo_l` high-accuracy)** to extract 512-d face feature vectors.
+- **Dynamic Runtime Settings & Performance Tuning:** Live adjustment of downscaling (25%–100%), frame skipping (1–10), station zone ROI cropping, preview FPS, archive path, and retention policies directly from the web UI (`⚙️`) with instant `.env` persistence.
 - **Cross-Model Embedding Re-indexing:** Built-in CLI script (`python -m scripts.reindex_embeddings`) and REST endpoint (`POST /api/persons/reindex-embeddings`) to automatically recompute stored vector representations when switching AI models.
-- **Automated Storage Retention & Cleanup:** Background hourly worker automatically purges expired snapshot images and database event logs according to configured retention policies, with live disk usage breakdown.
-- **Live Duty & Shift Attendance Tracking:** Real-time roster of personnel currently on duty with live station presence, current absence duration, and compliance percentages.
+- **Automated Storage Retention & Monthly Archiving:** Automatic monthly database and snapshot partitioning (`archive_manager.py`) with configurable `ARCHIVE_DIR`, transparent cross-archive querying for analytics/rosters, and hourly retention cleanup across both active and archived storage.
+- **Live Duty Roster & Smart Break Continuity:** Real-time roster with live station presence, arrival grace period tracking (shown only before first arrival), scheduled break deduction, and **pre-break + post-break absence accumulation** whenever an employee is absent before a legal rest period and remains absent afterward.
+- **Factory Hall TV Display (`/tv.html`):** High-contrast black-background TV board for production floors featuring a top warning banner, live Jalali clock, KPI ribbon, **Grid/List view toggle (`V`)**, audible alerts (`S`), fullscreen (`F`), and instant Persian/English toggle (`L`).
+- **Supervisor Executive Cockpit:** Mobile-responsive, privacy-first portal (`supervisorCockpit.js`) strictly scoped to assigned personnel and sections with zero raw snapshots, live shift telemetry, daily leave management, shift substitutions with conflict checks, and text-only alert timelines.
+- **Shift Templates, Rotational Shifts & Break Presets:** Create reusable weekly or rotational shift templates (e.g., 2D-2N-1Off / 2D-2N-2Off via interactive builder), define named break presets, and assign custom per-person shifts while preserving cross-section workstation assignments across updates.
 - **Absence Time Windows & Incident Counts:**
   - Tracks detailed absence intervals (e.g. `10:30 - 11:15 (45m)`) categorized into *late arrival*, *intermediate gaps*, and *current missing status*.
   - Counts total absence incidents during the shift (`X بار غیبت در این شیفت`) and displays a roster-wide KPI.
   - Interactive expandable time windows drawer in both Grid and List views with auto-refresh state preservation.
-- **Excel (.xlsx) & CSV Shift & Attendance Reporting:**
-  - Export comprehensive duty roster attendance records and event logs directly from the UI or REST API.
-  - Generates beautifully styled Persian Excel (`.xlsx`) spreadsheets with native RTL layout, KPI summaries, and color-coded status indicators.
-  - CSV files encoded with UTF-8 BOM (`utf-8-sig`) ensuring 100% clean Persian/Farsi display across Microsoft Excel, LibreOffice, and Google Sheets.
-  - Full filter support (Shamsi date/time windows, camera, person, status, and active shift toggle).
-- **Camera Offline Safeguard:** Decouples camera disconnects from absence times; offline camera periods are displayed with a distinct yellow status (`دوربین قطع است`) and are strictly excluded from absence durations and counts.
+- **Excel (.xlsx) & CSV Shift, Supervisor & Analytics Reporting:**
+  - Export duty roster, supervisor daily attendance reports, 30-day person analytics, and event logs directly from the UI or REST API.
+  - Generates styled Persian Excel (`.xlsx`) spreadsheets with native RTL layout, KPI summaries, absence window breakdowns, and color-coded status indicators.
+  - CSV files encoded with UTF-8 BOM (`utf-8-sig`) ensuring clean Persian/Farsi display across Microsoft Excel, LibreOffice, and Google Sheets.
+- **Scoped Camera Offline Safeguard:** Decouples camera disconnects from absence durations/counts (`دوربین قطع است`) and isolates camera disconnection alerts from personnel identity logs and unassigned supervisor feeds.
 - **Clean Camera Deletion Cascades:** Removing a camera automatically cleans up associated zones and alerts, unlinks camera IDs on historical detection logs, and clears in-memory state to prevent phantom alerts.
 - **Spatial Zone Monitoring:** Draw designated areas directly on camera snapshots and attach staff members.
-- **Shift Timetable Schedules:** Define active monitoring hours and active weekdays with automated absence timeout detection.
-- **Identity & Comprehensive Person Analytics:** Deep audit modal with 6 specialized tabs (Overview, Shifts, 24-Hour Timeline, 30-Day Attendance Log, Cameras, and Recent Sightings).
-- **User Management & RBAC:** Secure JWT authentication, password hashing, and role-based permissions (`admin`, `operator`, `viewer`).
-- **Direct Unknown Face Enrollment & Multi-Photo Picker:** Tap "Enroll Person" directly from any unidentified detection event to register the individual immediately. The enrollment dialog pre-loads the event snapshot as primary photo and provides an interactive **Unknown Logs Photo Picker** to select multiple detection angles/sightings from recent sequences or all cameras, automatically updating past detection logs to known status.
-- **Full Dual-Language Localization:** Persian (`fa`) as default with full RTL layout, Vazirmatn typography, Solar Hijri (Jalali) timestamps, and instant English (`en`) switching.
-- **Hardware Acceleration:** Out-of-the-box support for CUDA / GPU acceleration via ONNX Runtime, with automatic CPU fallback.
+- **Identity Editing & 30-Day Person Analytics:** Edit person profiles/sections (`PUT /api/persons/{id}`), and open the analytics modal (`Overview`, `Shifts & Absence Windows`, `24-Hour Timeline`, `30-Day Attendance Log` querying archived months, `Cameras`, `Recent Sightings`, plus Print & Excel export).
+- **Custom RBAC Roles & Departmental Sections:** Manage dynamic permissions (`/api/roles`), departmental sections (`/api/sections`), and scoped accounts (`admin`, `supervisor`, `operator`, `viewer`).
+- **Direct Unknown Face Enrollment & Multi-Photo Picker:** Tap "Enroll Person" directly from any unidentified detection event to register immediately using multi-angle snapshots from unknown logs.
+- **Full Dual-Language Localization & Hardware Acceleration:** Persian (`fa`) RTL default with Vazirmatn font and Solar Hijri timestamps, instant English (`en`) switching, and CUDA/GPU inference via ONNX Runtime with CPU fallback.
 
 ---
 
@@ -134,39 +135,58 @@ FaceTrack features a built-in internationalization engine (`frontend/js/i18n.js`
 FaceTrack provides a dedicated real-time shift operations command center (`/#duty`):
 
 1. **Roster Status Cards & Visual Indication:**
-   - 🟢 **حاضر در محل (On Station):** Staff actively detected in their designated camera zone within the last 60 seconds.
-   - 🔴 **غایب از منطقه (Absent from Zone):** Staff absent during scheduled working hours, displaying active elapsed absence in minutes.
+   - 🟢 **حاضر در محل (On Station):** Staff actively detected in their designated camera zone (or within station absence timeout), displaying last sighting age and arrival grace status (`در مهلت ورود`) strictly before first arrival.
+   - 🔴 **غایب از منطقه (Absent from Zone):** Staff absent during scheduled working hours, displaying net active absence in hours/minutes.
+   - ☕ **زمان استراحت (On Break):** Scheduled break/rest windows automatically pause absence penalties and suppress watchdog alerts.
    - 🟡 **دوربین قطع است (Camera Disconnected):** Camera signal lost or offline; clearly separated so staff are not unfairly penalized.
-   - ⚪ **خارج از شیفت (Off Duty):** Outside active timetable hours.
+   - ⚪ **خارج از شیفت / مرخصی (Off Duty / On Leave):** Outside active timetable hours or approved daily leave.
 
-2. **Absence Time Windows (بازه‌های زمانی عدم حضور):**
+2. **Legal Rest Time & Continuous Absence Continuity (`calculate_net_absence_with_breaks`):**
+   - Scheduled rest intervals (e.g., `12:00 - 13:00`) are deducted from raw missing durations across the Duty Roster, Person Analytics, and Watchdog alerts.
+   - **Pre-Rest + Post-Rest Accumulation:** If a worker is absent before a scheduled break begins (> 2 minutes prior to `break_start`) and remains absent or returns late after `break_end`, both absence periods are combined into **one continuous absence episode** (`mins_before + mins_after`), keeping the original departure timestamp before break as `start_time`.
+   - Conversely, workers present right up to the start of the break begin accumulating absence only from `break_end`.
+
+3. **Absence Time Windows (بازه‌های زمانی عدم حضور):**
    - Automatically detects and categorizes non-contiguous absence intervals:
      - **تاخیر در ورود (Late Arrival):** Delay between shift start time and first confirmed sighting.
-     - **خروج از منطقه (Detection Gap):** Periods during the shift exceeding 3 minutes where the person was absent from the station.
+     - **خروج از منطقه (Detection Gap):** Periods during the shift exceeding threshold where the person was absent from the station.
      - **غیبت جاری (Current Missing):** Trailing absence from the last confirmed sighting up to `هم‌اکنون` (Now).
    - Interactive toggle drawer (`🕒 مشاهده بازه‌ها`) shows exact start time $\rightarrow$ end time and duration badge (`۳۵m`).
    - Drawer toggle state is preserved across background 10-second auto-refresh cycles.
 
-3. **Shift Absence Incident Count (تعداد دفعات خروج):**
-   - Tracks how many times an individual vacated their post during the current shift (`X بار غیبت در این شیفت`).
-   - Roster-wide KPI card summarizes total shift absence incidents across the facility.
+4. **Shift Absence Incident Count & Camera Offline Safeguard:**
+   - Tracks absence incident counts (`X بار غیبت در این شیفت`) and displays a roster-wide KPI summary.
+   - Camera downtime is **never** counted toward absence durations or counts (`زمان قطعی جزو غیبت محاسبه نمی‌شود`).
 
-4. **Camera Disconnected Safeguard:**
-   - Camera downtime duration is **never** added to absence durations or absence counts (`زمان قطعی جزو غیبت محاسبه نمی‌شود`).
+5. **Grid & List Views + TV Hall Display (`/tv.html`):**
+   - Instant switching between high-density cards and compact table rows on both `/#duty` and the dedicated **TV Hall Display** (`/tv.html`).
+   - TV Mode provides a high-contrast pure black canvas designed for floor monitors with a large top warning marquee, live Shamsi clock/date, Grid/List toggle (`V`), audible alarm toggle (`S`), language switcher (`L`), and fullscreen mode (`F`).
 
-5. **Grid & List Views:** Instant switching between high-density cards and compact table rows with persisted preferences.
+---
+
+## 🧭 Supervisor Executive Cockpit
+
+Dedicated mobile-responsive workspace (`frontend/js/components/supervisorCockpit.js`) tailored for department supervisors:
+
+- **Strict Privacy & Scope Isolation:** Scoped solely to assigned personnel and sections (`/api/sections`), rendering zero raw face snapshots (using deterministic color-coded avatars and text-only timelines). Camera disconnect alerts are filtered strictly to assigned cameras.
+- **Executive Command Strip & Interactive KPI Pods:** Live Shamsi clock, telemetry radar, click-to-filter KPI cards, search (`/` shortcut), urgency/compliance/absence sorting, and Grid/List view toggle.
+- **Daily Leave & Shift Substitution Management:**
+  - Grant daily leaves (`supervisorLeaveModal.js`) to excuse absence compliance penalties cleanly.
+  - Assign temporary shift substitutes (`supervisorSubstitutionModal.js`) with automated conflict detection (`POST /api/substitutions/check-conflict`).
+- **Shift Customization & Excel Attendance Reports:** Assign shift templates, rotational cycles, breaks, and workstations per person (`personShiftModal.js`), and export dedicated RTL Excel attendance reports (`GET /api/zones/supervisor/attendance-report/export`).
 
 ---
 
 ## 🎯 Zone Monitoring & Security Schedules
 
-Manage critical work areas, counters, and security perimeters (`/#zones`):
+Manage critical work areas, shift templates, and security perimeters (`/#zones`):
 
 1. **Visual Area Drawer:** Drag rectangular polygons directly over high-res camera snapshots.
-2. **Staff Assignment:** Link enrolled identities to specific workstations.
-3. **Shift Hours & Active Days:** Set start/end times (e.g. `08:00 - 17:00`) and active working days (Saturday to Friday / Monday to Sunday).
-4. **Custom Alert Policies:**
-   - 🔔 **Absence Watchdog:** Triggers audio alerts and toast notifications if assigned staff is missing during active shift hours.
+2. **Staff Assignment & Cross-Section Preservation:** Link enrolled identities to workstations. Cross-section workstation assignments are safely preserved when individual sections or shifts are updated.
+3. **Shift Templates & Rotational Shifts:** Create reusable fixed weekly or rotational shift patterns (e.g., 2 days / 2 nights / 1 off) via `shiftTemplateModal.js` (`/api/shift-templates`) and customize shifts per employee (`personShiftModal.js`).
+4. **Scheduled Break Presets:** Define reusable legal rest/meal presets (`breakPresets.js`, `/api/break-presets`) and apply them to shifts and stations.
+5. **Custom Alert Policies:**
+   - 🔔 **Absence Watchdog:** Triggers audio alerts and notifications if assigned staff is missing during active work hours (outside scheduled breaks).
    - 🚨 **Unauthorized Entry:** Alerts if unregistered or unauthorized persons step into restricted areas.
    - ⚠️ **Combined Policy:** Full security surveillance (Absence + Unauthorized entry).
 
@@ -179,10 +199,10 @@ Click on any person card to launch the **Person Analytics Modal** (`PersonAnalyt
 - **1. پیشخوان و خلاصه (Overview):** Identity card, assigned shift badge, active status, today/week/month absence breakdown, punctuality statistics (on-time arrivals, late arrivals, early departures), and most frequented camera.
 - **2. انضباط و شیفت‌ها (Shifts & Compliance):** Shift timetable cards, today's detailed absence time windows panel, in-shift vs. out-of-shift detection counts, and overall compliance score.
 - **3. الگوهای ۲۴ ساعته (24-Hour Timeline):** 24-hour hourly detection histogram with automatic peak traffic hour highlight.
-- **4. سوابق حضور ۳۰ روزه (30-Day Attendance Log):** Historical tabular log with first arrival, last departure, presence span, punctuality status badges, and absence incident counts with window tooltips.
+- **4. سوابق حضور ۳۰ روزه (30-Day Attendance Log):** Historical tabular log (automatically querying monthly archive DBs as needed) with time window selector, first arrival, last departure, presence span, absence windows modal, and Excel export.
 - **5. توزیع دوربین‌ها (Cameras):** Percentage distribution across all facility camera feeds.
 - **6. آخرین ترددها (Recent Sightings):** Gallery of cropped high-res face snapshots with confidence scores and timestamps.
-- **7. خروجی چاپی (Print Summary):** Clean, print-optimized report for administrative and HR records.
+- **7. خروجی چاپی و اکسل (Print & Excel Export):** Print-optimized summary and RTL Excel export (`/api/persons/{id}/analytics/export`).
 
 ---
 
@@ -247,32 +267,36 @@ FaceTrack از دو بسته مدل InsightFace پشتیبانی می‌کند:
 
 ---
 
-## 🗄️ Automated Storage Retention & Cleanup (مدیریت فضای دیسک و پاکسازی خودکار)
+## 🗄️ Automated Storage Retention & Cleanup (مدیریت فضای دیسک، پاکسازی و بایگانی ماهانه)
 
-FaceTrack مجهز به سامانه جامع مدیریت دیسک و نگهداری فایل‌ها است:
+FaceTrack مجهز به سامانه جامع مدیریت دیسک، بایگانی ماهانه و نگهداری فایل‌ها است:
 
 1. **سیاست نگهداری تصاویر اسنپ‌شات (`SNAPSHOT_RETENTION_DAYS`):**
-   - تعیین مدت نگهداری عکس‌های ذخیره‌شده از چهره‌ها (۱ روز، ۱ هفته، ۱ ماه، ۳ ماه یا بدون انقضا).
-   - تصاویر قدیمی‌تر از مهلت مقرر به طور خودکار از روی دیسک پاک می‌شوند، در حالی که سوابق متنی رویدادها در دیتابیس حفظ می‌گردد.
+   - تعیین مدت نگهداری عکس‌های ذخیره‌شده از چهره‌ها (۱ روز، ۱ هفته، ۱ ماه، ۳ ماه یا بدون انقضا) هم در پایگاه اصلی و هم در پارتیشن‌های بایگانی.
 2. **سیاست نگهداری لاگ‌های دیتابیس (`EVENT_LOG_RETENTION_DAYS`):**
    - تعیین سقف زمانی سوابق رویدادها در پایگاه داده (۷ روز، ۳۰ روز، ۹۰ روز، ۶ ماه، ۱ سال یا بدون انقضا).
-3. **کارگر پس‌زمینه خودکار (Hourly Retention Worker):**
-   - کارگر `RetentionWorker` به طور ساعتی در پس‌زمینه اجرا شده و فایل‌ها و رکوردهای منقضی‌شده را پاکسازی می‌نماید.
-4. **داشبورد زنده آمار ذخیره‌سازی و پاکسازی درجا:**
-   - نمایش لحظه‌ای تعداد فایل‌های اسنپ‌شات، حجم اشغال‌شده به مگابایت/گیگابایت و تعداد کل رکوردهای رویداد.
-   - دکمه‌های پاکسازی فوری (`پاکسازی اکنون / Clean Now`) در پنجره تنظیمات برای آزادسازی سریع فضای دیسک در هر لحظه.
+3. **بایگانی ماهانه دیتابیس و اسنپ‌شات‌ها (`archive_manager.py` / `ARCHIVE_DIR`):**
+   - جداسازی خودکار یا دستی لاگ‌ها و تصاویر ماه‌های قبل به دیتابیس‌ها و پوشه‌های ماهانه در مسیر قابل تنظیم `ARCHIVE_DIR` (`AUTO_ARCHIVE_MONTHLY=True` و `ARCHIVE_PURGE_ACTIVE=True`).
+   - کوئری شفاف (Transparent Multi-DB Querying) در تحلیل رفتار پرسنل، جدول حضور ۳۰ روزه و مانیتورینگ شیفت، بدون از دست رفتن اطلاعات تاریخی.
+4. **کارگر پس‌زمینه خودکار (Hourly Retention Worker):**
+   - کارگر `RetentionWorker` به طور ساعتی در پس‌زمینه اجرا شده و فایل‌ها و رکوردهای منقضی‌شده (از جمله در آرشیوهای ماهانه) را پاکسازی می‌نماید.
+5. **داشبورد زنده آمار ذخیره‌سازی و پاکسازی درجا:**
+   - نمایش لحظه‌ای تعداد فایل‌های اسنپ‌شات، حجم اشغال‌شده و مدیریت آرشیوها با دکمه‌های پاکسازی و بایگانی فوری در پنجره تنظیمات.
 
 ---
 
-## 👥 User Management & Access Control (کاربران و دسترسی‌ها)
+## 👥 User Management & Access Control (کاربران، بخش‌ها و دسترسی‌ها)
 
-Manage administrative users and role-based permissions (`/#users`):
+Manage administrative users, organizational sections, and granular role-based permissions (`/#users`):
 
 - **JWT Authentication:** Secure token-based API authentication with encrypted passwords (`bcrypt`).
-- **Role-Based Access Control (RBAC):**
-  - 👑 **مدیر سیستم (Admin):** Full privileges (camera configuration, zone creation, user management, identity enrollment).
+- **Role-Based Access Control (RBAC & Custom Roles):**
+  - 👑 **مدیر سیستم (Admin):** Full privileges (camera configuration, zone creation, user/role management, sections, identity enrollment).
+  - 🧭 **سرپرست (Supervisor):** Dedicated executive cockpit scoped strictly to assigned sections, staff, and cameras, with leave/substitution management and zero raw snapshots.
   - 🛡️ **اپراتور (Operator):** Operational monitoring, event review, and live duty tracking.
   - 👁️ **بیننده (Viewer):** Read-only access to live streams and dashboards.
+  - ⚙️ **نقش‌های سفارشی (`/api/roles`):** Define custom roles from the permissions registry.
+- **Departmental Sections (`/api/sections`):** Organize staff into factory/office sections and restrict supervisor access by section.
 - **Self-Service Password Changes:** Change passwords securely from the header modal with real-time feedback.
 
 ---
@@ -411,7 +435,7 @@ DATABASE_URL=sqlite+aiosqlite:///./data/face_tracking.db
 
 # ── Face Recognition & AI Settings ──────────────────────
 MATCH_THRESHOLD=0.5
-INSIGHTFACE_MODEL=buffalo_l   # buffalo_l (High Accuracy) or buffalo_s (Fast CPU)
+INSIGHTFACE_MODEL=buffalo_s   # buffalo_s (Fast CPU default) or buffalo_l (High Accuracy)
 LOG_UNKNOWN_FACES=True        # If False, ignore and do not log unidentified faces
 
 # ── Stream Processing & Performance Tuning ───────────────
@@ -424,12 +448,15 @@ DUTY_BURST_DURATION=2.0       # Active detection burst window per cycle (seconds
 COOLDOWN_SECONDS=60           # Seconds before re-logging the same identity on same camera
 MAX_RECONNECT_BACKOFF=30      # Max backoff delay (seconds) on dropped RTSP streams
 
-# ── Storage & Automated Retention ─────────────────────────
+# ── Storage, Retention & Monthly Archiving ────────────────
 SNAPSHOT_DIR=./data/snapshots
 REFERENCE_PHOTO_DIR=./data/reference_photos
 SNAPSHOT_RETENTION_DAYS=30    # Days to keep snapshot images on disk (0 = keep forever)
 EVENT_LOG_RETENTION_DAYS=0    # Days to keep event records in DB (0 = keep forever)
 SAVE_SNAPSHOTS=True           # If False, log events without writing image files to disk
+ARCHIVE_DIR=./data/archives   # Directory for monthly standalone DB & snapshot partitions
+AUTO_ARCHIVE_MONTHLY=True     # Automatically archive previous month on 1st of month
+ARCHIVE_PURGE_ACTIVE=True     # Remove archived events from active DB to keep it fast
 
 # ── HTTP Server Settings ─────────────────────────────────
 HOST=0.0.0.0
@@ -448,38 +475,38 @@ Access the web dashboard by opening `http://localhost:8000` in your web browser.
 - **Filter Tabs:** Toggle between All Events, Known, or Unknown faces.
 - **Dynamic Stats:** Live counters tracking Total Events Today, Known Faces, Unknown Faces, and Active Cameras.
 
-### 2. Live Duty Roster (`/#duty` / پایش زنده پرسنل در شیفت)
-- **Active Shift Command Center:** Real-time visibility into who is currently scheduled to work and their current station presence.
-- **Top KPI Deck:** Total on duty, present on station, absent from zone, camera offline count, sum of shift absence duration, and average compliance rate.
+### 2. Live Duty Roster & TV Hall Display (`/#duty` & `/tv.html`)
+- **Active Shift Command Center:** Real-time visibility into scheduled staff, station presence, scheduled breaks, arrival grace (`در مهلت ورود` only before first arrival), and continuous pre/post-break absence calculation.
+- **Factory Hall TV Display (`/tv.html`):** Standalone high-contrast black TV screen with a prominent top alert strip, live Shamsi clock, Grid/List toggle (`V`), alert audio toggle (`S`), language switcher (`L`), and fullscreen mode (`F`).
+- **Top KPI Deck:** Total on duty, present on station, absent from zone, on break, camera offline count, sum of shift absence duration, and average compliance rate.
 - **Absence Time Windows Drawer:** Expandable drawer displaying non-contiguous absence intervals (late arrival, detection gaps, current missing) with exact timestamps and durations.
-- **Absence Count Tracking:** Distinct tracking of shift absence incidents (`X بار غیبت در این شیفت`).
 - **Camera Offline Isolation:** Disconnected camera status shown in yellow (`دوربین قطع است`), cleanly excluded from absence counts.
 - **Grid & List Views:** Instant toggle between visual card grid and compact administrative table list.
 
-### 3. Zone Monitoring & Shift Schedules (`/#zones` / پایش منطقه‌ها و شیفت‌ها)
+### 3. Supervisor Cockpit (`supervisorCockpit.js`)
+- **Privacy-First Scoped Dashboard:** Strictly scoped to assigned personnel/sections with text-only activity timelines, deterministic gradient avatars, and zero raw snapshots.
+- **Daily Actions:** Manage employee leaves, assign shift substitutions with conflict checks, customize individual shift templates/breaks, and export dedicated Excel attendance reports.
+
+### 4. Zone Monitoring & Shift Templates (`/#zones` / پایش منطقه‌ها و شیفت‌ها)
 - **Live Presence Board:** Overview of all configured zones across cameras and staff station presence status.
-- **Zone Assignments & Shifts:** Configure designated work areas, active weekdays, and schedule hours.
-- **Security & Absence Logs:** Filterable table of past absence timeouts, unauthorized entries, and out-of-zone violations.
+- **Shift Templates & Rotational Builder:** Create fixed or rotational schedules (e.g., 2D-2N-1Off / 2D-2N-2Off) and reusable break presets while preserving cross-section workstation assignments.
+- **Security & Absence Logs:** Filterable table of past absence timeouts, unauthorized entries, and scoped camera events.
 
-### 4. Camera Management (`/#cameras` / مدیریت دوربین‌ها)
-- **Add / Edit Cameras:** Register new cameras with RTSP credentials, port, and custom location tags.
-- **Live Stream Viewer:** View low-latency MJPEG live streams or high-res snapshots directly in a modal.
-- **Interactive Zone Drawer:** Draw and adjust spatial zones directly on camera snapshots.
+### 5. Camera Management (`/#cameras` / مدیریت دوربین‌ها)
+- **Add / Batch Import / Edit Cameras:** Register single or batch RTSP cameras with credentials, port, and location tags.
+- **Live Stream Viewer & Interactive Zone Drawer:** View MJPEG live streams/snapshots and draw spatial zones directly on camera snapshots.
 
-### 5. Identity Management & Analytics (`/#persons` / مدیریت هویت‌ها و پرسنل)
-- **Enroll Identities:** Upload single or multiple reference photos per individual.
-- **Photo Gallery:** Manage enrolled staff, update roles, and review biometric embeddings.
-- **Comprehensive Analytics Modal:** Click any staff member to view full 6-tab analytics audit (Overview, Shifts & Absence Windows, 24-Hour Timeline, 30-Day Attendance Log, Cameras, and Recent Sightings).
+### 6. Identity Management & Analytics (`/#persons` / مدیریت هویت‌ها و پرسنل)
+- **Enroll & Edit Identities:** Upload reference photos, enroll from unknown event logs, edit person info/sections, or customize shifts directly.
+- **Comprehensive 30-Day Analytics Modal:** Click any staff member to view full analytics audit (Overview, Shifts & Absence Windows, 24-Hour Timeline, 30-Day Cross-Archive Attendance Log, Cameras, Recent Sightings, plus Print & Excel export).
 
-### 6. Users & Access Control (`/#users` / کاربران و دسترسی‌ها)
-- **Role-Based Accounts:** Administer user accounts with granular permissions (`admin`, `operator`, `viewer`).
-- **Security Controls:** Password updates, credential resets, and session management.
+### 7. Users, Sections & Custom RBAC (`/#users` / کاربران و دسترسی‌ها)
+- **Role & Section Administration:** Manage user accounts, departmental sections, custom RBAC roles, and password resets.
 
-### 7. System Settings & Storage Management (`⚙️ تنظیمات سیستم` / پنجره تنظیمات)
+### 8. System Settings, Storage & Monthly Archiving (`⚙️ تنظیمات سیستم`)
 - **AI Performance Controls:** Slider for Downscaling (25% to 100%), Frame Skip presets (1 to 10), and Station Zone ROI Cropping toggle.
 - **Live Preview & Duty Cycle Tuning:** Configure live preview encode FPS, staggered camera duty bursts, and max reconnect backoff delay.
-- **Disk & Database Retention:** Set automated expiry days for snapshot files and event log records.
-- **On-Demand Storage Cleanup:** Real-time counters showing file count, disk space consumed (MB/GB), and database records with one-click cleanup triggers.
+- **Disk, Retention & Monthly Archives:** Configure snapshot/DB retention days, custom `ARCHIVE_DIR`, view active + archive storage stats, and trigger immediate cleanup or monthly archiving.
 
 ---
 
@@ -496,36 +523,39 @@ Interactive OpenAPI / Swagger documentation is available at: **`http://localhost
 | `POST` | `/api/auth/change-password` | Update current user password |
 | `GET` | `/api/users` | List all system user accounts *(Admin only)* |
 | `POST` | `/api/users` | Create a new user account *(Admin only)* |
-| `PUT` | `/api/users/{id}` | Update user information or role *(Admin only)* |
+| `PUT` | `/api/users/{id}` | Update user information, role, or section assignments *(Admin only)* |
 | `DELETE` | `/api/users/{id}` | Delete a user account *(Admin only)* |
+| `GET` | `/api/roles` | List RBAC roles and inspect permission registry (`GET /api/roles/permissions-registry`) |
+| `POST/PUT/DELETE` | `/api/roles` | Create, edit, or remove custom RBAC roles |
+| `GET/POST/PUT/DELETE` | `/api/sections` | Manage departmental sections (`/api/sections/{id}`) |
 | `GET` | `/api/health` | Service health status and AI engine readiness |
-| `GET` | `/api/settings` | Retrieve runtime system configuration, retention, and performance settings |
+| `GET` | `/api/settings` | Retrieve runtime system configuration, retention, archive path, and performance settings |
 | `PATCH` | `/api/settings` | **Update runtime configuration on the fly** & persist to `.env` |
 | `GET` | `/api/settings/storage-stats` | **Live disk storage stats** (snapshot files, MB used, DB event count) |
-| `POST` | `/api/settings/cleanup-snapshots` | On-demand cleanup of snapshot image files older than N days |
+| `POST` | `/api/settings/cleanup-snapshots` | On-demand cleanup of snapshot image files older than N days (including archives) |
 | `POST` | `/api/settings/cleanup-logs` | On-demand cleanup of database event records older than N days |
-| `GET` | `/api/cameras` | List all configured cameras |
-| `POST` | `/api/cameras` | Register a new camera stream |
-| `GET` | `/api/cameras/{id}` | Retrieve camera configuration details |
-| `PUT` | `/api/cameras/{id}` | Update camera URL, name, location, or active status |
-| `DELETE` | `/api/cameras/{id}` | Remove camera, cascade clean its zones/alerts, and terminate stream worker |
-| `POST` | `/api/cameras/{id}/test` | Test live camera RTSP connection |
-| `GET` | `/api/cameras/{id}/stream` | MJPEG live video stream |
-| `GET` | `/api/cameras/{id}/snapshot` | Current JPEG snapshot from live stream |
-| `GET` | `/api/cameras/{id}/zones` | List spatial zones for a camera |
-| `POST` | `/api/cameras/{id}/zones` | Create a new spatial zone with schedule & staff links |
-| `GET` | `/api/zones` | List all spatial zones across cameras |
-| `DELETE` | `/api/zones/{id}` | Delete a spatial zone |
+| `GET` | `/api/settings/archives` | List monthly database & snapshot archives |
+| `POST` | `/api/settings/archives/run` | Trigger monthly archiving manually |
+| `GET` | `/api/cameras` | List configured cameras |
+| `POST` | `/api/cameras` | Register a single camera or batch import (`POST /api/cameras/batch`) |
+| `PUT/DELETE` | `/api/cameras/{id}` | Update camera configuration or remove camera with cascade cleanup |
+| `POST` | `/api/cameras/{id}/test` | Test live camera RTSP connection (`POST /api/cameras/test-url` before saving) |
+| `GET` | `/api/cameras/{id}/stream` | MJPEG live video stream & snapshot (`GET /api/cameras/{id}/snapshot`) |
+| `GET/POST` | `/api/cameras/{id}/zones` | List or create spatial zones (`GET/PUT/DELETE /api/zones/{id}`) |
 | `GET` | `/api/zones/status` | Live presence status for all zones & attached staff |
-| `GET` | `/api/zones/duty-roster` | **Live shift roster** with absence time windows, counts & camera status |
+| `GET` | `/api/zones/duty-roster` | **Live shift roster** with continuous pre/post-break absence windows & counts |
 | `GET` | `/api/zones/duty-roster/export` | **Export Duty Roster & shift compliance** as formatted Excel (`.xlsx`) or CSV |
+| `GET` | `/api/zones/supervisor/attendance-report` | Scoped supervisor attendance report & Excel export (`/api/zones/supervisor/attendance-report/export`) |
 | `GET` | `/api/zones/logs` | Security and absence violation log records |
-| `GET` | `/api/persons` | List all registered known individuals |
-| `POST` | `/api/persons` | Enroll a person with uploaded photos (`photos`) and/or event snapshots (`event_ids`) |
-| `DELETE` | `/api/persons/{id}` | Remove registered individual and associated embeddings |
-| `POST` | `/api/persons/{id}/photos` | Upload additional reference photos or attach event snapshots (`event_ids`) |
+| `GET/POST/PUT/DELETE` | `/api/shift-templates` | Manage reusable fixed and rotational shift templates (`/api/shift-templates/{id}`) |
+| `GET/POST/PUT/DELETE` | `/api/break-presets` | Manage scheduled legal break/rest presets (`/api/break-presets/{id}`) |
+| `GET/POST/DELETE` | `/api/substitutions` | Manage shift substitutions & check conflicts (`POST /api/substitutions/check-conflict`) |
+| `GET/POST/PUT/DELETE` | `/api/persons` | List, enroll, edit (`PUT`), or remove known individuals |
+| `POST` | `/api/persons/{id}/photos` | Upload additional reference photos or attach event snapshots |
+| `GET/PUT` | `/api/persons/{id}/shift` | Retrieve or customize individual shift, breaks & cross-section workstations |
+| `GET/POST/DELETE` | `/api/persons/{id}/leaves` | Manage individual daily leaves (`/api/persons/{id}/leaves/{leave_id}`) |
 | `POST` | `/api/persons/reindex-embeddings` | **Recompute all embeddings** from photos using active InsightFace model |
-| `GET` | `/api/persons/{id}/analytics` | **Comprehensive person analytics**, punctuality & 14-day history |
+| `GET` | `/api/persons/{id}/analytics` | **Comprehensive person analytics**, 30-day multi-archive history & Excel export (`/export`) |
 | `GET` | `/api/events` | Query detection event logs with pagination and filters (`camera_id`, `is_known`, `has_snapshot`, time) |
 | `GET` | `/api/events/export` | **Export detection event logs** as formatted Excel (`.xlsx`) or CSV with filters |
 | `GET` | `/api/events/stats` | Retrieve daily event metrics summary |
@@ -569,17 +599,20 @@ pip install onnxruntime-gpu
 Run the test suite using `pytest`:
 
 ```bash
-# Run all tests
-python -m pytest tests/ -v
+# Run all tests (using local temp dir on Windows)
+python -m pytest tests/ --basetemp=./tmp_test -v
 
-# Run event photo enrollment & unknown log picker tests
-python -m pytest tests/test_enroll_from_event.py -v
+# Run duty roster & legal break accumulation tests
+python -m pytest tests/test_duty_roster.py tests/test_break_pre_absence.py tests/test_break_presets.py -v
 
-# Run API integration tests only
-python -m pytest tests/test_api.py -v
+# Run rotational shifts, substitutions & supervisor cockpit tests
+python -m pytest tests/test_rotational_shifts.py tests/test_shift_substitutions.py tests/test_supervisor_privacy_and_leaves.py tests/test_sections_and_scopes.py -v
 
-# Run AI matching unit tests only
-python -m pytest tests/test_face_engine.py -v
+# Run archiving, reporting & storage retention tests
+python -m pytest tests/test_archive_manager.py tests/test_archive_api.py tests/test_archive_person_analytics.py tests/test_archive_retention.py tests/test_reports_export.py tests/test_snapshot_cleanup.py -v
+
+# Run API & AI matching unit tests
+python -m pytest tests/test_api.py tests/test_face_engine.py tests/test_enroll_from_event.py -v
 ```
 
 ---
@@ -633,59 +666,95 @@ face_detection/
 │   ├── __init__.py
 │   ├── main.py               # Application entry point, lifespan & no-cache middleware
 │   ├── config.py             # Pydantic environment configuration
-│   ├── database.py           # Async SQLAlchemy database initialization & cascades
-│   ├── models.py             # Database ORM models (Camera, Person, Event, CameraZone, User)
+│   ├── database.py           # Async SQLAlchemy database initialization & migrations
+│   ├── models.py             # ORM models (Camera, Person, Event, CameraZone, ShiftTemplate, ShiftSubstitution, User, Role, Section, Leave)
 │   ├── schemas.py            # Pydantic validation schemas
+│   ├── auth.py               # Password hashing, JWT tokens & RBAC scope helpers
 │   ├── face_engine.py        # InsightFace detector & vector matcher
+│   ├── shift_utils.py        # Shift windows, rotational schedules & legal break continuity calculations
+│   ├── reporting.py          # RTL Persian Excel (.xlsx) & UTF-8 CSV exporters
+│   ├── archive_manager.py    # Monthly DB/snapshot archiving & transparent multi-DB querying
 │   ├── snapshot_cleanup.py   # Disk usage analysis, hourly retention worker & .env updater
-│   ├── stream_processor.py   # Async RTSP ingestion, zone watchdog & WebSocket manager
+│   ├── stream_processor.py   # Async RTSP ingestion, ROI cropping, watchdog & WebSocket manager
 │   └── routers/
 │       ├── __init__.py
 │       ├── auth.py           # JWT login, token verification & password change
-│       ├── users.py          # User management & RBAC endpoints
-│       ├── cameras.py        # Camera API & live stream endpoints
-│       ├── zones.py          # Spatial zones, duty roster & absence windows
-│       ├── persons.py        # Person enrollment, analytics & embedding re-indexing
-│       ├── events.py         # Event logs & metrics endpoints
-│       ├── system.py         # System settings, runtime config & storage cleanup
-│       └── snapshots.py      # Image serving endpoint
+│       ├── break_presets.py  # Scheduled break/rest presets API
+│       ├── cameras.py        # Camera API, batch import & live stream endpoints
+│       ├── events.py         # Event logs, export & metrics endpoints
+│       ├── persons.py        # Person enrollment, editing, shifts, leaves, analytics & re-indexing
+│       ├── roles.py          # Dynamic RBAC role & permission registry endpoints
+│       ├── sections.py       # Departmental sections API
+│       ├── snapshots.py      # Image serving endpoint (active & archived)
+│       ├── substitutions.py  # Shift substitutions & conflict detection endpoints
+│       ├── system.py         # System settings, runtime config, cleanup & archive endpoints
+│       ├── users.py          # User administration & scoped assignment endpoints
+│       └── zones.py          # Spatial zones, shift templates, duty roster & supervisor reports
 │
 ├── frontend/                 # Dashboard Frontend App
 │   ├── index.html            # Main HTML layout shell (RTL & Persian default)
+│   ├── tv.html               # Standalone Factory Hall TV Display (high contrast Grid/List)
 │   ├── css/
-│   │   └── style.css         # Glassmorphism dark-theme & RTL typography
+│   │   ├── style.css         # Glassmorphism dark-theme & RTL typography
+│   │   └── tv.css            # High-contrast black canvas styles for Hall TV mode
 │   └── js/
 │       ├── app.js            # App core, router & WebSocket client
 │       ├── auth.js           # JWT authentication manager & permission checks
 │       ├── i18n.js           # Internationalization engine, dictionaries & Jalali formatter
+│       ├── tv.js             # TV board controller, sound alerts, shortcuts & Grid/List toggle
 │       ├── components/
-│       │   ├── cameraForm.js # Camera modal component
-│       │   ├── eventCard.js  # Live event card & detail modal
-│       │   ├── personForm.js # Person enrollment & unknown logs photo picker modal
-│       │   ├── personAnalyticsModal.js # 6-tab comprehensive person analytics modal
-│       │   ├── settingsModal.js # Dynamic runtime settings & storage cleanup modal
-│       │   └── zoneModal.js  # Interactive canvas zone drawer & shift modal
+│       │   ├── breakPresets.js           # Scheduled break preset selector & editor
+│       │   ├── cameraForm.js             # Camera modal component
+│       │   ├── eventCard.js              # Live event card & detail modal
+│       │   ├── personAnalyticsModal.js   # Comprehensive 30-day person analytics modal
+│       │   ├── personForm.js             # Person enrollment, editing & photo picker modal
+│       │   ├── personShiftModal.js       # Per-person shift, break & workstation modal
+│       │   ├── settingsModal.js          # Runtime settings, archiving & cleanup modal
+│       │   ├── shiftTemplateModal.js     # Shift template & rotational schedule builder modal
+│       │   ├── supervisorAnalyticsModal.js # Text-only individual activity modal for supervisors
+│       │   ├── supervisorCockpit.js      # Scoped executive cockpit for supervisors
+│       │   ├── supervisorLeaveModal.js   # Supervisor daily leave management modal
+│       │   ├── supervisorReportModal.js  # Supervisor attendance report viewer & exporter
+│       │   ├── supervisorSubstitutionModal.js # Shift substitution & conflict check modal
+│       │   └── zoneModal.js              # Interactive canvas zone drawer & shift modal
 │       └── pages/
 │           ├── cameras.js    # Camera management page view
 │           ├── dashboard.js  # Live monitoring dashboard view
 │           ├── dutyPage.js   # Live shift roster, absence windows & KPI command center
-│           ├── persons.js    # Identity enrollment page view
-│           ├── usersPage.js  # User administration & role management view
-│           └── zonesPage.js  # Live Presence Board, shifts & security logs view
+│           ├── persons.js    # Identity enrollment & edit page view
+│           ├── usersPage.js  # User, roles & sections administration view
+│           └── zonesPage.js  # Live Presence Board, shift templates & security logs view
 │
 ├── scripts/                  # Management & Maintenance Scripts
 │   └── reindex_embeddings.py # CLI script to recompute face embeddings across AI models
 │
 ├── data/                     # Persistent Data Directory (Excluded from git)
 │   ├── snapshots/            # Event cropped snapshot JPEGs
-│   └── reference_photos/     # Enrolled person photos
+│   ├── reference_photos/     # Enrolled person photos
+│   └── archives/             # Monthly partitioned DB & snapshot archives
 │
-└── tests/                    # Test Suite
+└── tests/                    # Comprehensive Pytest Suite
     ├── __init__.py
-    ├── test_api.py           # API integration test suite
-    ├── test_enroll_from_event.py # Enrollment from detection snapshots & multi-photo tests
-    ├── test_face_engine.py   # AI face matcher unit tests
-    └── test_snapshot_cleanup.py # Storage retention & system settings tests
+    ├── test_api.py                           # API integration test suite
+    ├── test_archive_api.py                   # Archive settings API tests
+    ├── test_archive_manager.py               # Monthly archive partitioning & querying tests
+    ├── test_archive_person_analytics.py      # Cross-archive person analytics tests
+    ├── test_archive_retention.py             # Archive retention cleanup tests
+    ├── test_break_pre_absence.py             # Pre-break & post-break absence continuity tests
+    ├── test_break_presets.py                 # Break presets CRUD & application tests
+    ├── test_camera_disconnect_isolation.py   # Camera disconnect alert & offline isolation tests
+    ├── test_duty_roster.py                   # Live duty roster, break deduction & accumulation tests
+    ├── test_enroll_from_event.py             # Enrollment from detection snapshots & multi-photo tests
+    ├── test_face_engine.py                   # AI face matcher unit tests
+    ├── test_person_analytics.py              # 30-day attendance log & person analytics tests
+    ├── test_reports_export.py                # Excel (.xlsx) & CSV report generation tests
+    ├── test_rotational_shifts.py             # Rotational shift pattern computation tests
+    ├── test_sections_and_scopes.py           # Departmental sections & supervisor scoping tests
+    ├── test_shift_substitutions.py           # Shift substitution & conflict check tests
+    ├── test_shift_templates_assigned.py      # Shift templates & cross-section preservation tests
+    ├── test_snapshot_cleanup.py              # Storage retention & system settings tests
+    ├── test_supervisor_privacy_and_leaves.py # Supervisor snapshot privacy & daily leave tests
+    └── test_supervisor_report.py             # Supervisor attendance report export tests
 ```
 
 ---
